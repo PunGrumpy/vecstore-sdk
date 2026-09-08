@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".changeset/**"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+    inputs:
+      snapshot:
+        description: "Publish a snapshot release instead of a normal release"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+    if: github.repository_owner == 'PunGrumpy'
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Create Release Pull Request or Publish to npm
+        if: inputs.snapshot != true
+        id: changesets
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          version-script: bun run version-packages
+          publish-script: bun run release
+          commit-message: "chore(release): version packages"
+          pr-title: "chore(release): version packages"
+        env:
+          NPM_CONFIG_PROVENANCE: true
+
+      - name: Add SHORT_SHA env property with commit short sha
+        if: inputs.snapshot == true
+        run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> "$GITHUB_ENV"
+
+      - name: Delete pre.json if it exists
+        if: inputs.snapshot == true
+        run: rm -f .changeset/pre.json
+
+      - name: Version Packages (snapshot)
+        if: inputs.snapshot == true
+        run: bun x changeset version --snapshot "$SHORT_SHA"
+
+      - name: Build
+        if: inputs.snapshot == true
+        run: bun x turbo run build --filter=vecstore-sdk
+
+      - name: Publish Snapshot Release
+        if: inputs.snapshot == true
+        run: bun x changeset publish --no-git-tag --tag snapshot
+        env:
+          NPM_CONFIG_PROVENANCE: true

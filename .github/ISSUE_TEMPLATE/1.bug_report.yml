@@ -1,0 +1,44 @@
+name: Report a bug or request a feature
+description: Report a bug, a feature request, or another support issue with vecstore-sdk.
+labels: ["triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Clear reproduction steps, minimal examples, failing tests, and version details help resolve issues faster.
+  - type: dropdown
+    attributes:
+      label: Provider
+      description: Which adapter does this concern?
+      multiple: true
+      options:
+        - Qdrant
+        - pgvector
+        - Pinecone
+        - Core (filters, types, errors)
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Description
+      description: Include reproduction steps, code, expected behavior, actual behavior, and logs.
+      placeholder: |
+        Reproduction steps, code examples, expected behavior, actual behavior...
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Reproduction
+      description: A minimal repository, failing test, or small runnable example.
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Versions
+      description: Which versions are you using?
+      placeholder: |
+        - vecstore-sdk: 0.1.0
+        - @qdrant/js-client-rest: 1.19.0
+        - bun: 1.4.2
+    validations:
+      required: false

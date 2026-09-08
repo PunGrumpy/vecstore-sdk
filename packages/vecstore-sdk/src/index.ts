@@ -1,1 +1,60 @@
-console.log("Hello, Vector SDK");
+export type {
+  AlreadyExistsError,
+  ConnectionError,
+  InvalidArgumentError,
+  NotFoundError,
+  Provider,
+  ProviderError,
+  UnauthorizedError,
+  UnsupportedError,
+  VecstoreError,
+} from "./errors";
+export type {
+  AndFilter,
+  EqFilter,
+  ExistsFilter,
+  Filter,
+  GteFilter,
+  GtFilter,
+  InFilter,
+  LteFilter,
+  LtFilter,
+  NeFilter,
+  NinFilter,
+  NonEmpty,
+  NotFilter,
+  OrFilter,
+  RangeFilter,
+  Scalar,
+} from "./filter/ast";
+export {
+  and,
+  eq,
+  exists,
+  gt,
+  gte,
+  isIn,
+  lt,
+  lte,
+  ne,
+  not,
+  notIn,
+  or,
+} from "./filter/ast";
+export type { Err, Ok, Result } from "./result";
+export { err, ok } from "./result";
+export type {
+  DeleteSelector,
+  FetchOptions,
+  IndexOptions,
+  IndexSpec,
+  Metadata,
+  MetadataValue,
+  Metric,
+  QueryOptions,
+  ScoredRecord,
+  VecResult,
+  VectorIndex,
+  VectorRecord,
+  VectorStore,
+} from "./types";

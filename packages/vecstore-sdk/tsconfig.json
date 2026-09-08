@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    "strictNullChecks": true
+  },
+  "include": ["src/**/*", "test/**/*", "scripts/**/*"]
+}

@@ -2,6 +2,16 @@
   "name": "vecstore-sdk",
   "version": "0.0.0",
   "description": "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, and Pinecone, so you can switch providers without rewriting queries.",
+  "keywords": [
+    "embeddings",
+    "pgvector",
+    "pinecone",
+    "qdrant",
+    "rag",
+    "typescript",
+    "vector",
+    "vector-database"
+  ],
   "homepage": "https://github.com/PunGrumpy/vecstore-sdk#readme",
   "bugs": {
     "url": "https://github.com/PunGrumpy/vecstore-sdk/issues"
@@ -16,17 +26,67 @@
     "url": "git+https://github.com/PunGrumpy/vecstore-sdk.git",
     "directory": "packages/vecstore-sdk"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
   "sideEffects": false,
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./qdrant": {
+      "types": "./dist/qdrant.d.mts",
+      "import": "./dist/qdrant.mjs",
+      "default": "./dist/qdrant.mjs"
+    },
+    "./pgvector": {
+      "types": "./dist/pgvector.d.mts",
+      "import": "./dist/pgvector.mjs",
+      "default": "./dist/pgvector.mjs"
+    },
+    "./pinecone": {
+      "types": "./dist/pinecone.d.mts",
+      "import": "./dist/pinecone.mjs",
+      "default": "./dist/pinecone.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "test": "bun test",
-    "test:coverage": "bun test --coverage",
-    "typecheck": "tsc --noEmit"
+    "test": "bun test test/filter test/adapters test/internal.test.ts",
+    "test:coverage": "bun test --coverage test/filter test/adapters test/internal.test.ts",
+    "typecheck": "tsc --noEmit",
+    "test:live": "VECSTORE_LIVE=1 bun test test/live"
   },
   "devDependencies": {
+    "@pinecone-database/pinecone": "^8.2.0",
+    "@qdrant/js-client-rest": "^1.19.0",
     "@types/bun": "^1.4.2",
+    "@types/pg": "^8.23.1",
+    "pg": "^8.23.0",
     "tsdown": "^0.23.0"
+  },
+  "peerDependencies": {
+    "@pinecone-database/pinecone": ">=6.0.0",
+    "@qdrant/js-client-rest": ">=1.12.0"
+  },
+  "peerDependenciesMeta": {
+    "@pinecone-database/pinecone": {
+      "optional": true
+    },
+    "@qdrant/js-client-rest": {
+      "optional": true
+    }
   }
 }

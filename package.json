@@ -14,16 +14,19 @@
     "typecheck": "turbo run typecheck",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "turbo run build && changeset publish",
-    "prepare": "husky",
+    "release": "turbo run build --filter=vecstore-sdk && changeset publish",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.2",
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/opentype.js": "^1.3.10",
     "eslint-plugin-github": "6.1.2",
     "eslint-plugin-sonarjs": "^4.2.0",
     "husky": "^9.1.7",
+    "opentype.js": "^2.0.0",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
     "oxlint-plugin-react-doctor": "^0.9.13",

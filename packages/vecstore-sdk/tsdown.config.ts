@@ -1,16 +1,22 @@
 import { defineConfig } from "tsdown";
 
+import packageJson from "./package.json" with { type: "json" };
+
 export default defineConfig({
-  banner: {
-    js: "#!/usr/bin/env node",
-  },
   clean: true,
+  define: {
+    __PACKAGE_VERSION__: JSON.stringify(packageJson.version),
+  },
   dts: true,
-  entry: ["src/index.ts"],
+  entry: {
+    index: "src/index.ts",
+    pgvector: "src/pgvector/index.ts",
+    pinecone: "src/pinecone/index.ts",
+    qdrant: "src/qdrant/index.ts",
+  },
   format: ["esm"],
   minify: false,
   platform: "node",
-  shims: true,
   sourcemap: true,
-  target: "es2018",
+  target: "es2022",
 });

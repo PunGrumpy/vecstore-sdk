@@ -117,21 +117,41 @@ const ico = (entries: readonly { size: number; png: Buffer }[]): Buffer => {
   ]);
 };
 
+const PINECONE_INK = INK;
+const QDRANT_RED = "#dc244c";
+const PGVECTOR_BLUE = "#4169e1";
+
 interface ProviderRow {
   readonly file: string;
   readonly label: string;
+  readonly tint: string;
   readonly faded: boolean;
 }
 
 const rows: readonly ProviderRow[] = [
-  { faded: true, file: "pinecone.svg", label: "Pinecone" },
-  { faded: false, file: "qdrant.svg", label: "Qdrant" },
-  { faded: false, file: "postgresql.svg", label: "pgvector" },
-  { faded: false, file: "pinecone.svg", label: "Pinecone" },
-  { faded: true, file: "qdrant.svg", label: "Qdrant" },
+  {
+    faded: true,
+    file: "pinecone.svg",
+    label: "Pinecone",
+    tint: PINECONE_INK,
+  },
+  { faded: false, file: "qdrant.svg", label: "Qdrant", tint: QDRANT_RED },
+  {
+    faded: false,
+    file: "postgresql.svg",
+    label: "pgvector",
+    tint: PGVECTOR_BLUE,
+  },
+  {
+    faded: false,
+    file: "pinecone.svg",
+    label: "Pinecone",
+    tint: PINECONE_INK,
+  },
+  { faded: true, file: "qdrant.svg", label: "Qdrant", tint: QDRANT_RED },
 ];
 
-const providerIcon = (file: string, size: number): string => {
+const providerIcon = (file: string, size: number, tint: string): string => {
   const svg = readFileSync(path.join(assets, "providers", file), "utf-8");
   const viewBox =
     /viewBox="[\d.]+ [\d.]+ (?<width>[\d.]+) (?<height>[\d.]+)"/u.exec(svg);
@@ -139,7 +159,7 @@ const providerIcon = (file: string, size: number): string => {
   const height = Number(viewBox?.groups?.height ?? size);
   const scale = size / Math.max(width, height);
   const d = /\sd="(?<d>[^"]+)"/u.exec(svg)?.groups?.d ?? "";
-  return `<g transform="scale(${format(scale)})"><path d="${d}" fill="${INK}"/></g>`;
+  return `<g transform="scale(${format(scale)})"><path d="${d}" fill="${tint}"/></g>`;
 };
 
 const card = (row: ProviderRow, y: number, labelFont: Font): string => {
@@ -149,7 +169,7 @@ const card = (row: ProviderRow, y: number, labelFont: Font): string => {
   const box = label.getBoundingBox();
   const textX = 16 + CARD_ICON + 14;
   const textY = CARD_HEIGHT / 2 - (box.y1 + box.y2) / 2;
-  return `<g transform="translate(0 ${format(y)})" opacity="${row.faded ? FADED_OPACITY : 1}"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${CARD_STROKE}" stroke-width="1.5"/><g transform="translate(16 ${format((CARD_HEIGHT - CARD_ICON) / 2)})">${providerIcon(row.file, CARD_ICON)}</g><g transform="translate(${format(textX - box.x1)} ${format(textY)})"><path d="${cubicPathData(label)}" fill="${INK}"/></g></g>`;
+  return `<g transform="translate(0 ${format(y)})" opacity="${row.faded ? FADED_OPACITY : 1}"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${CARD_STROKE}" stroke-width="1.5"/><g transform="translate(16 ${format((CARD_HEIGHT - CARD_ICON) / 2)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(textX - box.x1)} ${format(textY)})"><path d="${cubicPathData(label)}" fill="${INK}"/></g></g>`;
 };
 
 const openGraph = (): string => {

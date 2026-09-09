@@ -11,18 +11,23 @@ const BACKGROUND = "#000000";
 const INK = "#ededed";
 const CARD_FILL = "#0a0a0a";
 const CARD_STROKE = "#2e2e2e";
-const CARD_WIDTH = 228;
-const CARD_HEIGHT = 58;
-const CARD_GAP = 12;
-const CARD_RADIUS = 12;
-const CARD_ICON = 22;
-const CARD_LABEL_SIZE = 22;
+const CARD_STROKE_WIDTH = 2;
+const CARD_WIDTH = 400;
+const CARD_HEIGHT = 112;
+const CARD_GAP = 28;
+const CARD_RADIUS = 20;
+const CARD_ICON = 34;
+const CARD_ICON_INSET = 28;
+const CARD_ICON_Y = (CARD_HEIGHT - CARD_ICON) / 2;
+const CARD_LABEL_GAP = 20;
+const CARD_LABEL_SIZE = 32;
+const CARD_LABEL_X = CARD_ICON_INSET + CARD_ICON + CARD_LABEL_GAP;
 const FADED_OPACITY = 0.35;
-const OG_LOGO_WIDTH = 440;
+const OG_LOGO_WIDTH = 580;
 const MARK_SIZE = 103.68;
 const OG_WIDTH = 1200;
 const OG_HEIGHT = 630;
-const OG_PADDING = 96;
+const OG_PADDING = 80;
 const TAGLINE = "One filter language for every vector store.";
 const ICO_HEADER_BYTES = 6;
 const ICO_ENTRY_BYTES = 16;
@@ -167,9 +172,8 @@ const card = (row: ProviderRow, y: number, labelFont: Font): string => {
     kerning: true,
   });
   const box = label.getBoundingBox();
-  const textX = 16 + CARD_ICON + 14;
   const textY = CARD_HEIGHT / 2 - (box.y1 + box.y2) / 2;
-  return `<g transform="translate(0 ${format(y)})" opacity="${row.faded ? FADED_OPACITY : 1}"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${CARD_STROKE}" stroke-width="1.5"/><g transform="translate(16 ${format((CARD_HEIGHT - CARD_ICON) / 2)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(textX - box.x1)} ${format(textY)})"><path d="${cubicPathData(label)}" fill="${INK}"/></g></g>`;
+  return `<g transform="translate(0 ${format(y)})" opacity="${row.faded ? FADED_OPACITY : 1}"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${CARD_STROKE}" stroke-width="${CARD_STROKE_WIDTH}"/><g transform="translate(${CARD_ICON_INSET} ${format(CARD_ICON_Y)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(CARD_LABEL_X - box.x1)} ${format(textY)})"><path d="${cubicPathData(label)}" fill="${INK}"/></g></g>`;
 };
 
 const openGraph = (): string => {

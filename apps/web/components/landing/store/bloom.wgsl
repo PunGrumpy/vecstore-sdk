@@ -56,7 +56,7 @@ fn radiance_at(uv: vec2f, scale: f32) -> vec3f {
   let radiance = near * 0.5 + far * 0.8;
 
   let toLight = uv - bloom.light;
-  let step = toLight / f32(RAY_STEPS) * 1.15;
+  let step = toLight / f32(RAY_STEPS) * 1.4;
   let jitter = fract(hash12(uv / max(bloom.texel.x, 1e-6)) + bloom.frame * 0.618034);
   var coordinate = uv - step * jitter;
   var illumination = 1.0;
@@ -64,18 +64,19 @@ fn radiance_at(uv: vec2f, scale: f32) -> vec3f {
   var rays = vec3f(0.0);
   for (var index = 0; index < RAY_STEPS; index++) {
     coordinate -= step;
-    rays += scene_at(coordinate) * illumination;
+    let sampled = scene_at(coordinate);
+    rays += max(sampled - vec3f(0.06), vec3f(0.0)) * illumination;
     weight += illumination;
-    illumination *= 0.94;
+    illumination *= 0.977;
   }
   rays /= max(weight, 0.001);
 
   let offset = toLight * aspect;
   let halo = exp(-dot(offset, offset) / (bloom.halo * bloom.halo));
-  let flare = radiance * bloom.gain + rays * bloom.scatter * (0.35 + halo) + radiance * halo * 0.4;
+  let flare = radiance * bloom.gain + rays * bloom.scatter * (0.6 + halo * 0.7) + radiance * halo * 0.4;
 
   let centered = uv - vec2f(0.5);
-  let envelope = smoothstep(0.52, 0.16, length(centered * aspect));
+  let envelope = smoothstep(0.6, 0.12, length(centered * aspect));
   let glow = resolve(flare * envelope);
   let grain = (hash12(uv * 311.7 + bloom.frame) - 0.5) * bloom.grain;
   let glowAlpha = clamp(dot(glow, LUMA) * bloom.exposure + grain, 0.0, 1.0);

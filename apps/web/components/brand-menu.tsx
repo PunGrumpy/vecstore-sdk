@@ -50,7 +50,7 @@ const CopyTile = ({
 
   return (
     <button
-      className="text-gray-1000 hover:bg-gray-alpha-100 flex min-w-0 flex-col gap-2 rounded-md p-2 text-left text-[14px] transition-[background-color,scale] duration-150 active:scale-[0.96]"
+      className="text-gray-1000 hover:bg-gray-alpha-100 flex min-w-0 flex-col gap-2 rounded-md p-2 text-left text-[14px] transition-colors"
       onClick={async (event) => {
         event.stopPropagation();
         if (!svgRef.current) {

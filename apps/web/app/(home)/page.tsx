@@ -6,6 +6,7 @@ import { Code } from "@/components/landing/code";
 import { CopyCommand } from "@/components/landing/copy-command";
 import { Demo } from "@/components/landing/demo";
 import { ProviderMark } from "@/components/landing/provider-marks";
+import { VectorField } from "@/components/landing/vector-field";
 import { ProviderIcon } from "@/components/provider-icon";
 import {
   adapters,
@@ -23,7 +24,8 @@ const Container = ({ children }: { readonly children: ReactNode }) => (
 );
 
 const Hero = () => (
-  <div className="mx-auto flex w-full max-w-[1120px] flex-col items-center px-6 pt-32 pb-16 text-center">
+  <div className="relative isolate mx-auto flex w-full max-w-[1120px] flex-col items-center px-6 pt-32 pb-16 text-center">
+    <VectorField />
     <h1 className="max-w-4xl text-[40px] leading-[1.05] font-semibold tracking-[-0.04em] text-balance md:text-[64px]">
       One filter language for every vector store
     </h1>

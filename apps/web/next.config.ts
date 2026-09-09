@@ -5,6 +5,14 @@ const withMDX = createMDX();
 
 const config: NextConfig = {
   agentRules: false,
+  turbopack: {
+    rules: {
+      "*.wgsl": {
+        as: "*.js",
+        loaders: ["@vgpu/wgsl/loader-webpack"],
+      },
+    },
+  },
 };
 
 export default withMDX(config);

@@ -126,8 +126,13 @@
   padding-inline: 1.5rem;
 }
 
+#nd-nav nav > div:last-child,
 #nd-subnav > div > div:last-child {
   margin-inline-end: -0.5rem;
+}
+
+#nd-subnav > div > div:last-child button {
+  margin-inline-end: 0;
 }
 
 #nd-subnav > div > div:last-child a {

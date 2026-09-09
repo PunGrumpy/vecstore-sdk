@@ -20,7 +20,7 @@ export const baseOptions = (): BaseLayoutProps => ({
         </Link>
         <a
           aria-label="GitHub"
-          className="text-fd-muted-foreground hover:text-fd-accent-foreground ms-auto inline-flex items-center p-2 transition-colors lg:hidden"
+          className="hover:bg-fd-accent hover:text-fd-accent-foreground ms-auto inline-flex items-center rounded-md p-2 transition-colors lg:hidden"
           href={githubUrl}
           rel="noreferrer noopener"
           target="_blank"

@@ -179,6 +179,7 @@
   outline: none;
 }
 
-#nd-nav [aria-label="Toggle Menu"] {
+#nd-nav [aria-label="Toggle Menu"],
+#nd-nav ul:empty {
   display: none;
 }

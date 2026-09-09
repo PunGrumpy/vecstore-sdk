@@ -25,7 +25,7 @@ export const baseOptions = (): BaseLayoutProps => ({
           rel="noreferrer noopener"
           target="_blank"
         >
-          <GithubIcon className="size-5" />
+          <GithubIcon className="size-4.5" />
         </a>
       </div>
     ),

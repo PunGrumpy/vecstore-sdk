@@ -1,0 +1,67 @@
+---
+title: Move between providers
+description: How to move a running application from one adapter to another without rewriting queries.
+---
+
+The verbs, filters, and result types stay the same when you move. What changes is the client you construct, how each provider stores ids and namespaces, and two filter edge cases.
+
+## Swap the adapter
+
+Replace the client and the `create*Store` import. Nothing else in your code refers to the provider.
+
+```ts
+import { Pinecone } from "@pinecone-database/pinecone";
+import { createPineconeStore } from "vecstore-sdk/pinecone";
+
+const store = createPineconeStore({ client: new Pinecone({ apiKey }) });
+```
+
+```ts
+import { QdrantClient } from "@qdrant/js-client-rest";
+import { createQdrantStore } from "vecstore-sdk/qdrant";
+
+const store = createQdrantStore({ client: new QdrantClient({ url }) });
+```
+
+```ts
+import { Pool } from "pg";
+import { createPgvectorStore } from "vecstore-sdk/pgvector";
+
+const store = createPgvectorStore({ client: new Pool({ connectionString }) });
+```
+
+## Copy the data
+
+The SDK does not move records for you. Read from the old index with `fetch` or your own export, then `upsert` into the new one. The adapter batches upserts, so pass as many records per call as fit in memory.
+
+Record ids, vectors, and metadata round-trip unchanged. Every provider accepts only `string`, `number`, `boolean`, and `string[]` metadata values, so a record that upserts on one provider upserts on all of them.
+
+## Check what each provider stores
+
+| Concern | Qdrant | pgvector | Pinecone |
+| --- | --- | --- | --- |
+| Index | Collection | Table | Index |
+| Namespace | `_namespace` payload key | `namespace` column | Native |
+| Id | UUID, hashed from your id when needed. The original id is kept in `_id`. | `id text` | Native |
+| Metadata | Payload | `metadata jsonb` | Metadata |
+| Metric | Set on the collection | Read from the HNSW index operator class | Set on the index |
+
+If you read a Qdrant collection or a pgvector table with another tool, expect those extra keys and columns.
+
+## Re-check score thresholds
+
+Each provider returns its native score for the index metric. A threshold tuned on one provider does not carry over. See the score table in [Stores and indexes](/docs/core/store#scores) and check the threshold against real data.
+
+## Check the filter edge cases
+
+Negation on missing fields and `eq` on array-valued fields behave differently per provider. See [Provider differences](/docs/providers/differences). If your queries depend on either case, add an `exists` clause or store a scalar field before you move.
+
+## Verify the move
+
+Before you cut over, run the live conformance suite against the new backend:
+
+```bash
+VECSTORE_LIVE=1 QDRANT_URL=http://localhost:6333 bun run test:live
+```
+
+The suite creates a temporary index, exercises every verb and filter operator, and deletes the index.

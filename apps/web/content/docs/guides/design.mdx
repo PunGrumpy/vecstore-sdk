@@ -1,0 +1,45 @@
+---
+title: Design
+description: Why VecStore SDK is a compile-time filter AST with total compilers and structural client interfaces, and which alternatives lost.
+---
+
+This page explains the design decisions behind VecStore SDK. It is background reading, not a guide.
+
+## Problem
+
+Three vector databases share four verbs and disagree on the metadata filter language, the id rules, namespace support, and the error types. An application that starts on one provider cannot move without rewriting every query. The design has to express filters once and compile them exactly on every provider, without pulling any provider SDK into the core bundle.
+
+Three constraints applied:
+
+- The provider SDKs stay optional peer dependencies. The adapters import only their types.
+- Types are the contract. There is no runtime schema library and no validation of caller input.
+- Provider payloads are narrowed at the boundary with named type predicates.
+
+## Shape
+
+**Filter AST.** A discriminated union on `kind` with leaf nodes (`eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `nin`, `exists`) and combinators (`and`, `or`, `not`). Membership and combinator children are non-empty tuples, so an empty `in` or `and` cannot be built.
+
+**Compilers.** One pure function per provider from `Filter` to the provider's native filter type. All three are total: no filter fails to compile. Qdrant has no float `match`, so `eq` on a float becomes a closed `range`. Pinecone has no `$not`, so the compiler pushes negation to the leaves with De Morgan's laws. Pinecone's `$in` rejects booleans, so those expand to `$or` of `$eq`.
+
+**Adapters.** Each adapter takes a client that satisfies a structural `*ClientLike` interface. The store is generic over the client type, so `raw` keeps the caller's concrete type. Every verb runs inside one `run` helper that converts a thrown SDK error to a `VecstoreError` and returns a `Result`.
+
+**Emulation.** Qdrant gets namespaces through a `_namespace` payload key with a tenant index, and arbitrary ids through a deterministic UUID. pgvector gets namespaces through a column in the primary key. Both round-trip exactly.
+
+## Tradeoffs accepted
+
+- A flat metadata type, in exchange for records that upsert on every provider.
+- Extra payload keys on Qdrant and an extra column on pgvector, in exchange for namespaces everywhere.
+- Provider-native scores, in exchange for not guessing a normalization that Pinecone's squared euclidean distance would break.
+- Negation on missing fields differs by provider, and the docs say so. In exchange, the compilers use native operators and keep indexes usable.
+- pgvector runs one catalog query per index handle to learn the metric, in exchange for working against tables the caller created.
+
+## Alternatives considered
+
+- **A MongoDB-style object filter as the public type.** Familiar, but it bends the AST toward Pinecone, cannot enforce non-empty lists, and makes `not` awkward.
+- **Compilers that return `Result` with an `unsupported` branch.** Rejected because every operator is expressible on every provider once the rewrites above exist. The branch would be unreachable.
+- **Adapters that construct the client from a config object.** Rejected because a runtime import of the SDK turns an optional peer into a real dependency.
+- **A registry table for pgvector metrics.** Rejected in favor of reading the index operator class from `pg_indexes`, which also works for tables the SDK did not create.
+
+## Not in v0
+
+Embedding generation, hybrid and sparse search, reranking, chunking, and an Effect integration.

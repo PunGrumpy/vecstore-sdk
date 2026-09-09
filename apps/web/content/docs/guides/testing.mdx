@@ -1,0 +1,27 @@
+---
+title: Testing
+description: How to run the unit tests against in-memory fakes and the live conformance suite against real backends.
+---
+
+The repository has two test suites. Unit tests run against in-memory fakes and need no backend. Live tests run the same conformance suite against real providers.
+
+## Run the unit tests
+
+```bash
+bun run test
+```
+
+Each adapter accepts any client that satisfies a structural `*ClientLike` interface, which lists only the methods the adapter calls. The real SDK client satisfies it, and the unit tests pass fakes.
+
+## Run the live tests
+
+Set `VECSTORE_LIVE=1` and the connection variables for the providers you have:
+
+```bash
+QDRANT_URL=http://localhost:6333 \
+PGVECTOR_URL=postgres://postgres:postgres@localhost:5432/postgres \
+PINECONE_API_KEY=your_pinecone_api_key \
+bun run test:live
+```
+
+The suite skips providers without a variable. For each provider it creates a temporary index, exercises every verb and filter operator, and deletes the index.

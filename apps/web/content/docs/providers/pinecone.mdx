@@ -1,0 +1,40 @@
+---
+title: Pinecone
+description: Reference for the Pinecone adapter, which wraps the Pinecone client and uses native namespaces and metadata filters.
+---
+
+The Pinecone adapter wraps a `Pinecone` client from `@pinecone-database/pinecone`. Indexes and namespaces map one to one, so the adapter emulates nothing.
+
+```ts
+import { Pinecone } from "@pinecone-database/pinecone";
+import { createPineconeStore } from "vecstore-sdk/pinecone";
+
+const store = createPineconeStore({
+  client: new Pinecone({ apiKey }),
+  indexSpec: { serverless: { cloud: "aws", region: "us-east-1" } },
+});
+```
+
+Install the client alongside the SDK:
+
+```bash
+bun add vecstore-sdk @pinecone-database/pinecone
+```
+
+## Index creation
+
+`createIndex` needs a deployment spec. `indexSpec` defaults to serverless on AWS in `us-east-1`. Pass `indexSpec` to change it. `createIndex` waits until the index is ready before it returns.
+
+## Delete by filter
+
+Serverless indexes reject `delete({ filter })`. The adapter returns an `unsupported` error with `feature: "deleteByFilter"`. To delete matching records, delete by ids instead, or query first and delete the returned ids.
+
+## What the adapter stores
+
+| Concern   | Pinecone         |
+| --------- | ---------------- |
+| Index     | Index            |
+| Namespace | Native           |
+| Id        | Native           |
+| Metadata  | Metadata         |
+| Metric    | Set on the index |

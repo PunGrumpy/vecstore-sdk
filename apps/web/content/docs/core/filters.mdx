@@ -1,0 +1,69 @@
+---
+title: Filters
+description: Reference for the filter builders and the native syntax each adapter compiles them to.
+---
+
+You build a filter once with the exported helpers. Each adapter compiles the same filter to its provider's native syntax. The compilers are total: every filter compiles on every provider.
+
+```ts
+import { and, eq, gt, isIn, not, or } from "vecstore-sdk";
+
+const filter = and(
+  eq("genre", "drama"),
+  gt("year", 2000),
+  or(isIn("lang", ["en", "th"]), not(eq("region", "eu")))
+);
+```
+
+## Builders
+
+| Builder | Qdrant | pgvector | Pinecone |
+| --- | --- | --- | --- |
+| `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}'` | `{ field: { $eq } }` |
+| `ne(field, value)` | `must_not` of the above | `NOT (metadata @> …)` | `$ne` |
+| `gt`, `gte`, `lt`, `lte` | `range` | A jsonb comparison guarded by `jsonb_typeof` | `$gt`, `$gte`, `$lt`, `$lte` |
+| `isIn(field, values)` | `match.any`, or `should` for mixed types | `metadata->field <@ values` | `$in`, or `$or` of `$eq` for booleans |
+| `notIn(field, values)` | `match.except`, or `must_not` | `NOT COALESCE(… <@ …, false)` | `$nin`, or `$and` of `$ne` for booleans |
+| `exists(field)` | `must_not is_empty` | `IS NOT NULL AND jsonb_typeof <> 'null'` | `$exists: true` |
+| `and`, `or` | `must`, `should` | `AND`, `OR` | `$and`, `$or` |
+| `not(filter)` | `must_not` | `NOT (…)` | Pushed to the leaves with De Morgan's laws |
+
+`isIn`, `notIn`, `and`, and `or` take at least one element. The types enforce this.
+
+## Compiled output
+
+The filter `and(eq("genre", "drama"), gt("year", 2000))` compiles to:
+
+```json title="Qdrant"
+{
+  "must": [
+    { "key": "genre", "match": { "value": "drama" } },
+    { "key": "year", "range": { "gt": 2000 } }
+  ]
+}
+```
+
+```sql title="pgvector"
+(metadata @> $1::jsonb
+  AND (jsonb_typeof((metadata->$2::text)) = 'number'
+    AND (metadata->$2::text) > $3::jsonb))
+-- $1 = '{"genre":"drama"}', $2 = 'year', $3 = '2000'
+```
+
+```json title="Pinecone"
+{
+  "$and": [{ "genre": { "$eq": "drama" } }, { "year": { "$gt": 2000 } }]
+}
+```
+
+## Inspect the native filter
+
+Each adapter exports its compiler. Import it to log or reuse the native output:
+
+```ts
+import { compileQdrantFilter } from "vecstore-sdk/qdrant";
+
+const native = compileQdrantFilter(filter);
+```
+
+Where a provider lacks an operator, the compiler rewrites the filter instead of failing. See [Provider differences](/docs/providers/differences) for the two cases where the semantics diverge.

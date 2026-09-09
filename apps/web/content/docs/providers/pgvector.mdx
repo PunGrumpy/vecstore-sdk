@@ -1,0 +1,56 @@
+---
+title: pgvector
+description: Reference for the pgvector adapter, which wraps a pg Pool or Client and compiles filters to JSONB predicates.
+---
+
+The pgvector adapter wraps any client with a `query(text, params)` method that resolves to `{ rows }`. A `pg` Pool or Client works as is. An index is a table.
+
+```ts
+import { Pool } from "pg";
+import { createPgvectorStore } from "vecstore-sdk/pgvector";
+
+const store = createPgvectorStore({
+  client: new Pool({ connectionString }),
+  schema: "public",
+});
+```
+
+Install the client alongside the SDK:
+
+```bash
+bun add vecstore-sdk pg
+```
+
+For postgres.js, pass `{ query: (text, params) => sql.unsafe(text, params) }` as the client.
+
+## Table layout
+
+`createIndex` runs `CREATE EXTENSION IF NOT EXISTS vector`, creates the table below, and adds an HNSW (Hierarchical Navigable Small World) index for the metric and a GIN (Generalized Inverted Index) index on `metadata`:
+
+```sql
+CREATE TABLE "docs" (
+  id text NOT NULL,
+  namespace text NOT NULL DEFAULT '',
+  embedding vector(1536) NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  PRIMARY KEY (namespace, id)
+);
+```
+
+`CREATE EXTENSION` needs a role that can create extensions. If your application role cannot, create the extension yourself before you call `createIndex`.
+
+## Metric detection
+
+Queries read the metric from the HNSW or IVFFlat index definition in `pg_indexes`. When no index exists, they default to cosine. This also works for tables the SDK did not create.
+
+`listIndexes` returns the tables in the schema that have an `embedding vector` column.
+
+## What the adapter stores
+
+| Concern   | pgvector                                    |
+| --------- | ------------------------------------------- |
+| Index     | Table                                       |
+| Namespace | `namespace` column, part of the primary key |
+| Id        | `id text`                                   |
+| Metadata  | `metadata jsonb`                            |
+| Metric    | Read from the HNSW index operator class     |

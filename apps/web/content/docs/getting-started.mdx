@@ -1,0 +1,87 @@
+---
+title: Getting started
+description: Install VecStore SDK with the provider you use, create an index, and run a filtered query.
+---
+
+In this guide you install VecStore SDK, create an index on Qdrant, write two records, and run a filtered query. At the end you swap the adapter for pgvector without touching the query.
+
+## Install the package
+
+Install `vecstore-sdk` and the client for the provider you use. Provider clients are optional peer dependencies. The adapters import only their types, so your bundle contains only the client you installed.
+
+```bash
+bun add vecstore-sdk @qdrant/js-client-rest
+```
+
+For pgvector, install `pg` instead. For Pinecone, install `@pinecone-database/pinecone`.
+
+## Create a store and an index
+
+Create a store from a native client, then create an index with the dimension of your embeddings:
+
+```ts
+import { QdrantClient } from "@qdrant/js-client-rest";
+import { createQdrantStore } from "vecstore-sdk/qdrant";
+
+const store = createQdrantStore({
+  client: new QdrantClient({ url: "http://localhost:6333" }),
+});
+
+await store.createIndex({ name: "docs", dimension: 1536, metric: "cosine" });
+```
+
+`createIndex` returns `{ ok: true }` when the index exists. If the index already exists, it returns `{ ok: false, error }` with `error.kind` set to `already_exists`.
+
+## Write records
+
+Get an index handle scoped to a namespace, then upsert records. Each record has an `id`, a `vector`, and optional `metadata`:
+
+```ts
+const docs = store.index("docs", { namespace: "tenant_1" });
+
+await docs.upsert([
+  { id: "doc-1", vector: embedding, metadata: { genre: "drama", year: 2010 } },
+  { id: "doc-2", vector: embedding, metadata: { genre: "comedy", year: 1998 } },
+]);
+```
+
+## Query with a filter
+
+Build the filter with the exported helpers and pass it to `query`. The adapter compiles it to a Qdrant filter:
+
+```ts
+import { and, eq, gt } from "vecstore-sdk";
+
+const result = await docs.query({
+  vector: queryEmbedding,
+  topK: 5,
+  filter: and(eq("genre", "drama"), gt("year", 2000)),
+});
+
+if (!result.ok) {
+  throw new Error(result.error.message);
+}
+
+for (const match of result.value) {
+  console.log(match.id, match.score, match.metadata);
+}
+```
+
+You should see `doc-1` with its score and metadata. `doc-2` does not match because its year is below 2000.
+
+## Switch providers
+
+To move to pgvector, change the client and the adapter import. The index, upsert, and query code stays the same:
+
+```ts
+import { Pool } from "pg";
+import { createPgvectorStore } from "vecstore-sdk/pgvector";
+
+const store = createPgvectorStore({ client: new Pool({ connectionString }) });
+```
+
+## Next steps
+
+- [Filters](/docs/core/filters) lists every builder and what it compiles to.
+- [Errors](/docs/core/errors) lists the error kinds and how to match on them.
+- [Move between providers](/docs/guides/migration) covers what changes when you swap the adapter in a running application.

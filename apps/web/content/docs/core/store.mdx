@@ -1,0 +1,57 @@
+---
+title: Stores and indexes
+description: Reference for the store verbs, the index verbs, the record shape, and the score each provider returns.
+---
+
+A store owns the index lifecycle and hands out index handles. An index handle is scoped to one namespace and owns the record verbs. Every verb returns a `Result`, either `{ ok: true, value }` or `{ ok: false, error }`. Provider failures never throw.
+
+## Store
+
+Create a store with the adapter for your provider: `createQdrantStore`, `createPgvectorStore`, or `createPineconeStore`. Each takes the native client under `client`.
+
+| Method | Description |
+| --- | --- |
+| `createIndex({ name, dimension, metric? })` | Creates a collection, table, or index. `metric` is `cosine` (default), `euclidean`, or `dot`. |
+| `deleteIndex(name)` | Drops the index. Returns `not_found` if the index does not exist. |
+| `listIndexes()` | Returns the index names. |
+| `index(name, { namespace? })` | Returns an index handle scoped to one namespace. |
+| `provider` | `"qdrant"`, `"pgvector"`, or `"pinecone"`. |
+| `raw` | The client you passed in, with its original type. |
+
+## Index
+
+Every provider gets namespaces. Pinecone has them natively. On Qdrant and pgvector the adapter emulates them, as described on each provider page.
+
+| Method | Description |
+| --- | --- |
+| `upsert(records)` | Inserts or replaces records by id. |
+| `query({ vector, topK, filter?, includeMetadata?, includeVector? })` | Returns the nearest records with a `score`. |
+| `fetch(ids, { includeVector? })` | Returns the records that exist, in request order. |
+| `delete({ ids })`, `delete({ filter })`, `delete({ all: true })` | Removes records in the namespace. |
+
+## Records
+
+```ts
+interface VectorRecord {
+  readonly id: string;
+  readonly vector: readonly number[];
+  readonly metadata?: Metadata;
+}
+
+type MetadataValue = string | number | boolean | string[];
+type Metadata = Readonly<Record<string, MetadataValue>>;
+```
+
+Metadata values are `string`, `number`, `boolean`, or `string[]`. That is the intersection of what the three providers accept, so a record that upserts on one provider upserts on all of them.
+
+## Scores
+
+Each provider returns its native score for the index metric. Higher is better for `cosine` and `dot`. Lower is better for `euclidean`.
+
+| Metric | Qdrant | pgvector | Pinecone |
+| --- | --- | --- | --- |
+| `cosine` | Similarity, higher is better | `1 - distance`, higher is better | Similarity, higher is better |
+| `dot` | Dot product, higher is better | Dot product, higher is better | Dot product, higher is better |
+| `euclidean` | Distance, lower is better | Distance, lower is better | Squared distance, lower is better |
+
+A score threshold tuned on one provider does not carry over to another. Check it against real data after a move.

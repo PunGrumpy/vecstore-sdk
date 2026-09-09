@@ -1,0 +1,41 @@
+---
+title: Introduction
+description: One TypeScript API for Qdrant, pgvector, and Pinecone. Write a filter once and each adapter compiles it to the provider's native syntax.
+---
+
+VecStore SDK gives you one TypeScript API for three vector databases. You write one metadata filter, and each adapter compiles it to the provider's native syntax.
+
+Vector databases agree on the verbs (upsert, query, fetch, delete) and disagree on the rest. Pinecone filters use MongoDB-style operators, Qdrant uses `must` and `should` clauses, and pgvector uses SQL. Qdrant accepts only UUID point ids. Pinecone has native namespaces and the others do not. Each SDK throws its own error classes.
+
+VecStore SDK hides those differences behind a small adapter API:
+
+- A filter type with builders (`eq`, `gt`, `isIn`, `and`, `or`, `not`) that compiles to each provider.
+- Four record verbs and three index verbs with the same signatures on every provider.
+- Namespaces on every provider. The adapter emulates them where the provider lacks them.
+- Errors as a discriminated union that you match on. The SDK never throws them.
+- A `raw` property that returns the native client you passed in.
+
+Embedding is out of scope. Generate vectors with your model provider and pass the numbers in.
+
+## Providers
+
+VecStore SDK supports three providers. Every verb and every filter builder works on all of them. The badges show what each adapter does differently.
+
+<ProviderCards />
+
+## Next steps
+
+<Cards>
+  <Card href="/docs/getting-started" title="Getting started">
+    Install the package and run your first filtered query.
+  </Card>
+  <Card href="/docs/core/filters" title="Filters">
+    Every builder and what it compiles to on each provider.
+  </Card>
+  <Card href="/docs/providers/differences" title="Provider differences">
+    The two filter cases where providers disagree.
+  </Card>
+  <Card href="/docs/guides/migration" title="Move between providers">
+    What changes when you swap the adapter.
+  </Card>
+</Cards>

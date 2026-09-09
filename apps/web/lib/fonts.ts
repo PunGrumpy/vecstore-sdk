@@ -8,14 +8,14 @@ import { cn } from "./utils";
 const sans = createSans({
   display: "swap",
   subsets: ["latin"],
-  variable: "--font-sans",
+  variable: "--font-geist-sans",
   weight: "variable",
 });
 
 const mono = createMono({
   display: "swap",
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-geist-mono",
   weight: "variable",
 });
 

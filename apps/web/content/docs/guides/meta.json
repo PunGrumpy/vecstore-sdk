@@ -1,0 +1,5 @@
+{
+  "title": "Guides",
+  "defaultOpen": true,
+  "pages": ["migration", "testing", "design"]
+}

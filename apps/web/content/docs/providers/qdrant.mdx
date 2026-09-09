@@ -1,0 +1,41 @@
+---
+title: Qdrant
+description: Reference for the Qdrant adapter, which wraps QdrantClient, hashes ids to UUIDs, and emulates namespaces with a payload key.
+---
+
+The Qdrant adapter wraps a `QdrantClient` from `@qdrant/js-client-rest`. An index is a collection.
+
+```ts
+import { QdrantClient } from "@qdrant/js-client-rest";
+import { createQdrantStore } from "vecstore-sdk/qdrant";
+
+const store = createQdrantStore({
+  client: new QdrantClient({ url, apiKey }),
+});
+```
+
+Install the client alongside the SDK:
+
+```bash
+bun add vecstore-sdk @qdrant/js-client-rest
+```
+
+## Ids
+
+Qdrant accepts only UUID (universally unique identifier) or integer point ids. The adapter hashes any other id to a deterministic UUID and stores your id in the `_id` payload key. A lowercase UUID id in the default namespace passes through unchanged.
+
+## Namespaces
+
+Namespaces live in the `_namespace` payload key. `createIndex` adds a tenant keyword index on that key. The adapter strips `_id` and `_namespace` from the metadata it returns.
+
+## What the adapter stores
+
+| Concern | Qdrant |
+| --- | --- |
+| Index | Collection |
+| Namespace | `_namespace` payload key |
+| Id | UUID, hashed from your id when needed. The original id is kept in `_id`. |
+| Metadata | Payload |
+| Metric | Set on the collection |
+
+If you read a collection with another tool, expect the `_id` and `_namespace` keys in the payload.

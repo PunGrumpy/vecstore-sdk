@@ -1,0 +1,5 @@
+{
+  "title": "Core",
+  "defaultOpen": true,
+  "pages": ["store", "filters", "errors"]
+}

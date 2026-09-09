@@ -1,0 +1,5 @@
+{
+  "title": "Providers",
+  "defaultOpen": true,
+  "pages": ["qdrant", "pgvector", "pinecone", "differences"]
+}

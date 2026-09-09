@@ -1,5 +1,17 @@
+import { createMDX } from "fumadocs-mdx/next";
 import type { NextConfig } from "next";
 
-const config: NextConfig = {};
+const withMDX = createMDX();
 
-export default config;
+const config: NextConfig = {
+  turbopack: {
+    rules: {
+      "*.wgsl": {
+        as: "*.js",
+        loaders: ["@vgpu/wgsl/loader-webpack"],
+      },
+    },
+  },
+};
+
+export default withMDX(config);

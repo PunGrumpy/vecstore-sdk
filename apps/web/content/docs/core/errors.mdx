@@ -1,0 +1,49 @@
+---
+title: Errors
+description: Reference for the Result type and the seven error kinds every verb can return.
+---
+
+Every verb resolves to a `Result`. Provider failures never throw. Match on `error.kind` to decide what to do:
+
+```ts
+const result = await docs.query({ vector, topK: 5 });
+
+if (!result.ok) {
+  switch (result.error.kind) {
+    case "not_found":
+      return [];
+    case "unsupported":
+      return fallback(result.error.feature);
+    default:
+      throw new Error(result.error.message);
+  }
+}
+
+return result.value;
+```
+
+## Kinds
+
+`error.kind` is one of:
+
+| Kind | Meaning |
+| --- | --- |
+| `not_found` | The index does not exist. Carries `name`. |
+| `already_exists` | `createIndex` found an existing index. Carries `name`. |
+| `invalid_argument` | The provider rejected the request: wrong dimension, bad id, or bad metadata. |
+| `unsupported` | The provider cannot do this. Carries `feature`, for example `deleteByFilter` on Pinecone serverless. |
+| `unauthorized` | Bad credentials or a missing permission. |
+| `connection` | The provider was unreachable or timed out. |
+| `provider` | Anything else. `cause` holds the original error. |
+
+Every error also carries `provider` (`"qdrant"`, `"pgvector"`, or `"pinecone"`) and `message`.
+
+## Result type
+
+```ts
+type Result<T, E> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: E };
+```
+
+The package exports the `ok` and `err` constructors for tests and fakes.

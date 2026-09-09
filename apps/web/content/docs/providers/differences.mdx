@@ -1,0 +1,20 @@
+---
+title: Provider differences
+description: The two filter cases where providers disagree, and the features one provider lacks.
+---
+
+The compilers agree on scalar fields with present values. Two cases differ across providers. If your application depends on either, add an `exists` clause or store a scalar field to make the intent explicit.
+
+## Negation and missing fields
+
+`ne`, `notIn`, and `not` match records that lack the field on Qdrant and pgvector. Pinecone evaluates operators against present fields only. A record without `genre` does not match `ne("genre", "drama")` on Pinecone but does match it on the other two.
+
+## Array-valued fields
+
+`eq("tags", "x")` and `isIn("tags", ["x"])` mean “contains x” on Qdrant and pgvector. Pinecone supports `$in` on list fields and rejects `$eq`.
+
+## Features one provider lacks
+
+- Pinecone serverless indexes reject `delete({ filter })`. The adapter returns `{ kind: "unsupported", feature: "deleteByFilter" }`.
+- Pinecone `createIndex` needs a deployment spec. The adapter defaults to serverless on AWS in `us-east-1`. Pass `indexSpec` to change it.
+- pgvector `createIndex` runs `CREATE EXTENSION IF NOT EXISTS vector`, which needs a role that can create extensions.

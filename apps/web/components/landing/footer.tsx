@@ -35,7 +35,7 @@ export const Footer = () => (
           target="_blank"
           rel="noopener noreferrer"
           className="hover:text-gray-1000 text-gray-900 transition-colors"
-          href="https://www.pungrumpy"
+          href="https://www.pungrumpy.com"
         >
           Noppakorn Kaewsalabnil
         </a>

@@ -22,6 +22,11 @@ const CARD_ICON_Y = (CARD_HEIGHT - CARD_ICON) / 2;
 const CARD_LABEL_GAP = 20;
 const CARD_LABEL_SIZE = 32;
 const CARD_LABEL_X = CARD_ICON_INSET + CARD_ICON + CARD_LABEL_GAP;
+const PLACEHOLDER_FILL = "#2e2e2e";
+const PLACEHOLDER_ICON_RADIUS = 10;
+const PLACEHOLDER_BAR_WIDTH = 132;
+const PLACEHOLDER_BAR_HEIGHT = 16;
+const PLACEHOLDER_BAR_RADIUS = 8;
 const FADE_START = 0.16;
 const FADE_END = 0.84;
 const OG_LOGO_WIDTH = 580;
@@ -128,17 +133,34 @@ const QDRANT_RED = "#dc244c";
 const PGVECTOR_BLUE = "#4169e1";
 
 interface ProviderRow {
+  readonly kind: "provider";
   readonly file: string;
   readonly label: string;
   readonly tint: string;
 }
 
-const rows: readonly ProviderRow[] = [
-  { file: "pinecone.svg", label: "Pinecone", tint: PINECONE_INK },
-  { file: "qdrant.svg", label: "Qdrant", tint: QDRANT_RED },
-  { file: "postgresql.svg", label: "pgvector", tint: PGVECTOR_BLUE },
-  { file: "pinecone.svg", label: "Pinecone", tint: PINECONE_INK },
-  { file: "qdrant.svg", label: "Qdrant", tint: QDRANT_RED },
+interface PlaceholderRow {
+  readonly kind: "placeholder";
+}
+
+type Row = ProviderRow | PlaceholderRow;
+
+const rows: readonly Row[] = [
+  { kind: "placeholder" },
+  { file: "qdrant.svg", kind: "provider", label: "Qdrant", tint: QDRANT_RED },
+  {
+    file: "postgresql.svg",
+    kind: "provider",
+    label: "pgvector",
+    tint: PGVECTOR_BLUE,
+  },
+  {
+    file: "pinecone.svg",
+    kind: "provider",
+    label: "Pinecone",
+    tint: PINECONE_INK,
+  },
+  { kind: "placeholder" },
 ];
 
 const providerIcon = (file: string, size: number, tint: string): string => {
@@ -152,13 +174,26 @@ const providerIcon = (file: string, size: number, tint: string): string => {
   return `<g transform="scale(${format(scale)})"><path d="${d}" fill="${tint}"/></g>`;
 };
 
-const card = (row: ProviderRow, y: number, labelFont: Font): string => {
+const placeholderBody = (): string => {
+  const barY = (CARD_HEIGHT - PLACEHOLDER_BAR_HEIGHT) / 2;
+  return `<rect x="${CARD_ICON_INSET}" y="${format(CARD_ICON_Y)}" width="${CARD_ICON}" height="${CARD_ICON}" rx="${PLACEHOLDER_ICON_RADIUS}" fill="${PLACEHOLDER_FILL}"/><rect x="${CARD_LABEL_X}" y="${format(barY)}" width="${PLACEHOLDER_BAR_WIDTH}" height="${PLACEHOLDER_BAR_HEIGHT}" rx="${PLACEHOLDER_BAR_RADIUS}" fill="${PLACEHOLDER_FILL}"/>`;
+};
+
+const providerBody = (row: ProviderRow, labelFont: Font): string => {
   const label = labelFont.getPath(row.label, 0, 0, CARD_LABEL_SIZE, {
     kerning: true,
   });
   const box = label.getBoundingBox();
   const textY = CARD_HEIGHT / 2 - (box.y1 + box.y2) / 2;
-  return `<g transform="translate(0 ${format(y)})"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${CARD_STROKE}" stroke-width="${CARD_STROKE_WIDTH}"/><g transform="translate(${CARD_ICON_INSET} ${format(CARD_ICON_Y)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(CARD_LABEL_X - box.x1)} ${format(textY)})"><path d="${cubicPathData(label)}" fill="${INK}"/></g></g>`;
+  return `<g transform="translate(${CARD_ICON_INSET} ${format(CARD_ICON_Y)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(CARD_LABEL_X - box.x1)} ${format(textY)})"><path d="${cubicPathData(label)}" fill="${INK}"/></g>`;
+};
+
+const card = (row: Row, y: number, labelFont: Font): string => {
+  const body =
+    row.kind === "placeholder"
+      ? placeholderBody()
+      : providerBody(row, labelFont);
+  return `<g transform="translate(0 ${format(y)})"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${CARD_STROKE}" stroke-width="${CARD_STROKE_WIDTH}"/>${body}</g>`;
 };
 
 const openGraph = (): string => {

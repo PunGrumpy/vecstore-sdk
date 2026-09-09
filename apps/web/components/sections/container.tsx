@@ -1,9 +1,16 @@
-import type { ReactNode } from "react";
+import type { ComponentProps } from "react";
 
-interface ContainerProps {
-  readonly children: ReactNode;
-}
+import { cn } from "@/lib/utils";
 
-export const Container = ({ children }: ContainerProps) => (
-  <div className="mx-auto w-full max-w-[1120px] px-6">{children}</div>
+export const Container = ({
+  children,
+  className,
+  ...props
+}: ComponentProps<"section">) => (
+  <section
+    className={cn("mx-auto w-full max-w-[1120px] px-6", className)}
+    {...props}
+  >
+    {children}
+  </section>
 );

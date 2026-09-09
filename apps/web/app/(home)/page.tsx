@@ -2,6 +2,7 @@ import { ArrowUpRightIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { VecstoreIcon } from "@/components/icons/vecstore";
 import { Code } from "@/components/landing/code";
 import { CopyCommand } from "@/components/landing/copy-command";
 import { Demo } from "@/components/landing/demo";
@@ -169,9 +170,11 @@ const Adapters = () => (
             key={adapter.title}
           >
             <h3 className="text-gray-1000 flex items-center gap-2 font-mono text-[16px] leading-5">
-              {adapter.mark ? (
+              {adapter.mark === "vecstore" ? (
+                <VecstoreIcon className="size-4" />
+              ) : (
                 <ProviderIcon className="size-4" id={adapter.mark} />
-              ) : null}
+              )}
               {adapter.title}
             </h3>
             <p className="text-copy-16 text-gray-900">{adapter.body}</p>

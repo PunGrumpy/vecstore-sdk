@@ -303,7 +303,7 @@ export const verbs = [
 export const adapters: readonly {
   readonly body: string;
   readonly command: string;
-  readonly mark: ProviderId | null;
+  readonly mark: ProviderId | "vecstore";
   readonly title: string;
 }[] = [
   {
@@ -325,10 +325,10 @@ export const adapters: readonly {
     title: "Pinecone",
   },
   {
-    body: "Embedding is out of scope. Generate vectors with the AI SDK embed() and pass the numbers in.",
-    command: "bun add ai",
-    mark: null,
-    title: "Bring your own embeddings",
+    body: "The core package ships the filter language and the adapter interface with no runtime dependencies.",
+    command: installCommand,
+    mark: "vecstore",
+    title: "vecstore-sdk",
   },
 ];
 

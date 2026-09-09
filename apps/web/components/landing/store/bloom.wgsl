@@ -15,7 +15,7 @@ struct Bloom {
 @group(0) @binding(1) var sceneTexture: texture_2d<f32>;
 @group(0) @binding(2) var sceneSampler: sampler;
 
-const TAPS = 24u;
+const TAPS = 32u;
 const RAY_STEPS = 256;
 const GOLDEN = 2.39996323;
 const LUMA = vec3f(0.2126, 0.7152, 0.0722);
@@ -53,18 +53,20 @@ fn radiance_at(uv: vec2f, scale: f32) -> vec3f {
 
   let near = radiance_at(uv, bloom.spread * 0.35);
   let far = radiance_at(uv, bloom.spread);
-  let radiance = near * 0.5 + far * 0.8;
+  let radiance = near * 0.34 + far * 1.05;
 
   let toLight = uv - bloom.light;
   let step = toLight / f32(RAY_STEPS) * 1.4;
   let jitter = fract(hash12(uv / max(bloom.texel.x, 1e-6)) + bloom.frame * 0.618034);
+  let sideways = vec2f(-step.y, step.x);
   var coordinate = uv - step * jitter;
   var illumination = 1.0;
   var weight = 0.0;
   var rays = vec3f(0.0);
   for (var index = 0; index < RAY_STEPS; index++) {
     coordinate -= step;
-    let sampled = scene_at(coordinate);
+    let feather = (fract(jitter + f32(index) * 0.381966) - 0.5) * 2.4;
+    let sampled = scene_at(coordinate + sideways * feather);
     rays += max(sampled - vec3f(0.06), vec3f(0.0)) * illumination;
     weight += illumination;
     illumination *= 0.977;

@@ -66,13 +66,15 @@ fn rounded_square(point: vec2f) -> f32 {
   let shell = glass + bounce;
   let sheen = mix(0.74, 1.0, abs(normal.z));
   let core = surface.emissive.rgb * scene.params.z * (1.0 + 0.35 * rim) * sheen;
-  let color = mix(shell, core, lit);
   let edge = rounded_square(surface.local);
   let band = smoothstep(-0.075, -0.02, edge);
-  let outline = select(1.0, band, abs(normal.z) > 0.5);
+  let cap = abs(normal.z) > 0.5;
+  let outline = select(1.0, band, cap);
+  let softness = select(1.0, smoothstep(0.0, -0.17, edge), cap);
+  let color = mix(shell, core * mix(0.38, 1.0, softness), lit);
   let glow = clamp(max(max(bounce.r, bounce.g), bounce.b), 0.0, 1.0);
   let pane = scene.ink.a * (0.06 + 0.5 * fresnel + specular * 0.9 + 0.35 * glow);
   let shellAlpha = max(scene.ink.a * (0.5 + 0.4 * rim + 0.6 * glow) * outline, pane);
-  let alpha = mix(shellAlpha, 1.0, lit) * surface.fade;
+  let alpha = mix(shellAlpha, mix(0.55, 1.0, softness), lit) * surface.fade;
   return vec4f(color * alpha, alpha);
 }

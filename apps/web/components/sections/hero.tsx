@@ -7,12 +7,12 @@ import { installCommand } from "@/lib/landing-content";
 
 export const Hero = () => (
   <div className="mx-auto flex w-full flex-col items-center px-6 pt-24 pb-16 text-center">
-    <h1 className="max-w-4xl text-[40px] leading-[1.05] font-semibold tracking-[-0.04em] text-balance md:text-[64px]">
+    <h1 className="text-heading-40 md:text-heading-64 max-w-4xl text-balance">
       One filter language for every vector store
     </h1>
     <p className="text-copy-20 mt-6 max-w-2xl text-balance text-gray-900">
       A unified TypeScript SDK for Qdrant, pgvector, and Pinecone. Write one
-      metadata filter and each adapter compiles it to the provider&apos;s native
+      metadata filter and each adapter compiles it to the provider’s native
       syntax.
     </p>
     <CopyCommand className="mt-8" command={installCommand} />

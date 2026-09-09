@@ -178,3 +178,7 @@
 [role="dialog"] input:focus-visible {
   outline: none;
 }
+
+#nd-nav [aria-label="Toggle Menu"] {
+  display: none;
+}

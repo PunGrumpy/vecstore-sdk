@@ -157,7 +157,7 @@ export const VectorField = () => {
   return (
     <canvas
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[640px] w-full [mask-image:radial-gradient(ellipse_75%_65%_at_50%_42%,black_25%,transparent_100%)]"
+      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-160 w-full mask-[radial-gradient(ellipse_75%_65%_at_50%_42%,black_25%,transparent_100%)]"
       ref={canvasRef}
     />
   );

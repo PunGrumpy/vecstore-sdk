@@ -3,13 +3,13 @@ import Link from "next/link";
 
 import { CopyCommand } from "@/components/landing/copy-command";
 import { Demo } from "@/components/landing/demo";
-import { StoreStack } from "@/components/landing/store-stack";
+import { StoreStack } from "@/components/landing/store/stack";
 import { installCommand } from "@/lib/landing-content";
 
 export const Hero = () => (
   <div className="mx-auto flex w-full max-w-[1120px] flex-col items-center px-6 pt-20 pb-16">
     <div className="flex w-full flex-col items-center gap-10 text-center lg:flex-row lg:justify-between lg:gap-12 lg:text-left">
-      <StoreStack className="size-32 shrink-0 md:size-40 lg:order-last lg:size-64" />
+      <StoreStack className="size-64 shrink-0 md:size-80 lg:order-last lg:size-96" />
       <div className="flex max-w-xl min-w-0 flex-col items-center lg:items-start">
         <h1 className="text-heading-40 md:text-heading-56 text-balance">
           One filter language for every vector store

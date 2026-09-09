@@ -8,7 +8,7 @@ struct Bloom {
   scatter: f32,
   halo: f32,
   frame: f32,
-  pad: f32,
+  dispersion: f32,
 }
 
 @group(0) @binding(0) var<uniform> bloom: Bloom;
@@ -67,7 +67,10 @@ fn radiance_at(uv: vec2f, scale: f32) -> vec3f {
     coordinate -= step;
     let feather = (fract(jitter + f32(index) * 0.381966) - 0.5) * 2.4;
     let sampled = scene_at(coordinate + sideways * feather);
-    rays += max(sampled - vec3f(0.06), vec3f(0.0)) * illumination;
+    let phase = f32(index) / f32(RAY_STEPS);
+    let split = vec3f(phase, 0.5, 1.0 - phase) * 2.0 - 1.0;
+    let prism = vec3f(1.0) + split * bloom.dispersion;
+    rays += max(sampled - vec3f(0.06), vec3f(0.0)) * illumination * prism;
     weight += illumination;
     illumination *= 0.977;
   }

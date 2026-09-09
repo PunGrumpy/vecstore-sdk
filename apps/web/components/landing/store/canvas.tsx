@@ -39,6 +39,7 @@ const BLOOM_SPREAD = 74;
 const BLOOM_GRAIN = 0.018;
 const FLARE_SCATTER = 1.35;
 const FLARE_HALO = 0.24;
+const FLARE_DISPERSION = 0.78;
 const DARK_GLOW = 0.09;
 const LIGHT_GLOW = 0.07;
 const DARK_EXPOSURE = 0.66;
@@ -207,13 +208,13 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
         blend: "premultiplied",
         set: {
           bloom: {
+            dispersion: 0,
             exposure: DARK_EXPOSURE,
             frame: 0,
             gain: DARK_GLOW,
             grain: BLOOM_GRAIN,
             halo: FLARE_HALO,
             light: [0.5, 0.5],
-            pad: 0,
             scatter: FLARE_SCATTER,
             spread: BLOOM_SPREAD,
             texel: [1, 1],
@@ -313,13 +314,13 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
         });
         composite.set({
           bloom: {
+            dispersion: hues ? FLARE_DISPERSION : 0,
             exposure: tone.exposure,
             frame: frameIndex,
             gain: tone.glow,
             grain: BLOOM_GRAIN,
             halo: FLARE_HALO,
             light: [lightU, lightV],
-            pad: 0,
             scatter: tone.scatter,
             spread: BLOOM_SPREAD,
             texel: [1 / width, 1 / height],

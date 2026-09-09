@@ -5,8 +5,8 @@ import { clock, effect, frameLoop, init, surface } from "vgpu";
 
 import shader from "./vector-field.wgsl";
 
-const POINTER_EASE = 0.08;
-const ORBIT_X = 0.55;
+const POINTER_RATE = 8;
+const ORBIT_X = 0.75;
 const ORBIT_Y = 0.3;
 const PULSE_SECONDS = 1.4;
 const LIGHT_INK = [0.09, 0.09, 0.09] as const;
@@ -52,6 +52,10 @@ export const VectorField = () => {
       pointer.tracking = false;
     };
     const onPointerDown = (event: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      if (event.clientY < rect.top || event.clientY > rect.bottom) {
+        return;
+      }
       const clip = toClip(canvas, event.clientX, event.clientY);
       pulse.x = clip.x;
       pulse.y = clip.y;
@@ -96,8 +100,9 @@ export const VectorField = () => {
                 y: Math.cos(elapsed * 0.16) * ORBIT_Y,
               };
         }
-        pointer.x += (pointer.target.x - pointer.x) * POINTER_EASE;
-        pointer.y += (pointer.target.y - pointer.y) * POINTER_EASE;
+        const ease = 1 - Math.exp(-time.deltaTime * POINTER_RATE);
+        pointer.x += (pointer.target.x - pointer.x) * ease;
+        pointer.y += (pointer.target.y - pointer.y) * ease;
         const dark = isDark();
         const dpr =
           canvas.width / Math.max(canvas.getBoundingClientRect().width, 1);

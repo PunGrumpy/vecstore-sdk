@@ -96,7 +96,7 @@ const Pitch = () => (
 
 const Highlights = () => (
   <Container>
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       {highlights.map((item) => (
         <div
           className="bg-background-100 rounded-lg border border-gray-200 p-8 shadow-sm"
@@ -112,7 +112,7 @@ const Highlights = () => (
 
 const Core = () => (
   <Container>
-    <div className="bg-background-100 mt-4 grid overflow-hidden rounded-lg border border-gray-200 shadow-sm lg:grid-cols-[1fr_2fr]">
+    <div className="bg-background-100 mt-4 grid grid-cols-1 overflow-hidden rounded-lg border border-gray-200 shadow-sm lg:grid-cols-[1fr_2fr]">
       <div className="flex flex-col p-8 lg:p-12">
         <h2 className="text-heading-24 text-gray-1000">VecStore Core</h2>
         <p className="text-copy-16 mt-3 text-gray-900">
@@ -131,8 +131,8 @@ const Core = () => (
           Read the docs
         </Link>
       </div>
-      <div className="flex flex-col border-t border-gray-200 lg:border-t-0 lg:border-l">
-        <div className="p-6">
+      <div className="flex min-w-0 flex-col border-t border-gray-200 lg:border-t-0 lg:border-l">
+        <div className="min-w-0 p-6">
           <Code code={switchCode} lang="ts" title="switch-provider.ts" />
         </div>
         <ul className="grid grid-cols-2 border-t border-gray-200 md:grid-cols-4">
@@ -152,7 +152,7 @@ const Core = () => (
 
 const Adapters = () => (
   <Container>
-    <div className="grid gap-4 py-24 lg:grid-cols-[1fr_2fr]">
+    <div className="grid grid-cols-1 gap-4 py-24 lg:grid-cols-[1fr_2fr]">
       <div className="lg:pr-12">
         <h2 className="text-heading-32 text-gray-1000">
           Bring your own client
@@ -162,7 +162,7 @@ const Adapters = () => (
           use and the adapter imports nothing else.
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {adapters.map((adapter) => (
           <div
             className="bg-background-100 flex flex-col gap-4 rounded-lg border border-gray-200 p-8 shadow-sm"
@@ -212,7 +212,7 @@ const Guides = () => (
         <CopyCommand command={installCommand} pill />
       </div>
     </div>
-    <div className="grid gap-4 pb-24 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 pb-24 md:grid-cols-3">
       {guides.map((guide) => (
         <Link
           className="bg-background-100 group flex flex-col gap-3 rounded-lg border border-gray-200 p-8 shadow-sm transition-colors hover:bg-gray-100"

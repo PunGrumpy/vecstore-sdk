@@ -48,7 +48,7 @@ fn segment(p: vec2f, a: vec2f, b: vec2f) -> f32 {
   let pulseCenter = (params.pulse * vec2f(0.5, -0.5) + 0.5) * params.resolution;
   let fromPulse = center - pulseCenter;
   let pulseDist = length(fromPulse);
-  let ringRadius = params.pulseAge * 520.0;
+  let ringRadius = 520.0 * (1.0 - exp(-3.0 * params.pulseAge));
   let ring = exp(-pow((pulseDist - ringRadius) / 70.0, 2.0)) * max(0.0, 1.0 - params.pulseAge * 0.8);
 
   let drift = noise2(cell * 0.16 + vec2f(params.time * 0.045, params.time * 0.02)) * 6.2831853;

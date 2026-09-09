@@ -85,7 +85,7 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
   const stateKey = `${example.id}-${provider.id}`;
 
   return (
-    <div className="mx-auto mt-20 flex w-full max-w-4xl flex-col gap-4">
+    <div className="mx-auto mt-14 flex w-full max-w-4xl flex-col gap-4">
       <div className="mx-auto flex w-fit items-center justify-center gap-8">
         <div
           aria-label="Filter examples"

@@ -24,7 +24,6 @@
       "name": "web",
       "version": "0.1.0",
       "dependencies": {
-        "@vgpu/wgsl": "0.4.1",
         "cn": "^0.2.6",
         "fumadocs-core": "16.15.8",
         "fumadocs-mdx": "15.4.0",
@@ -34,7 +33,6 @@
         "react": "19.2.8",
         "react-dom": "19.2.8",
         "tw-animate-css": "1.4.0",
-        "vgpu": "0.4.1",
       },
       "devDependencies": {
         "@tailwindcss/postcss": "4.3.3",
@@ -42,7 +40,6 @@
         "@types/node": "26.5.0",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.7",
-        "@webgpu/types": "^0.1.72",
         "postcss": "^8.5.28",
         "tailwindcss": "4.3.3",
         "typescript": "7.0.2",
@@ -293,10 +290,6 @@
     "@manypkg/tools": ["@manypkg/tools@2.1.2", "", { "dependencies": { "jju": "^1.4.0", "tinyglobby": "^0.2.13", "yaml": "^2.9.0" } }, "sha512-6QEf6yqFbETdwGITKq57aYoPfX/3K8XFNwsAlx0C1M7o8cb79sv1M3w+tWuWvIcSbNqrLF7OD7YpZMVVz335hQ=="],
 
     "@mdx-js/mdx": ["@mdx-js/mdx@3.1.1", "", { "dependencies": { "@types/estree": "^1.0.0", "@types/estree-jsx": "^1.0.0", "@types/hast": "^3.0.0", "@types/mdx": "^2.0.0", "acorn": "^8.0.0", "collapse-white-space": "^2.0.0", "devlop": "^1.0.0", "estree-util-is-identifier-name": "^3.0.0", "estree-util-scope": "^1.0.0", "estree-walker": "^3.0.0", "hast-util-to-jsx-runtime": "^2.0.0", "markdown-extensions": "^2.0.0", "recma-build-jsx": "^1.0.0", "recma-jsx": "^1.0.0", "recma-stringify": "^1.0.0", "rehype-recma": "^1.0.0", "remark-mdx": "^3.0.0", "remark-parse": "^11.0.0", "remark-rehype": "^11.0.0", "source-map": "^0.7.0", "unified": "^11.0.0", "unist-util-position-from-estree": "^2.0.0", "unist-util-stringify-position": "^4.0.0", "unist-util-visit": "^5.0.0", "vfile": "^6.0.0" } }, "sha512-f6ZO2ifpwAQIpzGWaBQT2TXxPv6z3RBzQKpVftEWN78Vl/YweF1uwussDx8ECAXVtr3Rs89fKyG9YlzUs9DyGQ=="],
-
-    "@modelcontextprotocol/core": ["@modelcontextprotocol/core@2.0.0", "", { "dependencies": { "zod": "^4.2.0" } }, "sha512-pJCEwGG7Lfr/+PQp9ZTwKXNeO5wzbfKL7H3MYpCorM4oFBoQrdjnBgEoqG+RjhsvS1FKrDbKux+M1HhlnGWqcA=="],
-
-    "@modelcontextprotocol/server": ["@modelcontextprotocol/server@2.0.0", "", { "dependencies": { "@modelcontextprotocol/core": "2.0.0", "zod": "^4.2.0" } }, "sha512-YhHWdHfpFMQfd0prsEnxKeS3Qz3ytIGmsS0sth4KDjnacIT7hxk6hXHkJ9KysxlkvTM+WZAtQbbcUhdoP4Hvtw=="],
 
     "@next/env": ["@next/env@16.3.4", "", {}, "sha512-cjWZnUUa6jZq2kFaNe/ZyJdZonOZ/QoN0Zka2nz/FLOrfx14pQuM9c5RaSVkWMqgdt4ksgPAMWPyHSs/CyV48Q=="],
 
@@ -741,18 +734,6 @@
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
     "@ungap/structured-clone": ["@ungap/structured-clone@1.4.0", "", {}, "sha512-1mEZtMKPM09vDmQt5y7YvmN2+DFTP7Tg0EWXdic8/C6VRnpb33e4ghisCIE3WZjsE2N8mf+QV1Zqh7ZFYLWInQ=="],
-
-    "@vgpu/adapter-mock": ["@vgpu/adapter-mock@0.4.1", "", { "dependencies": { "@vgpu/core": "0.4.1" } }, "sha512-4w6FHutvlno5nAYt/SYDB5TJlXVwL7liZeBo79jKkjOKJoIrtTO8jf9ny9M5lrLcdpzKdBcdLY1UPJRHZ+DbkQ=="],
-
-    "@vgpu/adapter-node": ["@vgpu/adapter-node@0.4.1", "", { "dependencies": { "@vgpu/core": "0.4.1", "webgpu": "0.4.0" } }, "sha512-fZgokRT/oTodHqCgyrqtKOrqw7TO+1qxW8gcW5A30wcKnjjAj+4sRHytaJTQkJCYDpZeOHp7B2lhvAxrv1zINg=="],
-
-    "@vgpu/core": ["@vgpu/core@0.4.1", "", { "dependencies": { "@vgpu/wgsl": "0.4.1" } }, "sha512-cWETNNvNrobCjGGKbWxujEjNgH8QCz+sTbz3zecKtq/P6V5iB8f6tFrKGmQNvc084R+XJLOAoLY/gGCo8KTbTQ=="],
-
-    "@vgpu/wgsl": ["@vgpu/wgsl@0.4.1", "", { "dependencies": { "@vgpu/wgsl-std": "0.4.1" }, "peerDependencies": { "@vgpu/adapter-node": ">=0.1.6 <1.0.0" }, "optionalPeers": ["@vgpu/adapter-node"] }, "sha512-wcK3y+bSVkFhcDPxbGKVNi1tATGA8TdqdmrAuBtRhv2LXi2cEgK5VOZ5k4y5G7yX5+4T5mml9nGO3fQdGDD6WQ=="],
-
-    "@vgpu/wgsl-std": ["@vgpu/wgsl-std@0.4.1", "", {}, "sha512-K6qB9qTBXP/G0uhiJZ9cKt0MEH/bHFrcD0t3+xyjkA7QxNPMXqx7LniMHMIz3T0pC47ujCLaBRyOuHwyOqV0EA=="],
-
-    "@webgpu/types": ["@webgpu/types@0.1.72", "", {}, "sha512-0cF7RFM2edNoiIS1ODJp0/Gzv4/xSXhwoR0YCza+OWpJWtn4wmo9DvK91aLlH9+uUnwIriP7ZiC3WitmyhuzBw=="],
 
     "@yuku-analyzer/binding-android-arm64": ["@yuku-analyzer/binding-android-arm64@0.9.5", "", { "os": "android", "cpu": "arm64" }, "sha512-Rvr0/EkPfPgc0C1wx8dz4bv6o4I4yeYI06tcHUL0f4ZdwSyIreABoLHNW51Ap0VNA7aDRVQ4izRNQh/LuykofA=="],
 
@@ -1590,11 +1571,7 @@
 
     "picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
 
-    "pixelmatch": ["pixelmatch@7.2.0", "", { "dependencies": { "pngjs": "^7.0.0" }, "bin": { "pixelmatch": "bin/pixelmatch" } }, "sha512-xhcb4yHu9sM/G7foGzoLtXYcC0zHEaOXXjRKhGup0fw78Nf2Tkiapv4EQyMzrbcmQPsllAI7DbFY2UT7PlI9Pg=="],
-
     "pkg-types": ["pkg-types@1.3.1", "", { "dependencies": { "confbox": "^0.1.8", "mlly": "^1.7.4", "pathe": "^2.0.1" } }, "sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ=="],
-
-    "pngjs": ["pngjs@7.0.0", "", {}, "sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow=="],
 
     "possible-typed-array-names": ["possible-typed-array-names@1.1.0", "", {}, "sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg=="],
 
@@ -1872,15 +1849,9 @@
 
     "vfile-message": ["vfile-message@4.0.3", "", { "dependencies": { "@types/unist": "^3.0.0", "unist-util-stringify-position": "^4.0.0" } }, "sha512-QTHzsGd1EhbZs4AsQ20JX1rC3cOlt/IWJruk893DfLRr57lcnOeMaWG4K0JrRta4mIJZKth2Au3mM3u03/JWKw=="],
 
-    "vgpu": ["vgpu@0.4.1", "", { "dependencies": { "@modelcontextprotocol/server": "2.0.0", "@vgpu/adapter-mock": "0.4.1", "@vgpu/adapter-node": "0.4.1", "@vgpu/core": "0.4.1", "@vgpu/wgsl": "0.4.1", "@vgpu/wgsl-std": "0.4.1", "@webgpu/types": "^0.1.69", "pixelmatch": "^7.2.0", "pngjs": "^7.0.0", "wgpu-matrix": "^3.4.2", "zod": "^4.4.3" }, "peerDependencies": { "three": ">=0.180.0 <0.200.0" }, "optionalPeers": ["three"], "bin": { "vgpu": "bin/vgpu.js" } }, "sha512-Kq2W2Y7Z0hZnSp4Hdf3jaoVL7oHjFypZapwGcMYYVkTfRXqAISmklGl3yd6wmte8yFwOhAkhJErPKZjWJBGpzA=="],
-
     "web": ["web@workspace:apps/web"],
 
     "web-namespaces": ["web-namespaces@2.0.1", "", {}, "sha512-bKr1DkiNa2krS7qxNtdrtHAmzuYGFQLiQ13TsorsdT6ULTkPLKuu5+GsFpDlg6JFjUTwX2DyhMPG2be8uPrqsQ=="],
-
-    "webgpu": ["webgpu@0.4.0", "", { "dependencies": { "@webgpu/types": "^0.1.69", "debug": "^4.4.0" } }, "sha512-F5pimn3Aoi0zWjuRdiVs5TnrUwSzD2lESBohsIUsqyitWkGRQlXU2fhV6ycXlQTa1bvAf3sjqiUpBEpmSQ5ptA=="],
-
-    "wgpu-matrix": ["wgpu-matrix@3.4.2", "", {}, "sha512-IfZFbG7olEYBD76VCZy2TzqM57GKy3LT++AZh37tMHPPByO6R2h61zXGBZFNPi2IzxNivNi8y5dvze5PjaczjA=="],
 
     "which": ["which@2.0.2", "", { "dependencies": { "isexe": "^2.0.0" }, "bin": { "node-which": "./bin/node-which" } }, "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA=="],
 

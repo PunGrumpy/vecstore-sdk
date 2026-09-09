@@ -11,18 +11,29 @@ const BACKGROUND = "#000000";
 const INK = "#ededed";
 const CARD_FILL = "#0a0a0a";
 const CARD_STROKE = "#2e2e2e";
-const CARD_WIDTH = 228;
-const CARD_HEIGHT = 58;
-const CARD_GAP = 12;
-const CARD_RADIUS = 12;
-const CARD_ICON = 22;
-const CARD_LABEL_SIZE = 22;
-const FADED_OPACITY = 0.35;
-const OG_LOGO_WIDTH = 440;
+const CARD_STROKE_WIDTH = 2;
+const CARD_WIDTH = 400;
+const CARD_HEIGHT = 112;
+const CARD_GAP = 28;
+const CARD_RADIUS = 20;
+const CARD_ICON = 34;
+const CARD_ICON_INSET = 28;
+const CARD_ICON_Y = (CARD_HEIGHT - CARD_ICON) / 2;
+const CARD_LABEL_GAP = 20;
+const CARD_LABEL_SIZE = 32;
+const CARD_LABEL_X = CARD_ICON_INSET + CARD_ICON + CARD_LABEL_GAP;
+const PLACEHOLDER_FILL = "#2e2e2e";
+const PLACEHOLDER_ICON_RADIUS = 10;
+const PLACEHOLDER_BAR_WIDTH = 132;
+const PLACEHOLDER_BAR_HEIGHT = 16;
+const PLACEHOLDER_BAR_RADIUS = 8;
+const FADE_START = 0.16;
+const FADE_END = 0.84;
+const OG_LOGO_WIDTH = 580;
 const MARK_SIZE = 103.68;
 const OG_WIDTH = 1200;
 const OG_HEIGHT = 630;
-const OG_PADDING = 96;
+const OG_PADDING = 80;
 const TAGLINE = "One filter language for every vector store.";
 const ICO_HEADER_BYTES = 6;
 const ICO_ENTRY_BYTES = 16;
@@ -117,21 +128,42 @@ const ico = (entries: readonly { size: number; png: Buffer }[]): Buffer => {
   ]);
 };
 
+const PINECONE_INK = INK;
+const QDRANT_RED = "#dc244c";
+const PGVECTOR_BLUE = "#4169e1";
+
 interface ProviderRow {
+  readonly kind: "provider";
   readonly file: string;
   readonly label: string;
-  readonly faded: boolean;
+  readonly tint: string;
 }
 
-const rows: readonly ProviderRow[] = [
-  { faded: true, file: "pinecone.svg", label: "Pinecone" },
-  { faded: false, file: "qdrant.svg", label: "Qdrant" },
-  { faded: false, file: "postgresql.svg", label: "pgvector" },
-  { faded: false, file: "pinecone.svg", label: "Pinecone" },
-  { faded: true, file: "qdrant.svg", label: "Qdrant" },
+interface PlaceholderRow {
+  readonly kind: "placeholder";
+}
+
+type Row = ProviderRow | PlaceholderRow;
+
+const rows: readonly Row[] = [
+  { kind: "placeholder" },
+  { file: "qdrant.svg", kind: "provider", label: "Qdrant", tint: QDRANT_RED },
+  {
+    file: "postgresql.svg",
+    kind: "provider",
+    label: "pgvector",
+    tint: PGVECTOR_BLUE,
+  },
+  {
+    file: "pinecone.svg",
+    kind: "provider",
+    label: "Pinecone",
+    tint: PINECONE_INK,
+  },
+  { kind: "placeholder" },
 ];
 
-const providerIcon = (file: string, size: number): string => {
+const providerIcon = (file: string, size: number, tint: string): string => {
   const svg = readFileSync(path.join(assets, "providers", file), "utf-8");
   const viewBox =
     /viewBox="[\d.]+ [\d.]+ (?<width>[\d.]+) (?<height>[\d.]+)"/u.exec(svg);
@@ -139,17 +171,29 @@ const providerIcon = (file: string, size: number): string => {
   const height = Number(viewBox?.groups?.height ?? size);
   const scale = size / Math.max(width, height);
   const d = /\sd="(?<d>[^"]+)"/u.exec(svg)?.groups?.d ?? "";
-  return `<g transform="scale(${format(scale)})"><path d="${d}" fill="${INK}"/></g>`;
+  return `<g transform="scale(${format(scale)})"><path d="${d}" fill="${tint}"/></g>`;
 };
 
-const card = (row: ProviderRow, y: number, labelFont: Font): string => {
+const placeholderBody = (): string => {
+  const barY = (CARD_HEIGHT - PLACEHOLDER_BAR_HEIGHT) / 2;
+  return `<rect x="${CARD_ICON_INSET}" y="${format(CARD_ICON_Y)}" width="${CARD_ICON}" height="${CARD_ICON}" rx="${PLACEHOLDER_ICON_RADIUS}" fill="${PLACEHOLDER_FILL}"/><rect x="${CARD_LABEL_X}" y="${format(barY)}" width="${PLACEHOLDER_BAR_WIDTH}" height="${PLACEHOLDER_BAR_HEIGHT}" rx="${PLACEHOLDER_BAR_RADIUS}" fill="${PLACEHOLDER_FILL}"/>`;
+};
+
+const providerBody = (row: ProviderRow, labelFont: Font): string => {
   const label = labelFont.getPath(row.label, 0, 0, CARD_LABEL_SIZE, {
     kerning: true,
   });
   const box = label.getBoundingBox();
-  const textX = 16 + CARD_ICON + 14;
   const textY = CARD_HEIGHT / 2 - (box.y1 + box.y2) / 2;
-  return `<g transform="translate(0 ${format(y)})" opacity="${row.faded ? FADED_OPACITY : 1}"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${CARD_STROKE}" stroke-width="1.5"/><g transform="translate(16 ${format((CARD_HEIGHT - CARD_ICON) / 2)})">${providerIcon(row.file, CARD_ICON)}</g><g transform="translate(${format(textX - box.x1)} ${format(textY)})"><path d="${cubicPathData(label)}" fill="${INK}"/></g></g>`;
+  return `<g transform="translate(${CARD_ICON_INSET} ${format(CARD_ICON_Y)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(CARD_LABEL_X - box.x1)} ${format(textY)})"><path d="${cubicPathData(label)}" fill="${INK}"/></g>`;
+};
+
+const card = (row: Row, y: number, labelFont: Font): string => {
+  const body =
+    row.kind === "placeholder"
+      ? placeholderBody()
+      : providerBody(row, labelFont);
+  return `<g transform="translate(0 ${format(y)})"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${CARD_STROKE}" stroke-width="${CARD_STROKE_WIDTH}"/>${body}</g>`;
 };
 
 const openGraph = (): string => {
@@ -170,7 +214,8 @@ const openGraph = (): string => {
       card(row, columnTop + index * (CARD_HEIGHT + CARD_GAP), labelFont)
     )
     .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}"><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="${BACKGROUND}"/><image href="data:image/svg+xml;base64,${logoData}" x="${OG_PADDING}" y="${format((OG_HEIGHT - logoDrawnHeight) / 2)}" width="${OG_LOGO_WIDTH}" height="${format(logoDrawnHeight)}"/><g transform="translate(${format(columnX)} 0)">${cards}</g></svg>`;
+  const fade = `<linearGradient id="column-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="${FADE_START}" stop-color="#ffffff"/><stop offset="${FADE_END}" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/></linearGradient><mask id="column-mask"><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#column-fade)"/></mask>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}"><defs>${fade}</defs><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="${BACKGROUND}"/><image href="data:image/svg+xml;base64,${logoData}" x="${OG_PADDING}" y="${format((OG_HEIGHT - logoDrawnHeight) / 2)}" width="${OG_LOGO_WIDTH}" height="${format(logoDrawnHeight)}"/><g mask="url(#column-mask)"><g transform="translate(${format(columnX)} 0)">${cards}</g></g></svg>`;
 };
 
 const run = (): void => {

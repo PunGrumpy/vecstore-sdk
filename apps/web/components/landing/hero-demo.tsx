@@ -95,7 +95,7 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
         >
           <span
             aria-hidden
-            className="bg-background-100 absolute top-0 bottom-0 left-0 rounded-md border border-gray-400 shadow-sm transition-[transform,width] duration-300 ease-out"
+            className="bg-background-100 absolute top-0 bottom-0 left-0 rounded-md border border-gray-400 shadow-sm transition-[transform,width] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]"
             style={{
               transform: `translateX(${indicator.left}px)`,
               width: indicator.width,
@@ -141,7 +141,7 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
             type="button"
           >
             <span
-              className="fade-in zoom-in-50 animate-in flex items-center justify-center duration-200"
+              className="flex items-center justify-center"
               key={provider.id}
             >
               <ProviderIcon className="size-4" id={provider.id} />
@@ -197,7 +197,7 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
           <div className="bg-background-100 flex h-full flex-col overflow-hidden rounded-lg border border-gray-200 shadow-sm">
             <div className="flex flex-1 flex-col justify-start gap-4 p-6 text-left">
               <div
-                className="fade-in slide-in-from-bottom-2 animate-in relative self-end duration-500 ease-out"
+                className="fade-in slide-in-from-bottom-2 animate-in relative self-end duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]"
                 key={`ask-${stateKey}`}
               >
                 <div className="bg-gray-1000 max-w-[240px] rounded-xl px-3 py-2 font-mono text-[12px] leading-snug break-words text-gray-100 dark:bg-white dark:text-black">
@@ -206,7 +206,7 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
                 <BubbleTail />
               </div>
               <div
-                className="fade-in slide-in-from-bottom-2 animate-in relative self-start duration-500 ease-out"
+                className="fade-in slide-in-from-bottom-2 animate-in fill-mode-backwards relative self-start delay-75 duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]"
                 key={`answer-${stateKey}`}
               >
                 <pre className="bg-background-100 max-w-[260px] rounded-xl rounded-bl-sm border border-gray-200 px-3 py-2 font-mono text-[11px] leading-snug break-words whitespace-pre-wrap text-gray-900">

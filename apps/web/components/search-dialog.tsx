@@ -72,8 +72,8 @@ export const SiteSearchDialog = (props: SharedProps) => {
       search={search}
       {...props}
     >
-      <SearchDialogOverlay className="bg-black/50" />
-      <SearchDialogContent className="bg-background-100 w-[calc(100%-1rem)] max-w-[650px] rounded-xl border border-gray-200 shadow-xl">
+      <SearchDialogOverlay className="bg-black/50 data-[state=closed]:animate-none data-[state=open]:animate-none" />
+      <SearchDialogContent className="bg-background-100 w-[calc(100%-1rem)] max-w-[650px] rounded-xl border border-gray-200 shadow-xl data-[state=closed]:animate-none data-[state=open]:animate-none">
         <SearchDialogHeader className="flex items-center gap-4 border-b border-gray-200 p-4">
           <SearchDialogIcon className="size-[18px] text-gray-800" />
           <SearchDialogInput

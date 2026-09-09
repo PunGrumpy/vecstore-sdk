@@ -95,7 +95,7 @@ export const ProviderCards = () => (
   <div className="not-prose grid gap-4 md:grid-cols-2">
     {providers.map((provider) => (
       <Link className="size-full" href={provider.href} key={provider.id}>
-        <div className="bg-background-100 relative flex size-full flex-col justify-between overflow-hidden rounded-lg border border-gray-200 p-4 shadow-sm transition-[border-color,box-shadow] hover:border-gray-400 hover:shadow-lg">
+        <div className="bg-background-100 relative flex size-full flex-col justify-between overflow-hidden rounded-lg border border-gray-200 p-4 shadow-sm transition-[border-color] hover:border-gray-400 hover:shadow-lg">
           <p className="text-gray-1000 text-lg leading-tight font-semibold tracking-tight">
             {provider.name}
           </p>

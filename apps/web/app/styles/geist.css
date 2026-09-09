@@ -534,6 +534,14 @@
       scroll-behavior: auto !important;
       transition-duration: 0.01ms !important;
     }
+
+    .animate-in {
+      --tw-enter-rotate: 0;
+      --tw-enter-scale: 1;
+      --tw-enter-translate-x: 0;
+      --tw-enter-translate-y: 0;
+      animation-duration: 150ms !important;
+    }
   }
 }
 

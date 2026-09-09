@@ -162,6 +162,7 @@
 
 #nd-toc div.origin-center path {
   stroke: var(--ds-gray-1000);
+  transition-property: d, stroke-dasharray, stroke-dashoffset;
 }
 
 #nd-toc div.origin-center > div {

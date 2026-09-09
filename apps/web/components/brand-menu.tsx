@@ -3,7 +3,7 @@
 import { CheckIcon, DownloadIcon, PenToolIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-import type { MouseEvent, ReactNode, RefObject } from "react";
+import type { KeyboardEvent, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import { VecstoreIcon } from "@/components/icons/vecstore";
@@ -50,7 +50,7 @@ const CopyTile = ({
 
   return (
     <button
-      className="flex flex-col gap-2 text-left"
+      className="text-gray-1000 hover:bg-gray-alpha-100 flex min-w-0 flex-col gap-2 rounded-md p-2 text-left text-[14px] transition-colors"
       onClick={async (event) => {
         event.stopPropagation();
         if (svgRef.current) {
@@ -61,9 +61,9 @@ const CopyTile = ({
       role="menuitem"
       type="button"
     >
-      <span className="border-gray-alpha-400 flex h-14 w-36 items-center justify-center rounded-lg border bg-black text-white">
+      <span className="border-gray-alpha-400 bg-background-200 text-gray-1000 relative flex h-12 w-full items-center justify-center overflow-hidden rounded-md border px-4">
         {copied ? (
-          <span className="inline-flex items-center gap-1.5 text-[13px] text-gray-900">
+          <span className="inline-flex items-center gap-1.5 text-[13px] text-gray-800">
             <CheckIcon aria-hidden className="size-3.5" />
             Copied to clipboard
           </span>
@@ -71,7 +71,7 @@ const CopyTile = ({
           children
         )}
       </span>
-      <span className="text-gray-1000 text-[13px]">{label}</span>
+      <span className="px-1">{label}</span>
     </button>
   );
 };
@@ -86,9 +86,25 @@ export const BrandMenu = ({ children }: { readonly children: ReactNode }) => {
   const menuId = useId();
 
   useEffect(() => {
+    const anchor = anchorRef.current?.closest("a") ?? anchorRef.current;
+    if (!anchor) {
+      return;
+    }
+    const handle = (event: Event) => {
+      event.preventDefault();
+      const rect = anchor.getBoundingClientRect();
+      setPosition({ left: rect.left, top: rect.bottom + MENU_GAP });
+      setOpen(true);
+    };
+    anchor.addEventListener("contextmenu", handle);
+    return () => anchor.removeEventListener("contextmenu", handle);
+  }, []);
+
+  useEffect(() => {
     if (!open) {
       return;
     }
+    menuRef.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
     const close = (event: Event) => {
       if (event instanceof KeyboardEvent && event.key !== "Escape") {
         return;
@@ -101,7 +117,7 @@ export const BrandMenu = ({ children }: { readonly children: ReactNode }) => {
         return;
       }
       setOpen(false);
-      anchorRef.current?.focus();
+      (anchorRef.current?.closest("a") ?? anchorRef.current)?.focus();
     };
     document.addEventListener("keydown", close);
     document.addEventListener("pointerdown", close);
@@ -111,45 +127,52 @@ export const BrandMenu = ({ children }: { readonly children: ReactNode }) => {
     };
   }, [open]);
 
-  const openMenu = (event: MouseEvent<HTMLSpanElement>) => {
+  const moveFocus = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+      return;
+    }
     event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    setPosition({ left: rect.left, top: rect.bottom + MENU_GAP });
-    setOpen(true);
+    const items = [
+      ...(menuRef.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ??
+        []),
+    ];
+    const active = document.activeElement;
+    const index = active instanceof HTMLElement ? items.indexOf(active) : -1;
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    items.at((index + step) % items.length)?.focus();
   };
 
   return (
     <>
-      <span
-        className="inline-flex items-center"
-        onContextMenu={openMenu}
-        ref={anchorRef}
-      >
+      <span className="inline-flex items-center" ref={anchorRef}>
         {children}
       </span>
       {open
         ? createPortal(
             <div
               aria-label="Brand assets"
-              className="border-gray-alpha-400 bg-background-100 fixed z-50 w-[328px] rounded-xl border p-4 shadow-lg"
+              className="border-gray-alpha-400 bg-background-100 fixed z-50 m-0 w-[325px] max-w-[calc(100vw-32px)] rounded-xl border p-1.5 opacity-100 transition-opacity duration-100 starting:opacity-0"
               id={menuId}
+              onKeyDown={moveFocus}
               ref={menuRef}
               role="menu"
               style={position}
               tabIndex={-1}
             >
-              <div className="flex gap-4">
+              <div className="grid grid-cols-2">
                 <CopyTile label="Copy wordmark" svgRef={wordmarkRef}>
-                  <VecstoreWordmark className="h-5 w-auto" ref={wordmarkRef} />
+                  <VecstoreWordmark
+                    className="h-[21px] w-auto"
+                    ref={wordmarkRef}
+                  />
                 </CopyTile>
                 <CopyTile label="Copy logo" svgRef={markRef}>
-                  <VecstoreIcon className="size-5" ref={markRef} />
+                  <VecstoreIcon className="size-[21px]" ref={markRef} />
                 </CopyTile>
               </div>
-              <div className="border-gray-alpha-400 my-4 border-t" />
-              <div className="flex flex-col gap-1">
+              <div className="border-gray-alpha-400 -mx-1.5 mt-2 border-t px-2 pt-2">
                 <a
-                  className="text-gray-1000 inline-flex items-center gap-3 rounded-md px-2 py-2 text-[14px] transition-colors hover:bg-gray-100"
+                  className="text-gray-1000 hover:bg-gray-alpha-100 flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-[14px] transition-colors"
                   href={`${githubUrl}/tree/main/assets`}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -163,7 +186,7 @@ export const BrandMenu = ({ children }: { readonly children: ReactNode }) => {
                   Download brand assets
                 </a>
                 <Link
-                  className="text-gray-1000 inline-flex items-center gap-3 rounded-md px-2 py-2 text-[14px] transition-colors hover:bg-gray-100"
+                  className="text-gray-1000 hover:bg-gray-alpha-100 flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-[14px] transition-colors"
                   href="/docs/guides/design"
                   onClick={(event) => {
                     event.stopPropagation();

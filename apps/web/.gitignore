@@ -5,5 +5,8 @@
 /.next/
 next-env.d.ts
 
+# vgpu
+wgsl-env.d.ts
+
 # Vercel CLI project link
 .vercel

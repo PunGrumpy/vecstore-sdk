@@ -16,14 +16,6 @@ import {
 } from "fumadocs-ui/components/sidebar/base";
 import type { ReactNode } from "react";
 
-import { cn } from "@/lib/utils";
-
-const linkClass =
-  "flex w-full items-center rounded-md px-2 py-1 pb-1.5 text-left text-gray-800 text-sm transition-colors hover:text-gray-1000 data-[active=true]:text-blue-700";
-
-const folderClass =
-  "[&>[data-icon]]:mr-2 [&>[data-icon]]:size-3 [&>[data-icon]]:shrink-0 [&>[data-icon]]:text-gray-700";
-
 const containsPath = (
   nodes: readonly PageTreeNode[],
   pathname: string
@@ -45,7 +37,7 @@ export const Item = ({ item }: { readonly item: PageTreeItem }) => {
   return (
     <SidebarItem
       active={pathname === item.url}
-      className={linkClass}
+      className="hover:text-gray-1000 flex w-full items-center rounded-md px-2 py-1 pb-1.5 text-left text-sm text-gray-800 transition-colors data-[active=true]:text-blue-700"
       external={item.external}
       href={item.url}
     >
@@ -72,13 +64,13 @@ export const Folder = ({
       {item.index ? (
         <SidebarFolderLink
           active={pathname === item.index.url}
-          className={cn(linkClass, folderClass)}
+          className="hover:text-gray-1000 flex w-full items-center rounded-md px-2 py-1 pb-1.5 text-left text-sm text-gray-800 transition-colors data-[active=true]:text-blue-700 [&>[data-icon]]:mr-2 [&>[data-icon]]:size-3 [&>[data-icon]]:shrink-0 [&>[data-icon]]:text-gray-700"
           href={item.index.url}
         >
           {item.name}
         </SidebarFolderLink>
       ) : (
-        <SidebarFolderTrigger className={cn(linkClass, folderClass)}>
+        <SidebarFolderTrigger className="hover:text-gray-1000 flex w-full items-center rounded-md px-2 py-1 pb-1.5 text-left text-sm text-gray-800 transition-colors data-[active=true]:text-blue-700 [&>[data-icon]]:mr-2 [&>[data-icon]]:size-3 [&>[data-icon]]:shrink-0 [&>[data-icon]]:text-gray-700">
           {item.name}
         </SidebarFolderTrigger>
       )}

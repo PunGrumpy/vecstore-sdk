@@ -30,14 +30,6 @@ interface HeroDemoProps {
   readonly examples: readonly DemoExample[];
 }
 
-const pillButton =
-  "relative whitespace-nowrap rounded-md px-4 py-2 text-center font-medium text-[13px] transition-colors";
-
-const trafficLights = ["bg-[#EE6D5E]", "bg-[#F3BF4A]", "bg-[#5DC753]"];
-
-const bubbleEnter =
-  "fade-in slide-in-from-bottom-2 animate-in duration-500 ease-out";
-
 const BubbleTail = () => (
   <svg
     aria-hidden
@@ -115,7 +107,7 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
               <button
                 aria-selected={active}
                 className={cn(
-                  pillButton,
+                  "relative rounded-md px-4 py-2 text-center text-[13px] font-medium whitespace-nowrap transition-colors",
                   active
                     ? "text-gray-1000"
                     : "hover:text-gray-1000 text-gray-900"
@@ -170,12 +162,9 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
         <div className="flex min-w-0 flex-col overflow-hidden rounded-lg shadow-sm">
           <div className="bg-background-100 relative flex h-12 items-center rounded-t-lg border border-b-0 border-gray-200 p-3">
             <div className="flex gap-1.5">
-              {trafficLights.map((color) => (
-                <span
-                  className={cn("inline-block size-2 rounded-full", color)}
-                  key={color}
-                />
-              ))}
+              <span className="inline-block size-2 rounded-full bg-[#EE6D5E]" />
+              <span className="inline-block size-2 rounded-full bg-[#F3BF4A]" />
+              <span className="inline-block size-2 rounded-full bg-[#5DC753]" />
             </div>
             <label className="ml-auto flex items-center gap-1.5 text-xs text-gray-900">
               Compiled for
@@ -208,7 +197,7 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
           <div className="bg-background-100 flex h-full flex-col overflow-hidden rounded-lg border border-gray-200 shadow-sm">
             <div className="flex flex-1 flex-col justify-start gap-4 p-6 text-left">
               <div
-                className={cn("relative self-end", bubbleEnter)}
+                className="fade-in slide-in-from-bottom-2 animate-in relative self-end duration-500 ease-out"
                 key={`ask-${stateKey}`}
               >
                 <div className="bg-gray-1000 max-w-[240px] rounded-xl px-3 py-2 font-mono text-[12px] leading-snug break-words text-gray-100 dark:bg-white dark:text-black">
@@ -217,7 +206,7 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
                 <BubbleTail />
               </div>
               <div
-                className={cn("relative self-start", bubbleEnter)}
+                className="fade-in slide-in-from-bottom-2 animate-in relative self-start duration-500 ease-out"
                 key={`answer-${stateKey}`}
               >
                 <pre className="bg-background-100 max-w-[260px] rounded-xl rounded-bl-sm border border-gray-200 px-3 py-2 font-mono text-[11px] leading-snug break-words whitespace-pre-wrap text-gray-900">

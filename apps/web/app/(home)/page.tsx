@@ -1,5 +1,6 @@
 import { ArrowUpRightIcon } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { Code } from "@/components/landing/code";
 import { CopyCommand } from "@/components/landing/copy-command";
@@ -17,15 +18,7 @@ import {
   verbs,
 } from "@/lib/landing-content";
 
-const card = "rounded-lg border border-gray-200 bg-background-100 shadow-sm";
-
-const pillButton =
-  "inline-flex h-[42px] items-center justify-center rounded-full bg-gray-1000 px-4 font-medium text-[14px] text-background-100 transition-colors hover:bg-gray-900";
-
-const primaryButton =
-  "text-button-14 inline-flex h-8 items-center justify-center rounded-md bg-gray-1000 px-3 text-background-100 transition-colors hover:bg-gray-900";
-
-const Container = ({ children }: { readonly children: React.ReactNode }) => (
+const Container = ({ children }: { readonly children: ReactNode }) => (
   <div className="mx-auto w-full max-w-[1120px] px-6">{children}</div>
 );
 
@@ -58,7 +51,10 @@ const Stats = () => (
   <Container>
     <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
       {stats.map((stat) => (
-        <div className={`${card} p-6`} key={stat.label}>
+        <div
+          className="bg-background-100 rounded-lg border border-gray-200 p-6 shadow-sm"
+          key={stat.label}
+        >
           <dd className="text-heading-32 text-gray-1000">{stat.value}</dd>
           <dt className="text-label-13-mono mt-2 text-gray-900">
             {stat.label}
@@ -100,7 +96,10 @@ const Highlights = () => (
   <Container>
     <div className="grid gap-4 md:grid-cols-3">
       {highlights.map((item) => (
-        <div className={`${card} p-8`} key={item.title}>
+        <div
+          className="bg-background-100 rounded-lg border border-gray-200 p-8 shadow-sm"
+          key={item.title}
+        >
           <h3 className="text-heading-20 text-gray-1000">{item.title}</h3>
           <p className="text-copy-16 mt-2 text-gray-900">{item.body}</p>
         </div>
@@ -111,7 +110,7 @@ const Highlights = () => (
 
 const Core = () => (
   <Container>
-    <div className={`${card} mt-4 grid overflow-hidden lg:grid-cols-[1fr_2fr]`}>
+    <div className="bg-background-100 mt-4 grid overflow-hidden rounded-lg border border-gray-200 shadow-sm lg:grid-cols-[1fr_2fr]">
       <div className="flex flex-col p-8 lg:p-12">
         <h2 className="text-heading-24 text-gray-1000">VecStore Core</h2>
         <p className="text-copy-16 mt-3 text-gray-900">
@@ -123,7 +122,10 @@ const Core = () => (
           Thin wrappers over the native client you already use. The raw client
           stays one property away.
         </p>
-        <Link className={`${primaryButton} mt-10 self-start`} href="/docs">
+        <Link
+          className="text-button-14 bg-gray-1000 text-background-100 mt-10 inline-flex h-8 items-center justify-center self-start rounded-md px-3 transition-colors hover:bg-gray-900"
+          href="/docs"
+        >
           Read the docs
         </Link>
       </div>
@@ -161,7 +163,7 @@ const Adapters = () => (
       <div className="grid gap-4 md:grid-cols-2">
         {adapters.map((adapter) => (
           <div
-            className={`${card} flex flex-col gap-4 p-8`}
+            className="bg-background-100 flex flex-col gap-4 rounded-lg border border-gray-200 p-8 shadow-sm"
             key={adapter.title}
           >
             <h3 className="text-gray-1000 flex items-center gap-2 font-mono text-[16px] leading-5">
@@ -199,7 +201,10 @@ const Guides = () => (
         </p>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-3">
-        <Link className={pillButton} href="/docs">
+        <Link
+          className="bg-gray-1000 text-background-100 inline-flex h-[42px] items-center justify-center rounded-full px-4 text-[14px] font-medium transition-colors hover:bg-gray-900"
+          href="/docs"
+        >
           Visit documentation
         </Link>
         <CopyCommand command={installCommand} pill />
@@ -208,7 +213,7 @@ const Guides = () => (
     <div className="grid gap-4 pb-24 md:grid-cols-3">
       {guides.map((guide) => (
         <Link
-          className={`${card} group flex flex-col gap-3 p-8 transition-colors hover:bg-gray-100`}
+          className="bg-background-100 group flex flex-col gap-3 rounded-lg border border-gray-200 p-8 shadow-sm transition-colors hover:bg-gray-100"
           href={guide.href}
           key={guide.title}
         >

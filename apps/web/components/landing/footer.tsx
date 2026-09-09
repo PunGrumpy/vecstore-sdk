@@ -28,7 +28,7 @@ export const Footer = () => (
         </nav>
       ))}
     </div>
-    <div className="mx-auto flex w-full max-w-(--fd-layout-width) items-center justify-between gap-4 px-6 pb-10">
+    <div className="mx-auto flex w-full max-w-(--fd-layout-width) flex-col items-start gap-6 px-6 pb-10 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-label-14 text-gray-900">
         © {year}{" "}
         <a
@@ -41,7 +41,7 @@ export const Footer = () => (
         </a>
         . Released under the MIT License.
       </p>
-      <ThemeSwitch mode="light-dark-system" />
+      <ThemeSwitch className="shrink-0" mode="light-dark-system" />
     </div>
   </footer>
 );

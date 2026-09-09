@@ -1,5 +1,10 @@
+import { createMDX } from "fumadocs-mdx/next";
 import type { NextConfig } from "next";
 
-const config: NextConfig = {};
+const withMDX = createMDX();
 
-export default config;
+const config: NextConfig = {
+  agentRules: false,
+};
+
+export default withMDX(config);

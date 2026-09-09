@@ -1,5 +1,4 @@
 import { TagIcon } from "lucide-react";
-import Link from "next/link";
 
 import { githubUrl } from "@/lib/layout.shared";
 
@@ -8,8 +7,10 @@ import { version } from "../../../../packages/vecstore-sdk/package.json";
 const major = version.split(".")[0] ?? "0";
 
 export const VersionCard = () => (
-  <Link
-    className="grid h-[60px] w-full grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md p-2 transition-colors hover:bg-gray-100"
+  <a
+    target="_blank"
+    rel="noopener noreferrer"
+    className="grid h-15 w-full grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md p-2 transition-colors hover:bg-gray-100"
     href={`${githubUrl}/releases`}
   >
     <span className="flex size-8 items-center justify-center rounded-md border border-amber-400 bg-amber-100 text-amber-900">
@@ -23,5 +24,5 @@ export const VersionCard = () => (
         vecstore-sdk {version}
       </span>
     </span>
-  </Link>
+  </a>
 );

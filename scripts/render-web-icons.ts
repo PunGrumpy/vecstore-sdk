@@ -14,8 +14,8 @@ const CARD_FILL = "#0a0a0a";
 const CARD_STROKE = "#2e2e2e";
 const CARD_STROKE_WIDTH = 2;
 const CARD_WIDTH = 400;
-const CARD_HEIGHT = 112;
-const CARD_GAP = 28;
+const CARD_HEIGHT = 96;
+const CARD_GAP = 22;
 const CARD_RADIUS = 20;
 const CARD_ICON = 34;
 const CARD_ICON_INSET = 28;
@@ -97,6 +97,7 @@ const QDRANT_RED = "#dc244c";
 const PGVECTOR_BLUE = "#4169e1";
 const SUPABASE_GREEN = "#3ecf8e";
 const UPSTASH_GREEN = "#00e9a3";
+const VECTORIZE_ORANGE = "#f6821f";
 
 interface ProviderRow {
   readonly file: string;
@@ -110,6 +111,7 @@ const rows: readonly ProviderRow[] = [
   { file: "pinecone.svg", label: "Pinecone", tint: PINECONE_INK },
   { file: "supabase.svg", label: "Supabase", tint: SUPABASE_GREEN },
   { file: "upstash.svg", label: "Upstash", tint: UPSTASH_GREEN },
+  { file: "cloudflare.svg", label: "Vectorize", tint: VECTORIZE_ORANGE },
 ];
 
 const providerIcon = (file: string, size: number, tint: string): string => {

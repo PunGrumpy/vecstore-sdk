@@ -5,6 +5,7 @@ import { PineconeIcon } from "@/components/icons/pinecone";
 import { QdrantIcon } from "@/components/icons/qdrant";
 import { SupabaseIcon } from "@/components/icons/supabase";
 import { UpstashIcon } from "@/components/icons/upstash";
+import { VectorizeIcon } from "@/components/icons/vectorize";
 import type { ProviderId } from "@/lib/landing-content";
 
 interface ProviderIconProps extends ComponentProps<"svg"> {
@@ -24,6 +25,9 @@ export const ProviderIcon = ({ id, ...props }: ProviderIconProps) => {
     }
     case "upstash": {
       return <UpstashIcon {...props} />;
+    }
+    case "vectorize": {
+      return <VectorizeIcon {...props} />;
     }
     default: {
       return <PineconeIcon {...props} />;

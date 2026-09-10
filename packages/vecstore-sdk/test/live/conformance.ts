@@ -17,6 +17,10 @@ export interface Live {
 
 export type LiveCase = [string, (live: Live) => Promise<void>];
 
+export interface LiveOptions {
+  readonly indexName?: () => string;
+}
+
 const DIMENSION = 3;
 const READY_RETRIES = 20;
 const READY_DELAY_MS = 500;
@@ -67,12 +71,15 @@ const waitForRecords = async (
   await waitForRecords(index, attempt + 1);
 };
 
-export const setupLive = (makeStore: () => LiveStore): (() => Live) => {
+export const setupLive = (
+  makeStore: () => LiveStore,
+  options: LiveOptions = {}
+): (() => Live) => {
   let live: Live | undefined;
 
   beforeAll(async () => {
     const store = makeStore();
-    const indexName = `vecstore_live_${Date.now()}`;
+    const indexName = options.indexName?.() ?? `vecstore_live_${Date.now()}`;
     unwrap(await store.createIndex({ dimension: DIMENSION, name: indexName }));
     const index = store.index(indexName, { namespace: NAMESPACE });
     unwrap(await index.upsert(records));

@@ -1,8 +1,9 @@
 {
   "name": "vecstore-sdk",
   "version": "0.1.0",
-  "description": "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, and Upstash Vector, so you can switch providers without rewriting queries.",
+  "description": "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, and Cloudflare Vectorize, so you can switch providers without rewriting queries.",
   "keywords": [
+    "cloudflare",
     "embeddings",
     "pgvector",
     "pinecone",
@@ -12,7 +13,8 @@
     "typescript",
     "upstash",
     "vector",
-    "vector-database"
+    "vector-database",
+    "vectorize"
   ],
   "homepage": "https://github.com/PunGrumpy/vecstore-sdk#readme",
   "bugs": {
@@ -69,6 +71,11 @@
       "import": "./dist/upstash.mjs",
       "default": "./dist/upstash.mjs"
     },
+    "./vectorize": {
+      "types": "./dist/vectorize.d.mts",
+      "import": "./dist/vectorize.mjs",
+      "default": "./dist/vectorize.mjs"
+    },
     "./sql/supabase.sql": "./sql/supabase.sql",
     "./package.json": "./package.json"
   },
@@ -90,6 +97,7 @@
     "@types/bun": "^1.4.2",
     "@types/pg": "^8.23.1",
     "@upstash/vector": "^1.2.3",
+    "cloudflare": "^7",
     "pg": "^8.23.0",
     "tsdown": "^0.23.0"
   },
@@ -97,7 +105,8 @@
     "@pinecone-database/pinecone": ">=6.0.0",
     "@qdrant/js-client-rest": ">=1.12.0",
     "@supabase/supabase-js": ">=2.40.0",
-    "@upstash/vector": ">=1.2.0"
+    "@upstash/vector": ">=1.2.0",
+    "cloudflare": ">=7.0.0"
   },
   "peerDependenciesMeta": {
     "@pinecone-database/pinecone": {
@@ -110,6 +119,9 @@
       "optional": true
     },
     "@upstash/vector": {
+      "optional": true
+    },
+    "cloudflare": {
       "optional": true
     }
   }

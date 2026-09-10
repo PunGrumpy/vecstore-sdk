@@ -5,7 +5,8 @@ export type Provider =
   | "pgvector"
   | "pinecone"
   | "supabase"
-  | "upstash";
+  | "upstash"
+  | "vectorize";
 
 interface ErrorBase {
   readonly provider: Provider;

@@ -7,11 +7,11 @@ The compilers agree on scalar fields with present values. Two cases differ acros
 
 ## Negation and missing fields
 
-`ne`, `notIn`, and `not` match records that lack the field on Qdrant, pgvector, and Supabase. Pinecone and Upstash evaluate operators against present fields only. A record without `genre` does not match `ne("genre", "drama")` on those two but does match it on the other three.
+`ne`, `notIn`, and `not` match records that lack the field on Qdrant, pgvector, and Supabase. Pinecone, Upstash, and Vectorize evaluate operators against present fields only. A record without `genre` does not match `ne("genre", "drama")` on those three but does match it on the other three.
 
 ## Array-valued fields
 
-`eq("tags", "x")` and `isIn("tags", ["x"])` mean “contains x” on Qdrant, pgvector, and Supabase. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself, so neither builder matches an element. Reach an element with the accessors Upstash documents, such as `eq("tags[0]", "x")`.
+`eq("tags", "x")` and `isIn("tags", ["x"])` mean “contains x” on Qdrant, pgvector, and Supabase. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself, so neither builder matches an element. Reach an element with the accessors Upstash documents, such as `eq("tags[0]", "x")`. Vectorize indexes string, number, and boolean properties only, so an array-valued field is not filterable there at all.
 
 ## Features one provider lacks
 
@@ -21,6 +21,10 @@ The compilers agree on scalar fields with present values. Two cases differ acros
 - Supabase needs the SQL functions in `sql/supabase.sql` installed once. Until they are, every verb returns `{ kind: "unsupported" }` naming the missing function.
 - Supabase `createIndex` and `deleteIndex` run DDL, so they need the service role key. The `anon` and `authenticated` roles get `{ kind: "unauthorized" }`.
 - Upstash cannot create a vector index from `@upstash/vector`. A vecstore index is an Upstash namespace, and `createIndex` only checks the dimension and metric against the index you connected to. See [Upstash Vector](/docs/providers/upstash).
-- Upstash normalizes scores to the range 0 to 1 and orders every metric so that higher is more similar. The other three adapters return the provider's raw score, where lower is better for euclidean.
+- Upstash normalizes scores to the range 0 to 1 and orders every metric so that higher is more similar. The other four adapters return the provider's raw score, where lower is better for euclidean.
 - Upstash filters are a string, so the compiler rejects field names and string values it cannot write safely with an `invalid_argument` error.
 - Upstash gives each query a filtering budget and can return fewer than `topK` records when the filter is selective. The default namespace mode scopes every query by namespace, so this applies to every Upstash query. `namespaceMode: "native"` puts each namespace in a real Upstash namespace instead. See [Upstash Vector](/docs/providers/upstash).
+- Vectorize has no OR operator and no test for a missing property, so `or(...)` and `exists(...)` return `{ kind: "unsupported" }` before the request is sent. See [Cloudflare Vectorize](/docs/providers/vectorize).
+- Vectorize deletes by id only, so `delete({ filter })` and `delete({ all: true })` return `{ kind: "unsupported" }`.
+- Vectorize filters match nothing on a property with no metadata index, and a metadata index has to exist before you insert. Pass `metadataIndexes` so `createIndex` opens them.
+- Vectorize writes are asynchronous. An upsert returns once the mutation is enqueued, and the records become searchable a moment later.

@@ -29,14 +29,17 @@ interface ProviderCard {
 }
 
 const emulatedNamespaces = "Emulated namespaces";
+const nativeNamespaces = "Native namespaces";
 const deleteByFilter = "Delete by filter";
 const indexIsTable = "Index = table";
+const indexIsIndex = "Index = index";
+const idsHashedToUuid = "Ids hashed to UUID";
 
 const providers: readonly ProviderCard[] = [
   {
     capabilities: [
       { icon: LayersIcon, label: emulatedNamespaces },
-      { icon: FingerprintIcon, label: "Ids hashed to UUID" },
+      { icon: FingerprintIcon, label: idsHashedToUuid },
       { icon: FilterXIcon, label: deleteByFilter },
       { icon: DatabaseIcon, label: "Index = collection" },
     ],
@@ -61,9 +64,9 @@ const providers: readonly ProviderCard[] = [
   },
   {
     capabilities: [
-      { icon: LayersIcon, label: "Native namespaces" },
+      { icon: LayersIcon, label: nativeNamespaces },
       { icon: ServerIcon, label: "Serverless index spec" },
-      { icon: DatabaseIcon, label: "Index = index" },
+      { icon: DatabaseIcon, label: indexIsIndex },
     ],
     glow: "#8f8f8f",
     href: "/docs/providers/pinecone",
@@ -96,6 +99,19 @@ const providers: readonly ProviderCard[] = [
     id: "upstash",
     logoClass: "text-[#00a97a] dark:text-[#00e9a3]",
     name: "Upstash Vector",
+  },
+  {
+    capabilities: [
+      { icon: LayersIcon, label: nativeNamespaces },
+      { icon: FingerprintIcon, label: idsHashedToUuid },
+      { icon: CodeIcon, label: "Metadata indexes upfront" },
+      { icon: DatabaseIcon, label: indexIsIndex },
+    ],
+    glow: "#f6821f",
+    href: "/docs/providers/vectorize",
+    id: "vectorize",
+    logoClass: "text-[#f6821f]",
+    name: "Cloudflare Vectorize",
   },
 ];
 

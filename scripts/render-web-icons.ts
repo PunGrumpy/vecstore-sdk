@@ -95,8 +95,8 @@ const ico = (entries: readonly { size: number; png: Buffer }[]): Buffer => {
 const PINECONE_INK = INK;
 const QDRANT_RED = "#dc244c";
 const PGVECTOR_BLUE = "#4169e1";
-const SUPABASE_GREEN = "#3ecf8e";
 const UPSTASH_GREEN = "#00e9a3";
+const VECTORIZE_ORANGE = "#f6821f";
 
 interface ProviderRow {
   readonly file: string;
@@ -108,8 +108,8 @@ const rows: readonly ProviderRow[] = [
   { file: "qdrant.svg", label: "Qdrant", tint: QDRANT_RED },
   { file: "postgresql.svg", label: "pgvector", tint: PGVECTOR_BLUE },
   { file: "pinecone.svg", label: "Pinecone", tint: PINECONE_INK },
-  { file: "supabase.svg", label: "Supabase", tint: SUPABASE_GREEN },
   { file: "upstash.svg", label: "Upstash", tint: UPSTASH_GREEN },
+  { file: "cloudflare.svg", label: "Vectorize", tint: VECTORIZE_ORANGE },
 ];
 
 const providerIcon = (file: string, size: number, tint: string): string => {

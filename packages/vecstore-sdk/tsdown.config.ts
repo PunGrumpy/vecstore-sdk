@@ -15,6 +15,7 @@ export default defineConfig({
     qdrant: "src/qdrant/index.ts",
     supabase: "src/supabase/index.ts",
     upstash: "src/upstash/index.ts",
+    vectorize: "src/vectorize/index.ts",
   },
   format: ["esm"],
   minify: false,

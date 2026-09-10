@@ -1,0 +1,134 @@
+---
+title: Cloudflare Vectorize
+description: Reference for the Cloudflare Vectorize adapter, which drives the v2 HTTP API, uses native namespaces, and reports what Vectorize has no call for.
+---
+
+The Vectorize adapter wraps a `Cloudflare` client from the official `cloudflare` package and talks to the Vectorize v2 HTTP API. One store reaches every Vectorize index in one account.
+
+```ts
+import Cloudflare from "cloudflare";
+import { createVectorizeStore } from "vecstore-sdk/vectorize";
+
+const store = createVectorizeStore({
+  client: new Cloudflare({ apiToken }),
+  accountId,
+  metadataIndexes: [
+    { property: "genre", type: "string" },
+    { property: "year", type: "number" },
+  ],
+});
+```
+
+Install the client alongside the SDK:
+
+```bash
+bun add vecstore-sdk cloudflare
+```
+
+The token needs the **Vectorize** permission on the account that owns the indexes. Create one under **My Profile → API Tokens** in the Cloudflare dashboard.
+
+## Why the HTTP API and not the Workers binding
+
+Vectorize splits its control plane from its data plane. Creating, listing, and deleting an index happens over the HTTP API or `wrangler`. The Workers binding (`env.DOCS`) reads and writes vectors in the one index it is bound to.
+
+The adapter takes the HTTP client, because that is the only shape where the whole store contract works. A binding has no call that creates, lists, or drops an index, no way to enumerate namespaces, and no way to list vectors, so `createIndex`, `deleteIndex`, and `listIndexes` would all be unsupported and `index(name)` would name nothing.
+
+The HTTP API works anywhere `fetch` does, including inside a Worker. Reaching your own account from a Worker costs a subrequest and an API token, so keep the binding for hot read paths and use this adapter where the store contract matters.
+
+## Metadata indexes
+
+A Vectorize filter only matches on a property that carries a metadata index, and the index has to exist before you insert the vectors. A filter on an unindexed property returns no matches rather than an error, which makes a missing index look like an empty result.
+
+`metadataIndexes` names the properties you filter on. `createIndex` creates the index and then opens one metadata index per entry:
+
+| Field      | Values                                  |
+| ---------- | --------------------------------------- |
+| `property` | The metadata key to index.              |
+| `type`     | `"string"`, `"number"`, or `"boolean"`. |
+
+Vectorize allows ten metadata indexes per index. An index created later does not cover vectors already written, so decide the list before the first `upsert`. To add one to an index the store did not create, run `wrangler vectorize create-metadata-index`.
+
+## Ids and namespaces
+
+Namespaces are native. The adapter sends the namespace with every vector and scopes every query to it. Vectorize allows 1,000 namespaces per index on the free plan and 50,000 on Workers Paid, and a namespace is at most 64 bytes.
+
+A Vectorize id is unique across the whole index rather than within a namespace, and it is capped at 64 bytes. Writing `doc-1` to two namespaces would move one record instead of creating two. The adapter therefore stores a record under a deterministic UUID and keeps your id in the `_id` metadata key:
+
+| Record | Stored id |
+| --- | --- |
+| In the default namespace, id at most 64 bytes | Your id, and no `_id` key |
+| In any other namespace | A deterministic UUID, original in `_id` |
+| Id longer than 64 bytes | A deterministic UUID, original in `_id` |
+
+The same id in the same namespace always hashes to the same UUID, so `upsert` still replaces. `query` and `fetch` read `_id` back and strip it from the metadata they return. Do not write metadata under that name.
+
+## What Vectorize cannot do
+
+Four things return `{ kind: "unsupported" }` with a `feature` you can match on:
+
+| Feature | Verb | Why |
+| --- | --- | --- |
+| `deleteByFilter` | `delete({ filter })` | Vectorize deletes by id only. |
+| `deleteAll` | `delete({ all: true })` | Vectorize has no call that empties a namespace. |
+| `orFilter` | `or(...)`, and `not` over `and(...)` | A Vectorize filter joins every clause with AND. |
+| `existsFilter` | `exists(...)` | Vectorize has no operator for a missing property. |
+
+To clear records without a delete-by-filter, query for the ids you want gone and delete those:
+
+```ts
+const matches = await docs.query({ vector, topK: 50, filter });
+
+if (matches.ok && matches.value.length > 0) {
+  await docs.delete({ ids: matches.value.map((match) => match.id) });
+}
+```
+
+To drop everything, delete the index and create it again.
+
+## Filter compilation
+
+A Vectorize filter is a flat object. Every field is a key, and Vectorize joins them with AND. The adapter exports the compiler as `compileVectorizeFilter`:
+
+```ts
+import { and, eq, gt, lt } from "vecstore-sdk";
+import { compileVectorizeFilter } from "vecstore-sdk/vectorize";
+
+compileVectorizeFilter(
+  and(eq("genre", "drama"), gt("year", 2000), lt("year", 2010))
+);
+// ok: true, value:
+// { genre: { $eq: "drama" }, year: { $gt: 2000, $lt: 2010 } }
+```
+
+It is the one compiler that returns a `Result`, because Vectorize is the one provider whose filter language is smaller than the filter AST. `not` is pushed to the leaves with De Morgan's laws, the same way the Pinecone and Upstash compilers do it, so `not(eq(...))` becomes `$ne` and `not(or(a, b))` becomes two AND clauses. What is left over fails:
+
+- `or(...)`, and any `not` that De Morgan turns into an OR, return `unsupported` with `feature: "orFilter"`.
+- `exists(...)` returns `unsupported` with `feature: "existsFilter"`.
+- Two clauses that set the same operator on one field, such as `and(eq("a", 1), eq("a", 2))`, return `invalid_argument`.
+- A membership operator and a comparison operator on one field, such as `and(isIn("a", [1]), gt("a", 2))`, return `invalid_argument`. Vectorize holds the two in separate objects.
+
+The verb reports the failure before it sends a request, so a filter Vectorize cannot express costs nothing.
+
+To run a query that needs an OR, run one query per branch and merge the results by id.
+
+## Query limits
+
+Every Vectorize query the adapter sends asks for full metadata, because that is where the original id lives. Vectorize caps a query that returns metadata at `topK: 50`, so that is the ceiling here. Without metadata the cap would be 100.
+
+A filter is limited to 2,048 bytes of JSON. Indexed string metadata is compared on its first 64 bytes.
+
+## Writes are asynchronous
+
+`upsert` and `delete({ ids })` return once Vectorize has enqueued the mutation, not once the records are searchable. A query run immediately after a write can miss it. Poll with `fetch` when a test or a workflow needs the write to land.
+
+The adapter sends up to 1,000 records per upsert request as NDJSON and runs the batches together.
+
+## What the adapter stores
+
+| Concern | Where it lives |
+| --- | --- |
+| Index | A Vectorize index |
+| Namespace | The native `namespace` field on each vector |
+| Id | Your id, or a deterministic UUID with the original in `_id` |
+| Metadata | Metadata, minus the reserved `_id` key |
+| Metric | `cosine`, `euclidean`, or `dot-product`, fixed when the index is created |

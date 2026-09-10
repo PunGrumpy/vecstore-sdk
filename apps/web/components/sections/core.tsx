@@ -19,7 +19,7 @@ export const Core = () => (
           stays one property away.
         </p>
         <Link
-          className="text-button-14 bg-gray-1000 text-background-100 mt-10 inline-flex h-8 items-center justify-center self-start rounded-md px-3 transition-colors hover:bg-gray-900"
+          className="text-button-14 bg-gray-1000 text-background-100 mt-10 inline-flex h-[42px] items-center justify-center self-start rounded-full px-4 transition-colors hover:bg-gray-900"
           href="/docs"
         >
           Read the docs

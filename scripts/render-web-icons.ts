@@ -2,19 +2,20 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { Resvg } from "@resvg/resvg-js";
-import type { Font, Path } from "opentype.js";
+import type { Font } from "opentype.js";
 import { parse } from "opentype.js";
 
+import { cubicPathData } from "./glyph-path";
+
 const PATH_PRECISION = 3;
-const TWO_THIRDS = 2 / 3;
 const BACKGROUND = "#000000";
 const INK = "#ededed";
 const CARD_FILL = "#0a0a0a";
 const CARD_STROKE = "#2e2e2e";
 const CARD_STROKE_WIDTH = 2;
 const CARD_WIDTH = 400;
-const CARD_HEIGHT = 112;
-const CARD_GAP = 28;
+const CARD_HEIGHT = 92;
+const CARD_GAP = 23;
 const CARD_RADIUS = 20;
 const CARD_ICON = 34;
 const CARD_ICON_INSET = 28;
@@ -27,8 +28,6 @@ const PLACEHOLDER_ICON_RADIUS = 10;
 const PLACEHOLDER_BAR_WIDTH = 132;
 const PLACEHOLDER_BAR_HEIGHT = 16;
 const PLACEHOLDER_BAR_RADIUS = 8;
-const FADE_START = 0.16;
-const FADE_END = 0.84;
 const OG_LOGO_WIDTH = 580;
 const MARK_SIZE = 103.68;
 const OG_WIDTH = 1200;
@@ -52,36 +51,6 @@ const loadFont = (file: string): Font => {
 };
 
 const format = (value: number): string => value.toFixed(PATH_PRECISION);
-
-const cubicPathData = (glyphs: Path): string => {
-  let previousX = 0;
-  let previousY = 0;
-  const segments: string[] = [];
-  for (const command of glyphs.commands) {
-    if (command.type === "Z") {
-      segments.push("Z");
-      continue;
-    }
-    if (command.type === "Q") {
-      const control1X = previousX + TWO_THIRDS * (command.x1 - previousX);
-      const control1Y = previousY + TWO_THIRDS * (command.y1 - previousY);
-      const control2X = command.x + TWO_THIRDS * (command.x1 - command.x);
-      const control2Y = command.y + TWO_THIRDS * (command.y1 - command.y);
-      segments.push(
-        `C${format(control1X)} ${format(control1Y)} ${format(control2X)} ${format(control2Y)} ${format(command.x)} ${format(command.y)}`
-      );
-    } else if (command.type === "C") {
-      segments.push(
-        `C${format(command.x1)} ${format(command.y1)} ${format(command.x2)} ${format(command.y2)} ${format(command.x)} ${format(command.y)}`
-      );
-    } else {
-      segments.push(`${command.type}${format(command.x)} ${format(command.y)}`);
-    }
-    previousX = command.x;
-    previousY = command.y;
-  }
-  return segments.join("");
-};
 
 const markInner = readFileSync(path.join(assets, "mark-dark.svg"), "utf-8")
   .replace(/^[\s\S]*?<g transform="translate\([^)]*\)">/u, "")
@@ -131,6 +100,7 @@ const ico = (entries: readonly { size: number; png: Buffer }[]): Buffer => {
 const PINECONE_INK = INK;
 const QDRANT_RED = "#dc244c";
 const PGVECTOR_BLUE = "#4169e1";
+const UPSTASH_GREEN = "#00e9a3";
 
 interface ProviderRow {
   readonly kind: "provider";
@@ -160,8 +130,18 @@ const rows: readonly Row[] = [
     label: "Pinecone",
     tint: PINECONE_INK,
   },
+  {
+    file: "upstash.svg",
+    kind: "provider",
+    label: "Upstash",
+    tint: UPSTASH_GREEN,
+  },
   { kind: "placeholder" },
 ];
+
+const providerIndexes = rows.flatMap((row, index) =>
+  row.kind === "provider" ? [index] : []
+);
 
 const providerIcon = (file: string, size: number, tint: string): string => {
   const svg = readFileSync(path.join(assets, "providers", file), "utf-8");
@@ -185,7 +165,7 @@ const providerBody = (row: ProviderRow, labelFont: Font): string => {
   });
   const box = label.getBoundingBox();
   const textY = CARD_HEIGHT / 2 - (box.y1 + box.y2) / 2;
-  return `<g transform="translate(${CARD_ICON_INSET} ${format(CARD_ICON_Y)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(CARD_LABEL_X - box.x1)} ${format(textY)})"><path d="${cubicPathData(label)}" fill="${INK}"/></g>`;
+  return `<g transform="translate(${CARD_ICON_INSET} ${format(CARD_ICON_Y)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(CARD_LABEL_X - box.x1)} ${format(textY)})"><path d="${cubicPathData(label, PATH_PRECISION)}" fill="${INK}"/></g>`;
 };
 
 const card = (row: Row, y: number, labelFont: Font): string => {
@@ -214,7 +194,14 @@ const openGraph = (): string => {
       card(row, columnTop + index * (CARD_HEIGHT + CARD_GAP), labelFont)
     )
     .join("");
-  const fade = `<linearGradient id="column-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="${FADE_START}" stop-color="#ffffff"/><stop offset="${FADE_END}" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/></linearGradient><mask id="column-mask"><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#column-fade)"/></mask>`;
+  const firstProvider = providerIndexes[0] ?? 0;
+  const lastProvider = providerIndexes.at(-1) ?? rows.length - 1;
+  const fadeStart =
+    (columnTop + firstProvider * (CARD_HEIGHT + CARD_GAP)) / OG_HEIGHT;
+  const fadeEnd =
+    (columnTop + lastProvider * (CARD_HEIGHT + CARD_GAP) + CARD_HEIGHT) /
+    OG_HEIGHT;
+  const fade = `<linearGradient id="column-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="${format(fadeStart)}" stop-color="#ffffff"/><stop offset="${format(fadeEnd)}" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/></linearGradient><mask id="column-mask"><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#column-fade)"/></mask>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}"><defs>${fade}</defs><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="${BACKGROUND}"/><image href="data:image/svg+xml;base64,${logoData}" x="${OG_PADDING}" y="${format((OG_HEIGHT - logoDrawnHeight) / 2)}" width="${OG_LOGO_WIDTH}" height="${format(logoDrawnHeight)}"/><g mask="url(#column-mask)"><g transform="translate(${format(columnX)} 0)">${cards}</g></g></svg>`;
 };
 

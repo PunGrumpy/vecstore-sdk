@@ -31,11 +31,20 @@ const store = createPgvectorStore({ client: new Pool({ connectionString }) });
 ```
 
 ```ts
+import { createClient } from "@supabase/supabase-js";
+import { createSupabaseStore } from "vecstore-sdk/supabase";
+
+const store = createSupabaseStore({ client: createClient(url, key) });
+```
+
+```ts
 import { Index } from "@upstash/vector";
 import { createUpstashStore } from "vecstore-sdk/upstash";
 
 const store = createUpstashStore({ client: new Index({ url, token }) });
 ```
+
+Moving to Supabase needs a setup step the others do not: install `sql/supabase.sql` in the project before the first call. [The Supabase page](/docs/providers/supabase#install-the-sql-functions) covers it.
 
 ## Copy the data
 
@@ -45,13 +54,15 @@ Record ids, vectors, and metadata round-trip unchanged. Every provider accepts o
 
 ## Check what each provider stores
 
-| Concern | Qdrant | pgvector | Pinecone | Upstash |
+| Concern | Qdrant | pgvector and Supabase | Pinecone | Upstash |
 | --- | --- | --- | --- | --- |
 | Index | Collection | Table | Index | Namespace |
 | Namespace | `_namespace` payload key | `namespace` column | Native | `_namespace` metadata key, or a real namespace under `namespaceMode: "native"` |
 | Id | UUID, hashed from your id when needed. The original id is kept in `_id`. | `id text` | Native | Prefixed with the namespace. The original id is kept in `_id`. Unchanged under `namespaceMode: "native"`. |
 | Metadata | Payload | `metadata jsonb` | Metadata | Metadata |
 | Metric | Set on the collection | Read from the HNSW index operator class | Set on the index | Set on the Upstash index |
+
+The pgvector and Supabase adapters share a table layout, so moving between those two copies no data. Point the other adapter at the same table.
 
 If you read a Qdrant collection, a pgvector table, or an Upstash namespace with another tool, expect those extra keys and columns.
 

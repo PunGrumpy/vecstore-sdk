@@ -1,0 +1,102 @@
+---
+title: Supabase
+description: Reference for the Supabase adapter, which reaches pgvector through supabase-js and a set of SQL functions the package ships.
+---
+
+Supabase Vector is pgvector inside Postgres. This adapter reaches it through `supabase-js` instead of a Postgres connection, so it runs anywhere `fetch` runs: Edge Functions, serverless handlers, and the browser. PostgREST has no syntax for `order by embedding <=> $1`, so every verb calls a SQL function that ships with the package.
+
+```ts
+import { createClient } from "@supabase/supabase-js";
+import { createSupabaseStore } from "vecstore-sdk/supabase";
+
+const store = createSupabaseStore({
+  client: createClient(supabaseUrl, supabaseKey),
+  schema: "public",
+});
+```
+
+Install the client alongside the SDK:
+
+```bash
+bun add vecstore-sdk @supabase/supabase-js
+```
+
+`schema` is optional. Leave it out and every function falls back to `current_schema()`, which is `public` on Supabase. The tables do not have to sit in a schema that PostgREST exposes, because the adapter never reads them directly.
+
+## Install the SQL functions
+
+Run `sql/supabase.sql` once per project, with a role that can create functions:
+
+```bash
+psql "$SUPABASE_DB_URL" -f node_modules/vecstore-sdk/sql/supabase.sql
+```
+
+The file starts with `create extension if not exists vector`. If your role cannot create extensions, enable **vector** from the **Database** page of the dashboard first, then run the file again.
+
+Supabase reloads the PostgREST schema cache when the file finishes. If a call still returns `{ kind: "unsupported" }` naming a `vecstore_` function, reload the cache by hand:
+
+```sql
+notify pgrst, 'reload schema';
+```
+
+## Which key to use
+
+Every function is declared `security invoker`, so it runs with the privileges of the key you passed to `createClient`. Row level security policies on your vector tables apply to `query`, `fetch`, `upsert`, and `delete` the same way they apply to a direct PostgREST request.
+
+`createIndex` and `deleteIndex` run DDL. The `anon` and `authenticated` roles cannot create or drop tables, so those two calls return `{ kind: "unauthorized" }` under a publishable key. Call them with the service role key from a trusted server, or create the tables in a migration and never call them at all.
+
+## Table layout
+
+`createIndex` creates the table below, an HNSW (Hierarchical Navigable Small World) index for the metric, and a GIN (Generalized Inverted Index) index on `metadata`:
+
+```sql
+create table "docs" (
+  id text not null,
+  namespace text not null default '',
+  embedding vector(1536) not null,
+  metadata jsonb not null default '{}'::jsonb,
+  primary key (namespace, id)
+);
+```
+
+This is the layout the pgvector adapter uses. A table either adapter created works with the other one.
+
+## Metric detection
+
+`vecstore_query` reads the metric from the HNSW or IVFFlat index definition in `pg_indexes` and defaults to cosine when no index exists. The lookup happens inside the same function call as the search, so a query costs one request.
+
+`listIndexes` returns the tables in the schema that have an `embedding vector` column.
+
+## How filters travel
+
+A filter goes over the wire as the JSON tree you built with `eq`, `and`, and the other builders. `vecstore_filter_sql` walks that tree and emits the same JSONB predicates the pgvector adapter compiles, with every value passed through `quote_literal`. Filter results on Supabase and pgvector match for the same data.
+
+## The SQL functions
+
+The adapter calls seven functions:
+
+| Function                | Called by                           |
+| ----------------------- | ----------------------------------- |
+| `vecstore_create_index` | `createIndex`                       |
+| `vecstore_drop_index`   | `deleteIndex`                       |
+| `vecstore_list_indexes` | `listIndexes`                       |
+| `vecstore_upsert`       | `upsert`, in batches of 100 records |
+| `vecstore_query`        | `query`                             |
+| `vecstore_fetch`        | `fetch`                             |
+| `vecstore_delete`       | `delete`                            |
+
+Three more functions support them: `vecstore_table` quotes an index name into a table reference, `vecstore_filter_sql` compiles a filter, and `vecstore_metric` reads the metric from the index definition.
+
+## What the adapter stores
+
+| Concern   | Supabase                                    |
+| --------- | ------------------------------------------- |
+| Index     | Table                                       |
+| Namespace | `namespace` column, part of the primary key |
+| Id        | `id text`                                   |
+| Metadata  | `metadata jsonb`                            |
+| Metric    | Read from the HNSW index operator class     |
+
+## Errors specific to Supabase
+
+Two error kinds mean something specific here. A missing or outdated SQL install returns `{ kind: "unsupported" }` carrying the function name in `feature`, because PostgREST answers `PGRST202` for a function it cannot find. An expired or rejected key returns `{ kind: "unauthorized" }`. Everything else follows the SQLSTATE mapping the pgvector adapter uses.

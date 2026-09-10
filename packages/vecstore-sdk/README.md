@@ -1,18 +1,18 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/PunGrumpy/vecstore-sdk/raw/HEAD/assets/hero-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/PunGrumpy/vecstore-sdk/raw/HEAD/assets/hero-light.png">
-  <img alt="One API for vector stores. vecstore-sdk is an open-source TypeScript library that compiles one metadata filter to Qdrant, pgvector, Pinecone, and Upstash Vector." src="https://github.com/PunGrumpy/vecstore-sdk/raw/HEAD/assets/hero-light.png">
+  <img alt="One API for vector stores. vecstore-sdk is an open-source TypeScript library that compiles one filter to Qdrant, pgvector, Pinecone, Supabase, and Upstash Vector." src="https://github.com/PunGrumpy/vecstore-sdk/raw/HEAD/assets/hero-light.png">
 </picture>
 
 # VecStore SDK
 
-One TypeScript API for Qdrant, pgvector, Pinecone, and Upstash Vector. You write one metadata filter, and each adapter compiles it to the provider's native syntax, so switching providers changes one import and one config object.
+One TypeScript API for Qdrant, pgvector, Pinecone, Supabase, and Upstash Vector. You write one metadata filter, and each adapter compiles it to the provider's native syntax, so switching providers changes one import and one config object.
 
 [![npm version](https://img.shields.io/npm/v/vecstore-sdk?style=flat&colorA=000000&colorB=000000)](https://npmjs.com/package/vecstore-sdk) [![npm downloads](https://img.shields.io/npm/dm/vecstore-sdk?style=flat&colorA=000000&colorB=000000)](https://www.npmjs.com/package/vecstore-sdk) [![MIT License](https://img.shields.io/badge/License-MIT-000?style=flat-square&logo=opensourceinitiative&logoColor=white&labelColor=000&color=000)](LICENSE)
 
 ## Why
 
-Vector databases agree on the verbs (upsert, query, fetch, delete) and disagree on the rest. Pinecone filters use MongoDB-style operators, Qdrant uses `must` and `should` clauses, pgvector uses SQL, Upstash uses a SQL-like string. Qdrant only accepts UUID point ids. Pinecone has native namespaces. The others do not. Each SDK throws its own error classes.
+Vector databases agree on the verbs (upsert, query, fetch, delete) and disagree on the rest. Pinecone filters use MongoDB-style operators, Qdrant uses `must` and `should` clauses, pgvector uses SQL, Upstash uses a SQL-like string. Qdrant only accepts UUID point ids. Pinecone has native namespaces. The others do not. Supabase reaches Postgres over HTTP, where no vector operator exists. Each SDK throws its own error classes.
 
 vecstore-sdk hides those differences behind a small adapter API:
 
@@ -32,6 +32,7 @@ Install the package and the SDK for the provider you use. Provider SDKs are opti
 bun add vecstore-sdk @qdrant/js-client-rest
 bun add vecstore-sdk pg
 bun add vecstore-sdk @pinecone-database/pinecone
+bun add vecstore-sdk @supabase/supabase-js
 bun add vecstore-sdk @upstash/vector
 ```
 
@@ -103,7 +104,7 @@ Every verb returns a `Result`, either `{ ok: true, value }` or `{ ok: false, err
 | `fetch(ids, { includeVector? })` | Returns the records that exist, in request order. |
 | `delete({ ids })`, `delete({ filter })`, `delete({ all: true })` | Removes records in the namespace. |
 
-Metadata values are `string`, `number`, `boolean`, or `string[]`. That is the intersection the four providers accept.
+Metadata values are `string`, `number`, `boolean`, or `string[]`. That is the intersection the five providers accept.
 
 Qdrant, pgvector, and Pinecone return the provider's native score for the index metric. Higher is better for `cosine` and `dot`, lower is better for `euclidean`. Upstash normalizes every metric to the range 0 to 1, where higher is always better.
 
@@ -111,7 +112,7 @@ Qdrant, pgvector, and Pinecone return the provider's native score for the index 
 
 Build filters with the exported helpers. Each compiler is also exported from its adapter, so you can inspect or reuse the native output.
 
-| Builder | Qdrant | pgvector | Pinecone | Upstash |
+| Builder | Qdrant | pgvector and Supabase | Pinecone | Upstash |
 | --- | --- | --- | --- | --- |
 | `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}'` | `{ field: { $eq } }` | `field = value` |
 | `ne(field, value)` | `must_not` of the above | `NOT (metadata @> ...)` | `$ne` | `field != value` |
@@ -124,6 +125,8 @@ Build filters with the exported helpers. Each compiler is also exported from its
 
 `isIn`, `notIn`, `and`, and `or` require at least one element, and the types enforce it.
 
+Supabase has no compiler to import. The filter travels to Postgres as JSON and `vecstore_filter_sql` emits the pgvector predicates there.
+
 ### Errors
 
 `error.kind` is one of:
@@ -133,7 +136,7 @@ Build filters with the exported helpers. Each compiler is also exported from its
 | `not_found` | The index does not exist. Carries `name`. |
 | `already_exists` | `createIndex` hit an existing index. |
 | `invalid_argument` | The provider rejected the request: wrong dimension, bad id, bad metadata. |
-| `unsupported` | The provider cannot do this. Carries `feature`, for example `deleteByFilter` on Pinecone serverless. |
+| `unsupported` | The provider cannot do this. Carries `feature`, for example `deleteByFilter` on Pinecone serverless, or a `vecstore_` function that Supabase has no install for. |
 | `unauthorized` | Bad credentials or missing permission. |
 | `connection` | The provider was unreachable or timed out. |
 | `provider` | Anything else. `cause` holds the original error. |
@@ -184,6 +187,21 @@ const store = createPineconeStore({
 
 Indexes and namespaces map one to one. `indexSpec` defaults to serverless on AWS in `us-east-1`. `createIndex` waits until the index is ready. Serverless indexes reject `delete({ filter })`. The adapter returns an `unsupported` error with `feature: "deleteByFilter"` in that case.
 
+### Supabase
+
+```ts
+import { createSupabaseStore } from "vecstore-sdk/supabase";
+const store = createSupabaseStore({ client: createClient(url, key) });
+```
+
+Supabase Vector is pgvector inside Postgres, and this adapter reaches it through `supabase-js`, so it runs in Edge Functions and the browser. PostgREST has no syntax for `order by embedding <=> $1`, so every verb calls a SQL function. Install them once per project:
+
+```bash
+psql "$SUPABASE_DB_URL" -f node_modules/vecstore-sdk/sql/supabase.sql
+```
+
+The functions are `security invoker`, so row level security policies apply to `query`, `fetch`, `upsert`, and `delete`. `createIndex` and `deleteIndex` run DDL and need the service role key. The table layout matches the pgvector adapter, so both adapters can read the same table.
+
 ### Upstash Vector
 
 ```ts
@@ -206,8 +224,8 @@ Upstash filters are a string rather than an object, so `compileUpstashFilter` va
 
 The compilers are exact for scalar fields. Two cases differ across providers:
 
-- Negations (`ne`, `notIn`, `not`) match records that lack the field on Qdrant and pgvector. Pinecone and Upstash apply operators to present fields only.
-- `eq` and `isIn` on array-valued fields mean "contains" on Qdrant and pgvector. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself. Reach an element with the accessors it documents, such as `eq("tags[0]", "x")`.
+- Negations (`ne`, `notIn`, `not`) match records that lack the field on Qdrant, pgvector, and Supabase. Pinecone and Upstash apply operators to present fields only.
+- `eq` and `isIn` on array-valued fields mean "contains" on Qdrant, pgvector, and Supabase. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself. Reach an element with the accessors it documents, such as `eq("tags[0]", "x")`.
 
 ## Testing
 
@@ -223,12 +241,14 @@ Live tests run the same conformance suite against real backends. Set `VECSTORE_L
 QDRANT_URL=http://localhost:6333 \
 PGVECTOR_URL=postgres://postgres:postgres@localhost:5432/postgres \
 PINECONE_API_KEY=pcsk_1234567890 \
+SUPABASE_URL=https://your_project_ref_here.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here \
 UPSTASH_VECTOR_REST_URL=https://your-index.upstash.io \
 UPSTASH_VECTOR_REST_TOKEN=your_upstash_token \
 bun run test:live
 ```
 
-The suite skips providers without a variable. Point the Upstash variables at a scratch index with dimension 3 and the cosine similarity function, since the adapter cannot create one.
+The suite skips providers without a variable. Supabase needs the SQL functions installed and the service role key, because the suite creates and drops tables. Point the Upstash variables at a scratch index with dimension 3 and the cosine similarity function, since the adapter cannot create one.
 
 ## Not in v0
 

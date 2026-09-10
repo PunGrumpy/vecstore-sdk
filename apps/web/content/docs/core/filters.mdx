@@ -17,7 +17,7 @@ const filter = and(
 
 ## Builders
 
-| Builder | Qdrant | pgvector | Pinecone | Upstash |
+| Builder | Qdrant | pgvector and Supabase | Pinecone | Upstash |
 | --- | --- | --- | --- | --- |
 | `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}'` | `{ field: { $eq } }` | `field = value` |
 | `ne(field, value)` | `must_not` of the above | `NOT (metadata @> …)` | `$ne` | `field != value` |
@@ -43,7 +43,7 @@ The filter `and(eq("genre", "drama"), gt("year", 2000))` compiles to:
 }
 ```
 
-```sql title="pgvector"
+```sql title="pgvector and Supabase"
 (metadata @> $1::jsonb
   AND (jsonb_typeof((metadata->$2::text)) = 'number'
     AND (metadata->$2::text) > $3::jsonb))
@@ -62,12 +62,14 @@ The filter `and(eq("genre", "drama"), gt("year", 2000))` compiles to:
 
 ## Inspect the native filter
 
-Each adapter exports its compiler. Import it to log or reuse the native output:
+Qdrant, pgvector, Pinecone, and Upstash each export their compiler. Import it to log or reuse the native output:
 
 ```ts
 import { compileQdrantFilter } from "vecstore-sdk/qdrant";
 
 const native = compileQdrantFilter(filter);
 ```
+
+Supabase has no compiler to import. The filter travels to Postgres as JSON and `vecstore_filter_sql` emits the pgvector predicates there, as [the Supabase page](/docs/providers/supabase#how-filters-travel) describes.
 
 Where a provider lacks an operator, the compiler rewrites the filter instead of failing. The one exception is Upstash, whose filter is a string: the compiler rejects a field name or a string value it cannot write safely, and the verb returns an `invalid_argument` error. See [Provider differences](/docs/providers/differences) for the two cases where the semantics diverge.

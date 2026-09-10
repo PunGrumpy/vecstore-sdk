@@ -28,11 +28,20 @@ const store = createPgvectorStore({ client: new Pool({ connectionString }) });
 ```
 
 ```ts
+import { createClient } from "@supabase/supabase-js";
+import { createSupabaseStore } from "vecstore-sdk/supabase";
+
+const store = createSupabaseStore({ client: createClient(url, key) });
+```
+
+```ts
 import { Index } from "@upstash/vector";
 import { createUpstashStore } from "vecstore-sdk/upstash";
 
 const store = createUpstashStore({ client: new Index({ url, token }) });
 ```
+
+Moving to Supabase needs a setup step the others do not. Install `sql/supabase.sql` in the project before the first call.
 
 ## Copy the data
 
@@ -42,13 +51,15 @@ Record ids, vectors, and metadata round-trip unchanged. Every provider accepts o
 
 ## What each provider stores
 
-| Concern | Qdrant | pgvector | Pinecone | Upstash |
+| Concern | Qdrant | pgvector and Supabase | Pinecone | Upstash |
 | --- | --- | --- | --- | --- |
 | Index | Collection | Table | Index | Namespace |
 | Namespace | `_namespace` payload key | `namespace` column | Native | `_namespace` metadata key |
 | Id | UUID, hashed from your id when needed, original kept in `_id` | `id text` | Native | Prefixed with the namespace, original kept in `_id` |
 | Metadata | Payload | `metadata jsonb` | Metadata | Metadata |
 | Metric | Set on the collection | Read from the HNSW index opclass | Set on the index | Set on the Upstash index |
+
+The pgvector and Supabase adapters share a table layout, so moving between those two copies no data. Point the other adapter at the same table.
 
 If you read a Qdrant collection, a pgvector table, or an Upstash namespace with another tool, expect those extra keys and columns.
 
@@ -58,7 +69,7 @@ Moving to Upstash needs one step the others do not. Create the vector index in t
 
 Qdrant, pgvector, and Pinecone return the provider's native score for the index metric. Upstash normalizes every metric to the range 0 to 1:
 
-| Metric | Qdrant | pgvector | Pinecone | Upstash |
+| Metric | Qdrant | pgvector and Supabase | Pinecone | Upstash |
 | --- | --- | --- | --- | --- |
 | `cosine` | Similarity, higher is better | `1 - distance`, higher is better | Similarity, higher is better | `(1 + similarity) / 2`, higher is better |
 | `dot` | Dot product, higher is better | Dot product, higher is better | Dot product, higher is better | Normalized, higher is better |
@@ -70,8 +81,8 @@ Do not carry a score threshold across providers without checking it against real
 
 The compilers agree on scalar fields with present values. Two cases differ:
 
-- Negation and missing fields. `ne`, `notIn`, and `not` match records that lack the field on Qdrant and pgvector. Pinecone and Upstash evaluate operators against present fields only, so a record without `genre` does not match `ne("genre", "drama")` there.
-- Array-valued fields. `eq("tags", "x")` and `isIn("tags", ["x"])` mean "contains x" on Qdrant and pgvector. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself. Reach an element with the accessors it documents, such as `eq("tags[0]", "x")`.
+- Negation and missing fields. `ne`, `notIn`, and `not` match records that lack the field on Qdrant, pgvector, and Supabase. Pinecone and Upstash evaluate operators against present fields only, so a record without `genre` does not match `ne("genre", "drama")` there.
+- Array-valued fields. `eq("tags", "x")` and `isIn("tags", ["x"])` mean "contains x" on Qdrant, pgvector, and Supabase. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself. Reach an element with the accessors it documents, such as `eq("tags[0]", "x")`.
 
 If your application depends on either case, add an `exists` clause or store a scalar field to make the intent explicit.
 
@@ -80,6 +91,8 @@ If your application depends on either case, add an `exists` clause or store a sc
 - Pinecone serverless indexes reject `delete({ filter })`. The adapter returns `{ kind: "unsupported", feature: "deleteByFilter" }`. Delete by ids instead, or query first and delete the returned ids.
 - Pinecone `createIndex` needs a deployment spec. The adapter defaults to serverless on AWS in `us-east-1`. Pass `indexSpec` to change it.
 - pgvector `createIndex` runs `CREATE EXTENSION IF NOT EXISTS vector`, which needs a role that can create extensions. Create the extension yourself if your application role cannot.
+- Supabase needs the SQL functions in `sql/supabase.sql` installed once. Until they are, every verb returns `{ kind: "unsupported" }` naming the missing function.
+- Supabase `createIndex` and `deleteIndex` run DDL, so they need the service role key. The `anon` and `authenticated` roles get `{ kind: "unauthorized" }`.
 - Upstash cannot create a vector index from `@upstash/vector`. A vecstore index is an Upstash namespace, and `createIndex` only checks the dimension and metric against the index you connected to.
 - Upstash filters are a string, so the compiler rejects a field name or a string value it cannot write safely and the verb returns an `invalid_argument` error.
 

@@ -63,10 +63,12 @@
       "peerDependencies": {
         "@pinecone-database/pinecone": ">=6.0.0",
         "@qdrant/js-client-rest": ">=1.12.0",
+        "@upstash/vector": ">=1.2.0",
       },
       "optionalPeers": [
         "@pinecone-database/pinecone",
         "@qdrant/js-client-rest",
+        "@upstash/vector",
       ],
     },
   },

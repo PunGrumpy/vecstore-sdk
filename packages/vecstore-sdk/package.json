@@ -1,7 +1,7 @@
 {
   "name": "vecstore-sdk",
   "version": "0.1.0",
-  "description": "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, and Pinecone, so you can switch providers without rewriting queries.",
+  "description": "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, and Upstash Vector, so you can switch providers without rewriting queries.",
   "keywords": [
     "embeddings",
     "pgvector",
@@ -9,6 +9,7 @@
     "qdrant",
     "rag",
     "typescript",
+    "upstash",
     "vector",
     "vector-database"
   ],
@@ -56,6 +57,11 @@
       "import": "./dist/pinecone.mjs",
       "default": "./dist/pinecone.mjs"
     },
+    "./upstash": {
+      "types": "./dist/upstash.d.mts",
+      "import": "./dist/upstash.mjs",
+      "default": "./dist/upstash.mjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -74,18 +80,23 @@
     "@qdrant/js-client-rest": "^1.19.0",
     "@types/bun": "^1.4.2",
     "@types/pg": "^8.23.1",
+    "@upstash/vector": "^1.2.3",
     "pg": "^8.23.0",
     "tsdown": "^0.23.0"
   },
   "peerDependencies": {
     "@pinecone-database/pinecone": ">=6.0.0",
-    "@qdrant/js-client-rest": ">=1.12.0"
+    "@qdrant/js-client-rest": ">=1.12.0",
+    "@upstash/vector": ">=1.2.0"
   },
   "peerDependenciesMeta": {
     "@pinecone-database/pinecone": {
       "optional": true
     },
     "@qdrant/js-client-rest": {
+      "optional": true
+    },
+    "@upstash/vector": {
       "optional": true
     }
   }

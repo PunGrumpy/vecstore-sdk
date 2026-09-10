@@ -50,12 +50,13 @@
     },
     "packages/vecstore-sdk": {
       "name": "vecstore-sdk",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "devDependencies": {
         "@pinecone-database/pinecone": "^8.2.0",
         "@qdrant/js-client-rest": "^1.19.0",
         "@types/bun": "^1.4.2",
         "@types/pg": "^8.23.1",
+        "@upstash/vector": "^1.2.3",
         "pg": "^8.23.0",
         "tsdown": "^0.23.0",
       },
@@ -741,6 +742,8 @@
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
     "@ungap/structured-clone": ["@ungap/structured-clone@1.4.0", "", {}, "sha512-1mEZtMKPM09vDmQt5y7YvmN2+DFTP7Tg0EWXdic8/C6VRnpb33e4ghisCIE3WZjsE2N8mf+QV1Zqh7ZFYLWInQ=="],
+
+    "@upstash/vector": ["@upstash/vector@1.2.3", "", {}, "sha512-yXsWKeuHNYyH72BcSZd3bV5ZD5MybAoTvKxkMaeV2UzuGfNzbHBVh5eO+ysTWTFAf8I9XcOueF4tZfAGjCa4Iw=="],
 
     "@vgpu/adapter-mock": ["@vgpu/adapter-mock@0.4.1", "", { "dependencies": { "@vgpu/core": "0.4.1" } }, "sha512-4w6FHutvlno5nAYt/SYDB5TJlXVwL7liZeBo79jKkjOKJoIrtTO8jf9ny9M5lrLcdpzKdBcdLY1UPJRHZ+DbkQ=="],
 

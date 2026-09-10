@@ -28,6 +28,7 @@ const sources = {
   pgvector: readFileSync(path.join(assets, "postgresql.svg"), "utf-8"),
   pinecone: readFileSync(path.join(assets, "pinecone.svg"), "utf-8"),
   qdrant: readFileSync(path.join(assets, "qdrant.svg"), "utf-8"),
+  supabase: readFileSync(path.join(assets, "supabase.svg"), "utf-8"),
   upstash: readFileSync(path.join(assets, "upstash.svg"), "utf-8"),
 } as const;
 

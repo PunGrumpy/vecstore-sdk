@@ -1,6 +1,11 @@
 import { isString } from "./internal/guards";
 
-export type Provider = "qdrant" | "pgvector" | "pinecone" | "upstash";
+export type Provider =
+  | "qdrant"
+  | "pgvector"
+  | "pinecone"
+  | "supabase"
+  | "upstash";
 
 interface ErrorBase {
   readonly provider: Provider;

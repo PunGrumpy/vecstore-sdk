@@ -31,8 +31,8 @@ const HASH_SCALE = 43_758.5453;
 
 const HEADLINE = "One API for vector stores";
 const SUBTITLE = [
-  "vecstore-sdk is an open-source TypeScript library that compiles",
-  "one metadata filter to Qdrant, pgvector, Pinecone, and Upstash Vector.",
+  "vecstore-sdk is an open-source TypeScript library that compiles one",
+  "filter to Qdrant, pgvector, Pinecone, Supabase, and Upstash Vector.",
 ];
 
 interface Theme {

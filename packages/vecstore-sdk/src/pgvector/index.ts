@@ -1,28 +1,26 @@
-import {
-  alreadyExists,
-  connection,
-  invalidArgument,
-  notFound,
-  providerError,
-  unauthorized,
-} from "../errors";
+import { invalidArgument } from "../errors";
 import type { VecstoreError } from "../errors";
 import { compilePgvectorFilter } from "../filter/pgvector";
 import type { PgvectorSql } from "../filter/pgvector";
 import { attempt } from "../internal/attempt";
 import { chunk, sortByIds } from "../internal/collections";
-import { isNumberArray, isObjectLike, isString } from "../internal/guards";
-import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
+import { isObjectLike } from "../internal/guards";
+import {
+  isNamedRow,
+  isPostgresRow,
+  normalizePostgresError,
+  toScoredRecord,
+  toVectorRecord,
+  vectorLiteral,
+} from "../internal/postgres";
 import { err } from "../result";
 import type {
   DeleteSelector,
   FetchOptions,
   IndexOptions,
   IndexSpec,
-  Metadata,
   Metric,
   QueryOptions,
-  ScoredRecord,
   VecResult,
   VectorIndex,
   VectorRecord,
@@ -72,82 +70,15 @@ const DISTANCE_OPERATORS: Record<Metric, string> = {
   euclidean: "<->",
 };
 
-const PG_UNDEFINED_TABLE = "42P01";
-const PG_DUPLICATE_TABLE = "42P07";
-const PG_INSUFFICIENT_PRIVILEGE = "42501";
-const PG_ADMIN_SHUTDOWN = "57P01";
-const PG_CONNECTION_CLASS = "08";
-const PG_AUTH_CLASS = "28";
-const PG_DATA_CLASS = "22";
-const PG_INTEGRITY_CLASS = "23";
-const PG_SYNTAX_CLASS = "42";
-const NODE_CONNECTION_CODES = new Set([
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "ENOTFOUND",
-  "ETIMEDOUT",
-  "EHOSTUNREACH",
-]);
-
 const quoteIdent = (name: string): string => `"${name.replaceAll('"', '""')}"`;
-
-const vectorLiteral = (vector: readonly number[]): string =>
-  `[${vector.join(",")}]`;
-
-const hasCode = (cause: unknown): cause is Error & { code: string } =>
-  cause instanceof Error && "code" in cause && typeof cause.code === "string";
-
-const isConnectionCode = (code: string): boolean =>
-  NODE_CONNECTION_CODES.has(code) ||
-  code === PG_ADMIN_SHUTDOWN ||
-  code.startsWith(PG_CONNECTION_CLASS);
-
-const isAuthCode = (code: string): boolean =>
-  code === PG_INSUFFICIENT_PRIVILEGE || code.startsWith(PG_AUTH_CLASS);
-
-const isArgumentCode = (code: string): boolean =>
-  code.startsWith(PG_DATA_CLASS) ||
-  code.startsWith(PG_INTEGRITY_CLASS) ||
-  code.startsWith(PG_SYNTAX_CLASS);
 
 export const normalizePgvectorError = (
   cause: unknown,
   index: string
-): VecstoreError => {
-  if (!hasCode(cause)) {
-    return providerError(PROVIDER, cause);
-  }
-  const { code } = cause;
-  if (code === PG_UNDEFINED_TABLE) {
-    return notFound(PROVIDER, index, cause);
-  }
-  if (code === PG_DUPLICATE_TABLE) {
-    return alreadyExists(PROVIDER, index, cause);
-  }
-  if (isConnectionCode(code)) {
-    return connection(PROVIDER, cause);
-  }
-  if (isAuthCode(code)) {
-    return unauthorized(PROVIDER, cause);
-  }
-  if (isArgumentCode(code)) {
-    return invalidArgument(PROVIDER, cause.message, cause);
-  }
-  return providerError(PROVIDER, cause);
-};
+): VecstoreError => normalizePostgresError(PROVIDER, cause, index);
 
 const run = <T>(index: string, action: () => Promise<T>): VecResult<T> =>
   attempt((cause) => normalizePgvectorError(cause, index), action);
-
-interface RecordRow {
-  readonly id: string;
-  readonly metadata?: object | null;
-  readonly embedding?: string;
-  readonly score?: number;
-}
-
-const isRecordRow = (row: unknown): row is RecordRow =>
-  isObjectLike(row) && "id" in row && typeof row.id === "string";
 
 interface IndexDefinitionRow {
   readonly indexdef: string;
@@ -155,43 +86,6 @@ interface IndexDefinitionRow {
 
 const isIndexDefinitionRow = (row: unknown): row is IndexDefinitionRow =>
   isObjectLike(row) && "indexdef" in row && typeof row.indexdef === "string";
-
-interface NamedRow {
-  readonly name: string;
-}
-
-const isNamedRow = (row: unknown): row is NamedRow =>
-  isObjectLike(row) && "name" in row && typeof row.name === "string";
-
-const readMetadata = (row: RecordRow): Metadata =>
-  metadataFromEntries(
-    Object.entries(row.metadata ?? {}).filter(isMetadataEntry)
-  );
-
-const readVector = (row: RecordRow): number[] => {
-  if (!isString(row.embedding)) {
-    return [];
-  }
-  const parsed = JSON.parse(row.embedding);
-  return isNumberArray(parsed) ? parsed : [];
-};
-
-const toVectorRecord = (row: RecordRow): VectorRecord => ({
-  id: row.id,
-  metadata: readMetadata(row),
-  vector: readVector(row),
-});
-
-const toScoredRecord = (
-  row: RecordRow,
-  includeMetadata: boolean,
-  includeVector: boolean
-): ScoredRecord => ({
-  id: row.id,
-  metadata: includeMetadata ? readMetadata(row) : undefined,
-  score: row.score ?? 0,
-  vector: includeVector ? readVector(row) : undefined,
-});
 
 const OPCLASS_METRICS: readonly (readonly [string, Metric])[] = [
   [OPCLASSES.cosine, "cosine"],
@@ -321,7 +215,7 @@ const createIndex = (
           [namespace, [...ids]]
         );
         const records = rows.flatMap((row) =>
-          isRecordRow(row) ? [toVectorRecord(row)] : []
+          isPostgresRow(row) ? [toVectorRecord(row)] : []
         );
         return sortByIds(ids, records);
       }),
@@ -357,7 +251,7 @@ const createIndex = (
         );
         const includeMetadata = query.includeMetadata ?? true;
         return rows.flatMap((row) =>
-          isRecordRow(row)
+          isPostgresRow(row)
             ? [
                 toScoredRecord(
                   row,

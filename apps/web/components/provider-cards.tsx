@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  CodeIcon,
   DatabaseIcon,
   FilterXIcon,
   FingerprintIcon,
@@ -28,13 +29,15 @@ interface ProviderCard {
 }
 
 const emulatedNamespaces = "Emulated namespaces";
+const deleteByFilter = "Delete by filter";
+const indexIsTable = "Index = table";
 
 const providers: readonly ProviderCard[] = [
   {
     capabilities: [
       { icon: LayersIcon, label: emulatedNamespaces },
       { icon: FingerprintIcon, label: "Ids hashed to UUID" },
-      { icon: FilterXIcon, label: "Delete by filter" },
+      { icon: FilterXIcon, label: deleteByFilter },
       { icon: DatabaseIcon, label: "Index = collection" },
     ],
     glow: "#dc244c",
@@ -47,8 +50,8 @@ const providers: readonly ProviderCard[] = [
     capabilities: [
       { icon: LayersIcon, label: emulatedNamespaces },
       { icon: RulerIcon, label: "Metric read from index" },
-      { icon: FilterXIcon, label: "Delete by filter" },
-      { icon: DatabaseIcon, label: "Index = table" },
+      { icon: FilterXIcon, label: deleteByFilter },
+      { icon: DatabaseIcon, label: indexIsTable },
     ],
     glow: "#4169e1",
     href: "/docs/providers/pgvector",
@@ -67,6 +70,19 @@ const providers: readonly ProviderCard[] = [
     id: "pinecone",
     logoClass: "text-[#201d1e] dark:text-white",
     name: "Pinecone",
+  },
+  {
+    capabilities: [
+      { icon: LayersIcon, label: emulatedNamespaces },
+      { icon: CodeIcon, label: "SQL install once" },
+      { icon: FilterXIcon, label: deleteByFilter },
+      { icon: DatabaseIcon, label: indexIsTable },
+    ],
+    glow: "#3ecf8e",
+    href: "/docs/providers/supabase",
+    id: "supabase",
+    logoClass: "text-[#3ecf8e]",
+    name: "Supabase",
   },
   {
     capabilities: [

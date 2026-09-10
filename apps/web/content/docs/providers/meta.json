@@ -1,5 +1,12 @@
 {
   "title": "Providers",
   "defaultOpen": true,
-  "pages": ["qdrant", "pgvector", "pinecone", "upstash", "differences"]
+  "pages": [
+    "qdrant",
+    "pgvector",
+    "pinecone",
+    "supabase",
+    "upstash",
+    "differences"
+  ]
 }

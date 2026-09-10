@@ -12,9 +12,10 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 
 ## Provider logos
 
-`components/landing/provider-logos.tsx` and the generated `components/landing/provider-marks.tsx` are derived from logo files vendored in `assets/providers/`:
+`components/icons/` and the generated `components/landing/provider-marks.tsx` are derived from logo files vendored in `assets/providers/`:
 
 - Qdrant and PostgreSQL marks come from Simple Icons (CC0 1.0).
 - The Pinecone mark comes from the SVG Logos collection (CC0 1.0).
+- The Supabase mark comes from the Supabase brand assets (Apache License, Version 2.0).
 
-Qdrant, PostgreSQL, and Pinecone are trademarks of their respective owners and are used here only to identify the supported providers.
+Qdrant, PostgreSQL, Pinecone, and Supabase are trademarks of their respective owners and are used here only to identify the supported providers.

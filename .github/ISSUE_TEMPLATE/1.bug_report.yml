@@ -15,6 +15,7 @@ body:
         - Qdrant
         - pgvector
         - Pinecone
+        - Supabase
         - Core (filters, types, errors)
     validations:
       required: true

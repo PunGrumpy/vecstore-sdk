@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { PgvectorIcon } from "@/components/icons/pgvector";
 import { PineconeIcon } from "@/components/icons/pinecone";
 import { QdrantIcon } from "@/components/icons/qdrant";
+import { SupabaseIcon } from "@/components/icons/supabase";
 import { UpstashIcon } from "@/components/icons/upstash";
 import type { ProviderId } from "@/lib/landing-content";
 
@@ -17,6 +18,9 @@ export const ProviderIcon = ({ id, ...props }: ProviderIconProps) => {
     }
     case "pgvector": {
       return <PgvectorIcon {...props} />;
+    }
+    case "supabase": {
+      return <SupabaseIcon {...props} />;
     }
     case "upstash": {
       return <UpstashIcon {...props} />;

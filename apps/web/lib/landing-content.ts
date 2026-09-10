@@ -1,4 +1,9 @@
-export type ProviderId = "qdrant" | "pgvector" | "pinecone" | "upstash";
+export type ProviderId =
+  | "qdrant"
+  | "pgvector"
+  | "pinecone"
+  | "supabase"
+  | "upstash";
 
 export const installCommand = "bun add vecstore-sdk";
 
@@ -92,6 +97,21 @@ const store = createPineconeStore({
 ${query(expression)}`,
   },
   {
+    id: "supabase",
+    label: "Supabase",
+    snippet: (
+      expression
+    ) => `import { createClient } from "@supabase/supabase-js";
+import { ${builderImports(expression)} } from "vecstore-sdk";
+import { createSupabaseStore } from "vecstore-sdk/supabase";
+
+const store = createSupabaseStore({
+  client: createClient(url, key),
+});
+
+${query(expression)}`,
+  },
+  {
     id: "upstash",
     label: "Upstash",
     snippet: (expression) => `import { Index } from "@upstash/vector";
@@ -142,6 +162,10 @@ $3 = '2000'`,
     }
   ]
 }`,
+      supabase: `(metadata @> '{"genre": "drama"}'::jsonb
+  AND (jsonb_typeof((metadata -> 'year'::text))
+        = 'number'
+    AND (metadata -> 'year'::text) > '2000'::jsonb))`,
       upstash: `(genre = 'drama' AND year > 2000)`,
     },
   },
@@ -181,6 +205,12 @@ $3 = 'price'   $4 = '100'`,
     }
   ]
 }`,
+      supabase: `((jsonb_typeof((metadata -> 'price'::text))
+      = 'number'
+  AND (metadata -> 'price'::text) >= '10'::jsonb)
+  AND (jsonb_typeof((metadata -> 'price'::text))
+      = 'number'
+  AND (metadata -> 'price'::text) <= '100'::jsonb))`,
       upstash: `(price >= 10 AND price <= 100)`,
     },
   },
@@ -218,6 +248,11 @@ $3 = 'status'  $4 = '["draft"]'`,
     }
   ]
 }`,
+      supabase: `((metadata -> 'lang'::text)
+    <@ '["en", "th"]'::jsonb
+  AND NOT COALESCE(
+    (metadata -> 'status'::text) <@ '["draft"]'::jsonb,
+    false))`,
       upstash: `(lang IN ('en', 'th') AND status NOT IN ('draft'))`,
     },
   },
@@ -257,13 +292,15 @@ $2 = '{"region":"eu"}'`,
     }
   ]
 }`,
+      supabase: `(metadata @> '{"tier": "pro"}'::jsonb
+  OR NOT (metadata @> '{"region": "eu"}'::jsonb))`,
       upstash: `(tier = 'pro' OR region != 'eu')`,
     },
   },
 ];
 
 export const stats = [
-  { label: "Providers", value: "4" },
+  { label: "Providers", value: "5" },
   { label: "Filter builders", value: "12" },
   { label: "Runtime dependencies", value: "0" },
   { label: "License", value: "MIT" },
@@ -279,7 +316,7 @@ export const highlights = [
     title: "Errors as values, never thrown.",
   },
   {
-    body: "Pinecone and Upstash have them. Qdrant and pgvector get them emulated with the same API.",
+    body: "Pinecone and Upstash have them. Qdrant, pgvector, and Supabase get them emulated with the same API.",
     title: "Namespaces on every provider.",
   },
 ] as const;
@@ -342,6 +379,12 @@ export const adapters: readonly {
     title: "Pinecone",
   },
   {
+    body: "Calls SQL functions over supabase-js, so vector search runs in Edge Functions and the browser.",
+    command: "bun add @supabase/supabase-js",
+    mark: "supabase",
+    title: "Supabase",
+  },
+  {
     body: "Wraps the Upstash Index. Maps an index to a namespace and compiles filters to the SQL-like filter string.",
     command: "bun add @upstash/vector",
     mark: "upstash",
@@ -395,6 +438,7 @@ export const footerColumns = [
       { href: "https://qdrant.tech", label: "Qdrant" },
       { href: "https://github.com/pgvector/pgvector", label: "pgvector" },
       { href: "https://www.pinecone.io", label: "Pinecone" },
+      { href: "https://supabase.com/docs/guides/ai", label: "Supabase" },
       { href: "https://upstash.com/docs/vector", label: "Upstash Vector" },
     ],
     title: "Providers",

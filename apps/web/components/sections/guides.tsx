@@ -11,7 +11,7 @@ export const Guides = () => (
       <div>
         <h2 className="text-heading-40 text-gray-1000">
           Build with VecStore
-          <span className="mx-[0.2em] inline-flex translate-y-[-0.08em] items-center rounded-full border-[0.06em] border-current px-[0.35em] align-middle text-[0.5em] leading-[1.5] font-semibold tracking-[0.02em]">
+          <span className="mx-[0.2em] inline-flex translate-y-[-0.08em] items-center rounded-full border-[0.15em] border-current px-[0.35em] align-middle text-[0.5em] leading-[1.5] font-semibold tracking-[0.02em]">
             SDK
           </span>
           today

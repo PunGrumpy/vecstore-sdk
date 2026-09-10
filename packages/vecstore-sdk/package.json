@@ -1,6 +1,6 @@
 {
   "name": "vecstore-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, and Upstash Vector, so you can switch providers without rewriting queries.",
   "keywords": [
     "embeddings",

@@ -1,13 +1,14 @@
 {
   "name": "vecstore-sdk",
   "version": "0.1.0",
-  "description": "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, and Upstash Vector, so you can switch providers without rewriting queries.",
+  "description": "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, and Upstash Vector, so you can switch providers without rewriting queries.",
   "keywords": [
     "embeddings",
     "pgvector",
     "pinecone",
     "qdrant",
     "rag",
+    "supabase",
     "typescript",
     "upstash",
     "vector",
@@ -29,6 +30,7 @@
   },
   "files": [
     "dist",
+    "sql",
     "README.md",
     "LICENSE"
   ],
@@ -57,11 +59,17 @@
       "import": "./dist/pinecone.mjs",
       "default": "./dist/pinecone.mjs"
     },
+    "./supabase": {
+      "types": "./dist/supabase.d.mts",
+      "import": "./dist/supabase.mjs",
+      "default": "./dist/supabase.mjs"
+    },
     "./upstash": {
       "types": "./dist/upstash.d.mts",
       "import": "./dist/upstash.mjs",
       "default": "./dist/upstash.mjs"
     },
+    "./sql/supabase.sql": "./sql/supabase.sql",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -78,6 +86,7 @@
   "devDependencies": {
     "@pinecone-database/pinecone": "^8.2.0",
     "@qdrant/js-client-rest": "^1.19.0",
+    "@supabase/supabase-js": "^2.58.0",
     "@types/bun": "^1.4.2",
     "@types/pg": "^8.23.1",
     "@upstash/vector": "^1.2.3",
@@ -87,6 +96,7 @@
   "peerDependencies": {
     "@pinecone-database/pinecone": ">=6.0.0",
     "@qdrant/js-client-rest": ">=1.12.0",
+    "@supabase/supabase-js": ">=2.40.0",
     "@upstash/vector": ">=1.2.0"
   },
   "peerDependenciesMeta": {
@@ -94,6 +104,9 @@
       "optional": true
     },
     "@qdrant/js-client-rest": {
+      "optional": true
+    },
+    "@supabase/supabase-js": {
       "optional": true
     },
     "@upstash/vector": {

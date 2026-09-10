@@ -64,13 +64,11 @@ jobs:
         env:
           NPM_CONFIG_PROVENANCE: true
 
-      - name: Enable Auto-merge on the Release Pull Request
-        if: inputs.snapshot != true && steps.changesets.outputs.pr-number != ''
-        run: gh pr merge "$PR_NUMBER" --auto --squash
+      - name: Deploy the Docs Site
+        if: inputs.snapshot != true && steps.changesets.outputs.published == 'true'
+        run: curl --fail --silent --show-error --request POST "$DEPLOY_HOOK"
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.changesets.outputs.pr-number }}
+          DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
 
       - name: Add SHORT_SHA env property with commit short sha
         if: inputs.snapshot == true

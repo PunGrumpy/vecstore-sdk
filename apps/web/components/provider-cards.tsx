@@ -27,10 +27,12 @@ interface ProviderCard {
   readonly capabilities: readonly Capability[];
 }
 
+const emulatedNamespaces = "Emulated namespaces";
+
 const providers: readonly ProviderCard[] = [
   {
     capabilities: [
-      { icon: LayersIcon, label: "Emulated namespaces" },
+      { icon: LayersIcon, label: emulatedNamespaces },
       { icon: FingerprintIcon, label: "Ids hashed to UUID" },
       { icon: FilterXIcon, label: "Delete by filter" },
       { icon: DatabaseIcon, label: "Index = collection" },
@@ -43,7 +45,7 @@ const providers: readonly ProviderCard[] = [
   },
   {
     capabilities: [
-      { icon: LayersIcon, label: "Emulated namespaces" },
+      { icon: LayersIcon, label: emulatedNamespaces },
       { icon: RulerIcon, label: "Metric read from index" },
       { icon: FilterXIcon, label: "Delete by filter" },
       { icon: DatabaseIcon, label: "Index = table" },
@@ -65,6 +67,19 @@ const providers: readonly ProviderCard[] = [
     id: "pinecone",
     logoClass: "text-[#201d1e] dark:text-white",
     name: "Pinecone",
+  },
+  {
+    capabilities: [
+      { icon: LayersIcon, label: emulatedNamespaces },
+      { icon: FingerprintIcon, label: "Ids scoped per namespace" },
+      { icon: RulerIcon, label: "Metric set on the index" },
+      { icon: DatabaseIcon, label: "Index = namespace" },
+    ],
+    glow: "#00e9a3",
+    href: "/docs/providers/upstash",
+    id: "upstash",
+    logoClass: "text-[#00a97a] dark:text-[#00e9a3]",
+    name: "Upstash Vector",
   },
 ];
 

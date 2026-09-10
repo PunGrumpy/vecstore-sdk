@@ -387,7 +387,7 @@ export const verbs = [
 export const adapters: readonly {
   readonly body: string;
   readonly command: string;
-  readonly mark: ProviderId | "vecstore";
+  readonly mark: ProviderId;
   readonly title: string;
 }[] = [
   {
@@ -409,28 +409,10 @@ export const adapters: readonly {
     title: "Pinecone",
   },
   {
-    body: "Calls SQL functions over supabase-js, so vector search runs in Edge Functions and the browser.",
-    command: "bun add @supabase/supabase-js",
-    mark: "supabase",
-    title: "Supabase",
-  },
-  {
-    body: "Wraps the Upstash Index. Maps an index to a namespace and compiles filters to the SQL-like filter string.",
-    command: "bun add @upstash/vector",
-    mark: "upstash",
-    title: "Upstash Vector",
-  },
-  {
     body: "Drives the Vectorize v2 HTTP API. Uses native namespaces and reports what Vectorize has no call for.",
     command: "bun add cloudflare",
     mark: "vectorize",
     title: "Cloudflare Vectorize",
-  },
-  {
-    body: "The core package ships the filter language and the adapter interface with no runtime dependencies.",
-    command: installCommand,
-    mark: "vecstore",
-    title: "vecstore-sdk",
   },
 ];
 

@@ -1,5 +1,5 @@
 {
   "title": "Providers",
   "defaultOpen": true,
-  "pages": ["qdrant", "pgvector", "pinecone", "differences"]
+  "pages": ["qdrant", "pgvector", "pinecone", "upstash", "differences"]
 }

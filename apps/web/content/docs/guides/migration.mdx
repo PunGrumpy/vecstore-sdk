@@ -30,6 +30,13 @@ import { createPgvectorStore } from "vecstore-sdk/pgvector";
 const store = createPgvectorStore({ client: new Pool({ connectionString }) });
 ```
 
+```ts
+import { Index } from "@upstash/vector";
+import { createUpstashStore } from "vecstore-sdk/upstash";
+
+const store = createUpstashStore({ client: new Index({ url, token }) });
+```
+
 ## Copy the data
 
 The SDK does not move records for you. Read from the old index with `fetch` or your own export, then `upsert` into the new one. The adapter batches upserts, so pass as many records per call as fit in memory.
@@ -38,19 +45,21 @@ Record ids, vectors, and metadata round-trip unchanged. Every provider accepts o
 
 ## Check what each provider stores
 
-| Concern | Qdrant | pgvector | Pinecone |
-| --- | --- | --- | --- |
-| Index | Collection | Table | Index |
-| Namespace | `_namespace` payload key | `namespace` column | Native |
-| Id | UUID, hashed from your id when needed. The original id is kept in `_id`. | `id text` | Native |
-| Metadata | Payload | `metadata jsonb` | Metadata |
-| Metric | Set on the collection | Read from the HNSW index operator class | Set on the index |
+| Concern | Qdrant | pgvector | Pinecone | Upstash |
+| --- | --- | --- | --- | --- |
+| Index | Collection | Table | Index | Namespace |
+| Namespace | `_namespace` payload key | `namespace` column | Native | `_namespace` metadata key, or a real namespace under `namespaceMode: "native"` |
+| Id | UUID, hashed from your id when needed. The original id is kept in `_id`. | `id text` | Native | Prefixed with the namespace. The original id is kept in `_id`. Unchanged under `namespaceMode: "native"`. |
+| Metadata | Payload | `metadata jsonb` | Metadata | Metadata |
+| Metric | Set on the collection | Read from the HNSW index operator class | Set on the index | Set on the Upstash index |
 
-If you read a Qdrant collection or a pgvector table with another tool, expect those extra keys and columns.
+If you read a Qdrant collection, a pgvector table, or an Upstash namespace with another tool, expect those extra keys and columns.
+
+Moving to Upstash needs one step the others do not. Create the vector index in the Upstash console first with the dimension and similarity function you want, because `@upstash/vector` cannot create one. `createIndex` then checks your spec against it.
 
 ## Re-check score thresholds
 
-Each provider returns its native score for the index metric. A threshold tuned on one provider does not carry over. See the score table in [Stores and indexes](/docs/core/store#scores) and check the threshold against real data.
+Qdrant, pgvector, and Pinecone return the provider's native score for the index metric, and Upstash normalizes every metric to the range 0 to 1. A threshold tuned on one provider does not carry over. See the score table in [Stores and indexes](/docs/core/store#scores) and check the threshold against real data.
 
 ## Check the filter edge cases
 

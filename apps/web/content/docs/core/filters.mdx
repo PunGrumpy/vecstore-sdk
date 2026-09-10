@@ -17,16 +17,16 @@ const filter = and(
 
 ## Builders
 
-| Builder | Qdrant | pgvector | Pinecone |
-| --- | --- | --- | --- |
-| `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}'` | `{ field: { $eq } }` |
-| `ne(field, value)` | `must_not` of the above | `NOT (metadata @> …)` | `$ne` |
-| `gt`, `gte`, `lt`, `lte` | `range` | A jsonb comparison guarded by `jsonb_typeof` | `$gt`, `$gte`, `$lt`, `$lte` |
-| `isIn(field, values)` | `match.any`, or `should` for mixed types | `metadata->field <@ values` | `$in`, or `$or` of `$eq` for booleans |
-| `notIn(field, values)` | `match.except`, or `must_not` | `NOT COALESCE(… <@ …, false)` | `$nin`, or `$and` of `$ne` for booleans |
-| `exists(field)` | `must_not is_empty` | `IS NOT NULL AND jsonb_typeof <> 'null'` | `$exists: true` |
-| `and`, `or` | `must`, `should` | `AND`, `OR` | `$and`, `$or` |
-| `not(filter)` | `must_not` | `NOT (…)` | Pushed to the leaves with De Morgan's laws |
+| Builder | Qdrant | pgvector | Pinecone | Upstash |
+| --- | --- | --- | --- | --- |
+| `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}'` | `{ field: { $eq } }` | `field = value` |
+| `ne(field, value)` | `must_not` of the above | `NOT (metadata @> …)` | `$ne` | `field != value` |
+| `gt`, `gte`, `lt`, `lte` | `range` | A jsonb comparison guarded by `jsonb_typeof` | `$gt`, `$gte`, `$lt`, `$lte` | `>`, `>=`, `<`, `<=` |
+| `isIn(field, values)` | `match.any`, or `should` for mixed types | `metadata->field <@ values` | `$in`, or `$or` of `$eq` for booleans | `field IN (…)` |
+| `notIn(field, values)` | `match.except`, or `must_not` | `NOT COALESCE(… <@ …, false)` | `$nin`, or `$and` of `$ne` for booleans | `field NOT IN (…)` |
+| `exists(field)` | `must_not is_empty` | `IS NOT NULL AND jsonb_typeof <> 'null'` | `$exists: true` | `HAS FIELD field` |
+| `and`, `or` | `must`, `should` | `AND`, `OR` | `$and`, `$or` | `AND`, `OR` |
+| `not(filter)` | `must_not` | `NOT (…)` | Pushed to the leaves with De Morgan's laws | Pushed to the leaves with De Morgan's laws |
 
 `isIn`, `notIn`, `and`, and `or` take at least one element. The types enforce this.
 
@@ -56,6 +56,10 @@ The filter `and(eq("genre", "drama"), gt("year", 2000))` compiles to:
 }
 ```
 
+```sql title="Upstash"
+(genre = 'drama' AND year > 2000)
+```
+
 ## Inspect the native filter
 
 Each adapter exports its compiler. Import it to log or reuse the native output:
@@ -66,4 +70,4 @@ import { compileQdrantFilter } from "vecstore-sdk/qdrant";
 const native = compileQdrantFilter(filter);
 ```
 
-Where a provider lacks an operator, the compiler rewrites the filter instead of failing. See [Provider differences](/docs/providers/differences) for the two cases where the semantics diverge.
+Where a provider lacks an operator, the compiler rewrites the filter instead of failing. The one exception is Upstash, whose filter is a string: the compiler rejects a field name or a string value it cannot write safely, and the verb returns an `invalid_argument` error. See [Provider differences](/docs/providers/differences) for the two cases where the semantics diverge.

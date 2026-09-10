@@ -1,11 +1,11 @@
 ---
 title: Introduction
-description: One TypeScript API for Qdrant, pgvector, and Pinecone. Write a filter once and each adapter compiles it to the provider's native syntax.
+description: One TypeScript API for Qdrant, pgvector, Pinecone, and Upstash Vector. Write a filter once and each adapter compiles it to the provider's native syntax.
 ---
 
-VecStore SDK gives you one TypeScript API for three vector databases. You write one metadata filter, and each adapter compiles it to the provider's native syntax.
+VecStore SDK gives you one TypeScript API for four vector databases. You write one metadata filter, and each adapter compiles it to the provider's native syntax.
 
-Vector databases agree on the verbs (upsert, query, fetch, delete) and disagree on the rest. Pinecone filters use MongoDB-style operators, Qdrant uses `must` and `should` clauses, and pgvector uses SQL. Qdrant accepts only UUID point ids. Pinecone has native namespaces and the others do not. Each SDK throws its own error classes.
+Vector databases agree on the verbs (upsert, query, fetch, delete) and disagree on the rest. Pinecone filters use MongoDB-style operators, Qdrant uses `must` and `should` clauses, pgvector uses SQL, and Upstash uses a SQL-like string. Qdrant accepts only UUID point ids. Pinecone has native namespaces and the others do not. Each SDK throws its own error classes.
 
 VecStore SDK hides those differences behind a small adapter API:
 
@@ -19,7 +19,7 @@ Embedding is out of scope. Generate vectors with your model provider and pass th
 
 ## Providers
 
-VecStore SDK supports three providers. Every verb and every filter builder works on all of them. The badges show what each adapter does differently.
+VecStore SDK supports four providers. Every verb and every filter builder works on all of them. The badges show what each adapter does differently.
 
 <ProviderCards />
 
@@ -33,7 +33,7 @@ VecStore SDK supports three providers. Every verb and every filter builder works
     Every builder and what it compiles to on each provider.
   </Card>
   <Card href="/docs/providers/differences" title="Provider differences">
-    The two filter cases where providers disagree.
+    The filter cases where providers disagree.
   </Card>
   <Card href="/docs/guides/migration" title="Move between providers">
     What changes when you swap the adapter.

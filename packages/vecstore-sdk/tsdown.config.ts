@@ -13,6 +13,7 @@ export default defineConfig({
     pgvector: "src/pgvector/index.ts",
     pinecone: "src/pinecone/index.ts",
     qdrant: "src/qdrant/index.ts",
+    upstash: "src/upstash/index.ts",
   },
   format: ["esm"],
   minify: false,

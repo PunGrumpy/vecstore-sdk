@@ -4,10 +4,11 @@ import { Resvg } from "@resvg/resvg-js";
 import { parse } from "opentype.js";
 import type { Font, Path } from "opentype.js";
 
+import { cubicPathData } from "./glyph-path";
+
 const SEMIBOLD_FILE = "assets/fonts/Geist-SemiBold.ttf";
 const OUTPUT_SCALE = 4;
 const PATH_PRECISION = 3;
-const TWO_THIRDS = 2 / 3;
 
 const NAME = "VecStore";
 const SUFFIX = "SDK";
@@ -55,36 +56,6 @@ const loadFont = (file: string): Font => {
 
 const format = (value: number): string => value.toFixed(PATH_PRECISION);
 
-const cubicPathData = (path: Path): string => {
-  let previousX = 0;
-  let previousY = 0;
-  const segments: string[] = [];
-  for (const command of path.commands) {
-    if (command.type === "Z") {
-      segments.push("Z");
-      continue;
-    }
-    if (command.type === "Q") {
-      const control1X = previousX + TWO_THIRDS * (command.x1 - previousX);
-      const control1Y = previousY + TWO_THIRDS * (command.y1 - previousY);
-      const control2X = command.x + TWO_THIRDS * (command.x1 - command.x);
-      const control2Y = command.y + TWO_THIRDS * (command.y1 - command.y);
-      segments.push(
-        `C${format(control1X)} ${format(control1Y)} ${format(control2X)} ${format(control2Y)} ${format(command.x)} ${format(command.y)}`
-      );
-    } else if (command.type === "C") {
-      segments.push(
-        `C${format(command.x1)} ${format(command.y1)} ${format(command.x2)} ${format(command.y2)} ${format(command.x)} ${format(command.y)}`
-      );
-    } else {
-      segments.push(`${command.type}${format(command.x)} ${format(command.y)}`);
-    }
-    previousX = command.x;
-    previousY = command.y;
-  }
-  return segments.join("");
-};
-
 const font = loadFont(SEMIBOLD_FILE);
 
 const textPath = (text: string, size: number, tracking: number): Path =>
@@ -131,13 +102,13 @@ const wordmark = (ink: string): Piece => {
     translate(
       -nameBox.x,
       nameY,
-      `<path fill="${ink}" d="${cubicPathData(name)}"/>`
+      `<path fill="${ink}" d="${cubicPathData(name, PATH_PRECISION)}"/>`
     ),
     `<rect x="${format(pillX + stroke / 2)}" y="${format(pillY + stroke / 2)}" width="${format(pillWidth - stroke)}" height="${format(pillHeight - stroke)}" rx="${format(radius)}" fill="none" stroke="${ink}" stroke-width="${format(stroke)}"/>`,
     translate(
       suffixX,
       suffixY,
-      `<path fill="${ink}" d="${cubicPathData(suffix)}"/>`
+      `<path fill="${ink}" d="${cubicPathData(suffix, PATH_PRECISION)}"/>`
     ),
   ].join("");
   return { height, svg, width: pillX + pillWidth };

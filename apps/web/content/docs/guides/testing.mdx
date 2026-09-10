@@ -21,7 +21,11 @@ Set `VECSTORE_LIVE=1` and the connection variables for the providers you have:
 QDRANT_URL=http://localhost:6333 \
 PGVECTOR_URL=postgres://postgres:postgres@localhost:5432/postgres \
 PINECONE_API_KEY=your_pinecone_api_key \
+UPSTASH_VECTOR_REST_URL=https://your-index.upstash.io \
+UPSTASH_VECTOR_REST_TOKEN=your_upstash_token \
 bun run test:live
 ```
 
 The suite skips providers without a variable. For each provider it creates a temporary index, exercises every verb and filter operator, and deletes the index.
+
+Upstash is the exception. The adapter cannot create an index, so it creates a namespace inside the index your URL and token point at. Point them at a scratch index with dimension 3 and the cosine similarity function, which is what the conformance suite asks for.

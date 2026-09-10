@@ -4,6 +4,8 @@ import { Resvg } from "@resvg/resvg-js";
 import { parse } from "opentype.js";
 import type { Font } from "opentype.js";
 
+import { cubicPathData } from "./glyph-path";
+
 const SANS_FILE = "assets/fonts/Geist-Regular.ttf";
 const SANS_SEMIBOLD_FILE = "assets/fonts/Geist-SemiBold.ttf";
 
@@ -29,8 +31,8 @@ const HASH_SCALE = 43_758.5453;
 
 const HEADLINE = "One API for vector stores";
 const SUBTITLE = [
-  "vecstore-sdk is an open-source TypeScript library that",
-  "compiles one metadata filter to Qdrant, pgvector, and Pinecone.",
+  "vecstore-sdk is an open-source TypeScript library that compiles",
+  "one metadata filter to Qdrant, pgvector, Pinecone, and Upstash Vector.",
 ];
 
 interface Theme {
@@ -120,9 +122,10 @@ const textPath = (
   fill: string,
   letterSpacing = 0
 ): string =>
-  `<path fill="${fill}" d="${font
-    .getPath(text, x, y, size, { kerning: true, letterSpacing })
-    .toPathData(PATH_PRECISION)}"/>`;
+  `<path fill="${fill}" d="${cubicPathData(
+    font.getPath(text, x, y, size, { kerning: true, letterSpacing }),
+    PATH_PRECISION
+  )}"/>`;
 
 const copy = (theme: Theme): string =>
   textPath(

@@ -1,0 +1,114 @@
+---
+title: Upstash Vector
+description: Reference for the Upstash Vector adapter, which maps an index to an Upstash namespace and compiles filters to the Upstash filter string.
+---
+
+The Upstash adapter wraps an `Index` from `@upstash/vector`. One store talks to one Upstash Vector index, the one your URL and token point at.
+
+```ts
+import { Index } from "@upstash/vector";
+import { createUpstashStore } from "vecstore-sdk/upstash";
+
+const store = createUpstashStore({
+  client: new Index({ url, token }),
+});
+```
+
+Install the client alongside the SDK:
+
+```bash
+bun add vecstore-sdk @upstash/vector
+```
+
+## Index creation
+
+You create an Upstash vector index in the console, in the developer API, or in Terraform. Its dimension and similarity function are fixed at that point. `@upstash/vector` has no call that creates one, so the adapter cannot either.
+
+Instead, a vecstore index is an Upstash namespace inside the index you connected to. That keeps `createIndex`, `deleteIndex`, and `listIndexes` meaningful:
+
+| Verb | What the adapter does |
+| --- | --- |
+| `createIndex({ name, dimension, metric? })` | Reads `info()` and checks the spec against the index. Returns `invalid_argument` when the dimension differs, or when an explicit `metric` differs from the index's similarity function. Returns `already_exists` when the index already holds records. |
+| `deleteIndex(name)` | Deletes every Upstash namespace the index opened. Returns `not_found` when there are none. |
+| `listIndexes()` | Returns the index names, minus Upstash's own default namespace. |
+
+Upstash creates a namespace on the first write, so `createIndex` records no state of its own. Call it twice before the first `upsert` and it returns `{ ok: true }` both times.
+
+An index name goes into the request path unescaped, so it can only hold characters that need no URL escaping. `docs/v2` returns `invalid_argument`.
+
+## Namespace modes
+
+The index name already uses the one namespace level Upstash gives you, so the `namespace` option needs somewhere else to live. `namespaceMode` picks where:
+
+| Mode | Where a namespace lives | What it costs |
+| --- | --- | --- |
+| `"metadata"` (default) | The `_namespace` metadata key | Every query carries a namespace filter |
+| `"native"` | An Upstash namespace named `{index}~{namespace}` | Upstash caps namespaces at 100 on the free plan and 10,000 on the paid plans |
+
+```ts
+const store = createUpstashStore({
+  client: new Index({ url, token }),
+  namespaceMode: "native",
+});
+```
+
+Choose `"native"` when you can name your namespaces up front, and `"metadata"` when a namespace is a tenant id you cannot bound. Nothing migrates between the two: a record written in one mode is invisible in the other.
+
+### Metadata mode
+
+- Records carry the namespace in the `_namespace` metadata key, and the adapter adds that key to every query and filtered delete.
+- The adapter stores ids as `{namespace}/{length}/{id}`, so two namespaces can hold the same id. The original id goes in the `_id` metadata key and comes back on `query` and `fetch`.
+- Records in the default namespace keep their id and carry neither key.
+- The adapter strips `_id` and `_namespace` from returned metadata. Do not write metadata under those names.
+
+One Upstash namespace holds every vecstore namespace under that index, so the number of tenants you can have is unbounded.
+
+### Native mode
+
+- Each index and namespace pair is its own Upstash namespace: `{index}` for the default namespace, `{index}~{namespace}` for the rest.
+- Ids and metadata are stored as you wrote them. There are no reserved keys.
+- Queries carry no namespace filter, so a query without a `filter` is a plain vector search.
+- `delete({ all: true })` resets the namespace in one call instead of deleting by filter.
+- `listIndexes` reads the index name back off each Upstash namespace, and `deleteIndex` drops every namespace the index opened.
+
+Because the whole name goes into the request path, an index name cannot contain `~` or a character that needs URL escaping, and neither can a namespace. The verb returns `invalid_argument` rather than sending the request.
+
+## Every filtered query has a budget
+
+Upstash gives each query a filtering budget: a number of candidate vectors it can compare against the filter before it falls back to post-filtering. A query whose filter is highly selective can return fewer than `topK` records, so ask for more than you need, or page with a second query.
+
+In metadata mode the adapter adds the `_namespace` clause to every query, which makes every query a filtered query. The default namespace compiles to `(HAS NOT FIELD _namespace OR _namespace = '')` so that records written by another tool still match, and an `OR` of two conditions spends more of the budget than a single equality does. Native mode spends none of it on the namespace.
+
+## Filter compilation
+
+An Upstash filter is a SQL-like string rather than a structured object. The adapter exports the compiler as `compileUpstashFilter`:
+
+```ts
+import { and, eq, gt } from "vecstore-sdk";
+import { compileUpstashFilter } from "vecstore-sdk/upstash";
+
+compileUpstashFilter(and(eq("genre", "drama"), gt("year", 2000)));
+// "(genre = 'drama' AND year > 2000)"
+```
+
+Upstash has no general `NOT` operator, so the compiler pushes `not` to the leaves with De Morgan's laws, the same way the Pinecone compiler does. `exists` becomes `HAS FIELD`, and its negation becomes `HAS NOT FIELD`.
+
+Because the filter is a string, the compiler checks every part it writes into that string. The verb returns an `invalid_argument` error in three cases:
+
+- A field name does not match Upstash's identifier rule `[a-zA-Z_][a-zA-Z_0-9.[\]#-]*`.
+- A string value contains a backslash, or contains both `'` and `"`. Upstash documents no escape sequence inside a string literal. The compiler picks the quote the value does not use, and refuses the cases where neither quote works.
+- A number is not finite.
+
+## Score normalization
+
+Upstash normalizes every score to the range 0 to 1. Higher is always more similar, including for euclidean distance. The other three adapters return the provider's raw score instead. Cosine returns `(1 + cosine_similarity) / 2` and euclidean returns `1 / (1 + squared_distance)`.
+
+## What the adapter stores
+
+| Concern | Metadata mode | Native mode |
+| --- | --- | --- |
+| Index | Namespace | Namespace prefix |
+| Namespace | `_namespace` metadata key | Namespace suffix |
+| Id | `{namespace}/{length}/{id}`, original in `_id` | The id you wrote |
+| Metadata | Metadata, minus the two reserved keys | Metadata |
+| Metric | Set on the Upstash index | Set on the Upstash index |

@@ -1,4 +1,4 @@
-export type ProviderId = "qdrant" | "pgvector" | "pinecone";
+export type ProviderId = "qdrant" | "pgvector" | "pinecone" | "upstash";
 
 export const installCommand = "bun add vecstore-sdk";
 
@@ -91,6 +91,19 @@ const store = createPineconeStore({
 
 ${query(expression)}`,
   },
+  {
+    id: "upstash",
+    label: "Upstash",
+    snippet: (expression) => `import { Index } from "@upstash/vector";
+import { ${builderImports(expression)} } from "vecstore-sdk";
+import { createUpstashStore } from "vecstore-sdk/upstash";
+
+const store = createUpstashStore({
+  client: new Index({ url, token }),
+});
+
+${query(expression)}`,
+  },
 ];
 
 export const demoExamples: readonly DemoExample[] = [
@@ -129,6 +142,7 @@ $3 = '2000'`,
     }
   ]
 }`,
+      upstash: `(genre = 'drama' AND year > 2000)`,
     },
   },
   {
@@ -167,6 +181,7 @@ $3 = 'price'   $4 = '100'`,
     }
   ]
 }`,
+      upstash: `(price >= 10 AND price <= 100)`,
     },
   },
   {
@@ -203,6 +218,7 @@ $3 = 'status'  $4 = '["draft"]'`,
     }
   ]
 }`,
+      upstash: `(lang IN ('en', 'th') AND status NOT IN ('draft'))`,
     },
   },
   {
@@ -241,12 +257,13 @@ $2 = '{"region":"eu"}'`,
     }
   ]
 }`,
+      upstash: `(tier = 'pro' OR region != 'eu')`,
     },
   },
 ];
 
 export const stats = [
-  { label: "Providers", value: "3" },
+  { label: "Providers", value: "4" },
   { label: "Filter builders", value: "12" },
   { label: "Runtime dependencies", value: "0" },
   { label: "License", value: "MIT" },
@@ -262,7 +279,7 @@ export const highlights = [
     title: "Errors as values, never thrown.",
   },
   {
-    body: "Pinecone has them. Qdrant and pgvector get them emulated with the same API.",
+    body: "Pinecone and Upstash have them. Qdrant and pgvector get them emulated with the same API.",
     title: "Namespaces on every provider.",
   },
 ] as const;
@@ -325,6 +342,12 @@ export const adapters: readonly {
     title: "Pinecone",
   },
   {
+    body: "Wraps the Upstash Index. Maps an index to a namespace and compiles filters to the SQL-like filter string.",
+    command: "bun add @upstash/vector",
+    mark: "upstash",
+    title: "Upstash Vector",
+  },
+  {
     body: "The core package ships the filter language and the adapter interface with no runtime dependencies.",
     command: installCommand,
     mark: "vecstore",
@@ -372,6 +395,7 @@ export const footerColumns = [
       { href: "https://qdrant.tech", label: "Qdrant" },
       { href: "https://github.com/pgvector/pgvector", label: "pgvector" },
       { href: "https://www.pinecone.io", label: "Pinecone" },
+      { href: "https://upstash.com/docs/vector", label: "Upstash Vector" },
     ],
     title: "Providers",
   },

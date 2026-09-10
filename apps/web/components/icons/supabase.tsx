@@ -1,0 +1,13 @@
+import type { ComponentProps } from "react";
+
+export const SupabaseIcon = (props: ComponentProps<"svg">) => (
+  <svg
+    aria-hidden
+    fill="currentColor"
+    viewBox="0 0 109 113"
+    xmlns="http://www.w3.org/2000/svg"
+    {...props}
+  >
+    <path d="M63.71 110.28C60.85 113.89 55.05 111.91 54.98 107.31L53.97 40.06H99.19C107.38 40.06 111.95 49.52 106.86 55.94L63.71 110.28ZM45.32 2.07C48.18 -1.53 53.97 0.44 54.04 5.04L54.48 72.29H9.83C1.64 72.29 -2.93 62.83 2.17 56.42L45.32 2.07Z" />
+  </svg>
+);

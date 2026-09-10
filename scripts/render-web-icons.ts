@@ -100,6 +100,7 @@ const ico = (entries: readonly { size: number; png: Buffer }[]): Buffer => {
 const PINECONE_INK = INK;
 const QDRANT_RED = "#dc244c";
 const PGVECTOR_BLUE = "#4169e1";
+const SUPABASE_GREEN = "#3ecf8e";
 const UPSTASH_GREEN = "#00e9a3";
 
 interface ProviderRow {
@@ -129,6 +130,12 @@ const rows: readonly Row[] = [
     kind: "provider",
     label: "Pinecone",
     tint: PINECONE_INK,
+  },
+  {
+    file: "supabase.svg",
+    kind: "provider",
+    label: "Supabase",
+    tint: SUPABASE_GREEN,
   },
   {
     file: "upstash.svg",

@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - ".changeset/**"
-      - ".github/workflows/release.yml"
   workflow_dispatch:
     inputs:
       snapshot:

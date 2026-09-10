@@ -44,6 +44,16 @@ import { createUpstashStore } from "vecstore-sdk/upstash";
 const store = createUpstashStore({ client: new Index({ url, token }) });
 ```
 
+```ts
+import Cloudflare from "cloudflare";
+import { createVectorizeStore } from "vecstore-sdk/vectorize";
+
+const store = createVectorizeStore({
+  client: new Cloudflare({ apiToken }),
+  accountId,
+});
+```
+
 Moving to Supabase needs a setup step the others do not: install `sql/supabase.sql` in the project before the first call. [The Supabase page](/docs/providers/supabase#install-the-sql-functions) covers it.
 
 ## Copy the data
@@ -54,23 +64,25 @@ Record ids, vectors, and metadata round-trip unchanged. Every provider accepts o
 
 ## Check what each provider stores
 
-| Concern | Qdrant | pgvector and Supabase | Pinecone | Upstash |
-| --- | --- | --- | --- | --- |
-| Index | Collection | Table | Index | Namespace |
-| Namespace | `_namespace` payload key | `namespace` column | Native | `_namespace` metadata key, or a real namespace under `namespaceMode: "native"` |
-| Id | UUID, hashed from your id when needed. The original id is kept in `_id`. | `id text` | Native | Prefixed with the namespace. The original id is kept in `_id`. Unchanged under `namespaceMode: "native"`. |
-| Metadata | Payload | `metadata jsonb` | Metadata | Metadata |
-| Metric | Set on the collection | Read from the HNSW index operator class | Set on the index | Set on the Upstash index |
+| Concern | Qdrant | pgvector and Supabase | Pinecone | Upstash | Vectorize |
+| --- | --- | --- | --- | --- | --- |
+| Index | Collection | Table | Index | Namespace | Index |
+| Namespace | `_namespace` payload key | `namespace` column | Native | `_namespace` metadata key, or a real namespace under `namespaceMode: "native"` | Native |
+| Id | UUID, hashed from your id when needed. The original id is kept in `_id`. | `id text` | Native | Prefixed with the namespace. The original id is kept in `_id`. Unchanged under `namespaceMode: "native"`. | UUID, hashed from your id when needed. The original id is kept in `_id`. |
+| Metadata | Payload | `metadata jsonb` | Metadata | Metadata | Metadata |
+| Metric | Set on the collection | Read from the HNSW index operator class | Set on the index | Set on the Upstash index | Set on the index |
 
 The pgvector and Supabase adapters share a table layout, so moving between those two copies no data. Point the other adapter at the same table.
 
-If you read a Qdrant collection, a pgvector table, or an Upstash namespace with another tool, expect those extra keys and columns.
+If you read a Qdrant collection, a pgvector table, an Upstash namespace, or a Vectorize index with another tool, expect those extra keys and columns.
 
 Moving to Upstash needs one step the others do not. Create the vector index in the Upstash console first with the dimension and similarity function you want, because `@upstash/vector` cannot create one. `createIndex` then checks your spec against it.
 
+Moving to Vectorize needs one too. Name the properties you filter on in `metadataIndexes` before the first `upsert`, because a Vectorize filter matches nothing on a property that has no metadata index, and an index added later does not cover data already written. Vectorize also has no OR operator, no `exists`, and no delete beyond delete-by-id. See [Cloudflare Vectorize](/docs/providers/vectorize).
+
 ## Re-check score thresholds
 
-Qdrant, pgvector, and Pinecone return the provider's native score for the index metric, and Upstash normalizes every metric to the range 0 to 1. A threshold tuned on one provider does not carry over. See the score table in [Stores and indexes](/docs/core/store#scores) and check the threshold against real data.
+Qdrant, pgvector, Pinecone, and Vectorize return the provider's native score for the index metric, and Upstash normalizes every metric to the range 0 to 1. A threshold tuned on one provider does not carry over. See the score table in [Stores and indexes](/docs/core/store#scores) and check the threshold against real data.
 
 ## Check the filter edge cases
 

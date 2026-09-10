@@ -8,7 +8,7 @@ import { fonts } from "@/lib/fonts";
 
 export const metadata: Metadata = {
   description:
-    "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, and Upstash Vector, so you can switch providers without rewriting queries.",
+    "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, and Cloudflare Vectorize, so you can switch providers without rewriting queries.",
   title: {
     default: "VecStore SDK",
     template: "%s | VecStore SDK",

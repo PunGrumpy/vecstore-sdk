@@ -30,6 +30,7 @@ const sources = {
   qdrant: readFileSync(path.join(assets, "qdrant.svg"), "utf-8"),
   supabase: readFileSync(path.join(assets, "supabase.svg"), "utf-8"),
   upstash: readFileSync(path.join(assets, "upstash.svg"), "utf-8"),
+  vectorize: readFileSync(path.join(assets, "cloudflare.svg"), "utf-8"),
 } as const;
 
 const inkAt = (pixels: Uint8Array, index: number): number => {

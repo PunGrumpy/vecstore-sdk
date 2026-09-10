@@ -3,7 +3,8 @@ export type ProviderId =
   | "pgvector"
   | "pinecone"
   | "supabase"
-  | "upstash";
+  | "upstash"
+  | "vectorize";
 
 export const installCommand = "bun add vecstore-sdk";
 
@@ -124,6 +125,20 @@ const store = createUpstashStore({
 
 ${query(expression)}`,
   },
+  {
+    id: "vectorize",
+    label: "Vectorize",
+    snippet: (expression) => `import Cloudflare from "cloudflare";
+import { ${builderImports(expression)} } from "vecstore-sdk";
+import { createVectorizeStore } from "vecstore-sdk/vectorize";
+
+const store = createVectorizeStore({
+  client: new Cloudflare({ apiToken }),
+  accountId,
+});
+
+${query(expression)}`,
+  },
 ];
 
 export const demoExamples: readonly DemoExample[] = [
@@ -167,6 +182,10 @@ $3 = '2000'`,
         = 'number'
     AND (metadata -> 'year'::text) > '2000'::jsonb))`,
       upstash: `(genre = 'drama' AND year > 2000)`,
+      vectorize: `{
+  "genre": { "$eq": "drama" },
+  "year": { "$gt": 2000 }
+}`,
     },
   },
   {
@@ -212,6 +231,9 @@ $3 = 'price'   $4 = '100'`,
       = 'number'
   AND (metadata -> 'price'::text) <= '100'::jsonb))`,
       upstash: `(price >= 10 AND price <= 100)`,
+      vectorize: `{
+  "price": { "$gte": 10, "$lte": 100 }
+}`,
     },
   },
   {
@@ -254,6 +276,10 @@ $3 = 'status'  $4 = '["draft"]'`,
     (metadata -> 'status'::text) <@ '["draft"]'::jsonb,
     false))`,
       upstash: `(lang IN ('en', 'th') AND status NOT IN ('draft'))`,
+      vectorize: `{
+  "lang": { "$in": ["en", "th"] },
+  "status": { "$nin": ["draft"] }
+}`,
     },
   },
   {
@@ -295,12 +321,16 @@ $2 = '{"region":"eu"}'`,
       supabase: `(metadata @> '{"tier": "pro"}'::jsonb
   OR NOT (metadata @> '{"region": "eu"}'::jsonb))`,
       upstash: `(tier = 'pro' OR region != 'eu')`,
+      vectorize: `{
+  "kind": "unsupported",
+  "feature": "orFilter"
+}`,
     },
   },
 ];
 
 export const stats = [
-  { label: "Providers", value: "5" },
+  { label: "Providers", value: "6" },
   { label: "Filter builders", value: "12" },
   { label: "Runtime dependencies", value: "0" },
   { label: "License", value: "MIT" },
@@ -316,7 +346,7 @@ export const highlights = [
     title: "Errors as values, never thrown.",
   },
   {
-    body: "Pinecone and Upstash have them. Qdrant, pgvector, and Supabase get them emulated with the same API.",
+    body: "Pinecone, Upstash, and Vectorize have them. Qdrant, pgvector, and Supabase get them emulated with the same API.",
     title: "Namespaces on every provider.",
   },
 ] as const;
@@ -391,6 +421,12 @@ export const adapters: readonly {
     title: "Upstash Vector",
   },
   {
+    body: "Drives the Vectorize v2 HTTP API. Uses native namespaces and reports what Vectorize has no call for.",
+    command: "bun add cloudflare",
+    mark: "vectorize",
+    title: "Cloudflare Vectorize",
+  },
+  {
     body: "The core package ships the filter language and the adapter interface with no runtime dependencies.",
     command: installCommand,
     mark: "vecstore",
@@ -440,6 +476,10 @@ export const footerColumns = [
       { href: "https://www.pinecone.io", label: "Pinecone" },
       { href: "https://supabase.com/docs/guides/ai", label: "Supabase" },
       { href: "https://upstash.com/docs/vector", label: "Upstash Vector" },
+      {
+        href: "https://developers.cloudflare.com/vectorize",
+        label: "Cloudflare Vectorize",
+      },
     ],
     title: "Providers",
   },

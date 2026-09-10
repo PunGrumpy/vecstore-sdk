@@ -17,16 +17,16 @@ const filter = and(
 
 ## Builders
 
-| Builder | Qdrant | pgvector and Supabase | Pinecone | Upstash |
-| --- | --- | --- | --- | --- |
-| `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}'` | `{ field: { $eq } }` | `field = value` |
-| `ne(field, value)` | `must_not` of the above | `NOT (metadata @> …)` | `$ne` | `field != value` |
-| `gt`, `gte`, `lt`, `lte` | `range` | A jsonb comparison guarded by `jsonb_typeof` | `$gt`, `$gte`, `$lt`, `$lte` | `>`, `>=`, `<`, `<=` |
-| `isIn(field, values)` | `match.any`, or `should` for mixed types | `metadata->field <@ values` | `$in`, or `$or` of `$eq` for booleans | `field IN (…)` |
-| `notIn(field, values)` | `match.except`, or `must_not` | `NOT COALESCE(… <@ …, false)` | `$nin`, or `$and` of `$ne` for booleans | `field NOT IN (…)` |
-| `exists(field)` | `must_not is_empty` | `IS NOT NULL AND jsonb_typeof <> 'null'` | `$exists: true` | `HAS FIELD field` |
-| `and`, `or` | `must`, `should` | `AND`, `OR` | `$and`, `$or` | `AND`, `OR` |
-| `not(filter)` | `must_not` | `NOT (…)` | Pushed to the leaves with De Morgan's laws | Pushed to the leaves with De Morgan's laws |
+| Builder | Qdrant | pgvector and Supabase | Pinecone | Upstash | Vectorize |
+| --- | --- | --- | --- | --- | --- |
+| `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}'` | `{ field: { $eq } }` | `field = value` | `{ field: { $eq } }` |
+| `ne(field, value)` | `must_not` of the above | `NOT (metadata @> …)` | `$ne` | `field != value` | `$ne` |
+| `gt`, `gte`, `lt`, `lte` | `range` | A jsonb comparison guarded by `jsonb_typeof` | `$gt`, `$gte`, `$lt`, `$lte` | `>`, `>=`, `<`, `<=` | `$gt`, `$gte`, `$lt`, `$lte` |
+| `isIn(field, values)` | `match.any`, or `should` for mixed types | `metadata->field <@ values` | `$in`, or `$or` of `$eq` for booleans | `field IN (…)` | `$in` |
+| `notIn(field, values)` | `match.except`, or `must_not` | `NOT COALESCE(… <@ …, false)` | `$nin`, or `$and` of `$ne` for booleans | `field NOT IN (…)` | `$nin` |
+| `exists(field)` | `must_not is_empty` | `IS NOT NULL AND jsonb_typeof <> 'null'` | `$exists: true` | `HAS FIELD field` | `unsupported` |
+| `and`, `or` | `must`, `should` | `AND`, `OR` | `$and`, `$or` | `AND`, `OR` | `and` merges fields into one object, `or` is `unsupported` |
+| `not(filter)` | `must_not` | `NOT (…)` | Pushed to the leaves with De Morgan's laws | Pushed to the leaves with De Morgan's laws | Pushed to the leaves with De Morgan's laws |
 
 `isIn`, `notIn`, `and`, and `or` take at least one element. The types enforce this.
 
@@ -60,9 +60,16 @@ The filter `and(eq("genre", "drama"), gt("year", 2000))` compiles to:
 (genre = 'drama' AND year > 2000)
 ```
 
+```json title="Vectorize"
+{
+  "genre": { "$eq": "drama" },
+  "year": { "$gt": 2000 }
+}
+```
+
 ## Inspect the native filter
 
-Qdrant, pgvector, Pinecone, and Upstash each export their compiler. Import it to log or reuse the native output:
+Qdrant, pgvector, Pinecone, Upstash, and Vectorize each export their compiler. Import it to log or reuse the native output:
 
 ```ts
 import { compileQdrantFilter } from "vecstore-sdk/qdrant";
@@ -72,4 +79,4 @@ const native = compileQdrantFilter(filter);
 
 Supabase has no compiler to import. The filter travels to Postgres as JSON and `vecstore_filter_sql` emits the pgvector predicates there, as [the Supabase page](/docs/providers/supabase#how-filters-travel) describes.
 
-Where a provider lacks an operator, the compiler rewrites the filter instead of failing. The one exception is Upstash, whose filter is a string: the compiler rejects a field name or a string value it cannot write safely, and the verb returns an `invalid_argument` error. See [Provider differences](/docs/providers/differences) for the two cases where the semantics diverge.
+Where a provider lacks an operator, the compiler rewrites the filter instead of failing. Two providers are exceptions. Upstash's filter is a string, so the compiler rejects a field name or a string value it cannot write safely and the verb returns an `invalid_argument` error. Vectorize has no OR and no presence test, so `compileVectorizeFilter` returns a `Result` and the verb returns an `unsupported` error before it sends a request. See [Provider differences](/docs/providers/differences) for the two cases where the semantics diverge.

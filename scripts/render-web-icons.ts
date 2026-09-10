@@ -14,8 +14,8 @@ const CARD_FILL = "#0a0a0a";
 const CARD_STROKE = "#2e2e2e";
 const CARD_STROKE_WIDTH = 2;
 const CARD_WIDTH = 400;
-const CARD_HEIGHT = 92;
-const CARD_GAP = 23;
+const CARD_HEIGHT = 112;
+const CARD_GAP = 28;
 const CARD_RADIUS = 20;
 const CARD_ICON = 34;
 const CARD_ICON_INSET = 28;
@@ -23,11 +23,6 @@ const CARD_ICON_Y = (CARD_HEIGHT - CARD_ICON) / 2;
 const CARD_LABEL_GAP = 20;
 const CARD_LABEL_SIZE = 32;
 const CARD_LABEL_X = CARD_ICON_INSET + CARD_ICON + CARD_LABEL_GAP;
-const PLACEHOLDER_FILL = "#2e2e2e";
-const PLACEHOLDER_ICON_RADIUS = 10;
-const PLACEHOLDER_BAR_WIDTH = 132;
-const PLACEHOLDER_BAR_HEIGHT = 16;
-const PLACEHOLDER_BAR_RADIUS = 8;
 const OG_LOGO_WIDTH = 580;
 const MARK_SIZE = 103.68;
 const OG_WIDTH = 1200;
@@ -104,51 +99,18 @@ const SUPABASE_GREEN = "#3ecf8e";
 const UPSTASH_GREEN = "#00e9a3";
 
 interface ProviderRow {
-  readonly kind: "provider";
   readonly file: string;
   readonly label: string;
   readonly tint: string;
 }
 
-interface PlaceholderRow {
-  readonly kind: "placeholder";
-}
-
-type Row = ProviderRow | PlaceholderRow;
-
-const rows: readonly Row[] = [
-  { kind: "placeholder" },
-  { file: "qdrant.svg", kind: "provider", label: "Qdrant", tint: QDRANT_RED },
-  {
-    file: "postgresql.svg",
-    kind: "provider",
-    label: "pgvector",
-    tint: PGVECTOR_BLUE,
-  },
-  {
-    file: "pinecone.svg",
-    kind: "provider",
-    label: "Pinecone",
-    tint: PINECONE_INK,
-  },
-  {
-    file: "supabase.svg",
-    kind: "provider",
-    label: "Supabase",
-    tint: SUPABASE_GREEN,
-  },
-  {
-    file: "upstash.svg",
-    kind: "provider",
-    label: "Upstash",
-    tint: UPSTASH_GREEN,
-  },
-  { kind: "placeholder" },
+const rows: readonly ProviderRow[] = [
+  { file: "qdrant.svg", label: "Qdrant", tint: QDRANT_RED },
+  { file: "postgresql.svg", label: "pgvector", tint: PGVECTOR_BLUE },
+  { file: "pinecone.svg", label: "Pinecone", tint: PINECONE_INK },
+  { file: "supabase.svg", label: "Supabase", tint: SUPABASE_GREEN },
+  { file: "upstash.svg", label: "Upstash", tint: UPSTASH_GREEN },
 ];
-
-const providerIndexes = rows.flatMap((row, index) =>
-  row.kind === "provider" ? [index] : []
-);
 
 const providerIcon = (file: string, size: number, tint: string): string => {
   const svg = readFileSync(path.join(assets, "providers", file), "utf-8");
@@ -161,11 +123,6 @@ const providerIcon = (file: string, size: number, tint: string): string => {
   return `<g transform="scale(${format(scale)})"><path d="${d}" fill="${tint}"/></g>`;
 };
 
-const placeholderBody = (): string => {
-  const barY = (CARD_HEIGHT - PLACEHOLDER_BAR_HEIGHT) / 2;
-  return `<rect x="${CARD_ICON_INSET}" y="${format(CARD_ICON_Y)}" width="${CARD_ICON}" height="${CARD_ICON}" rx="${PLACEHOLDER_ICON_RADIUS}" fill="${PLACEHOLDER_FILL}"/><rect x="${CARD_LABEL_X}" y="${format(barY)}" width="${PLACEHOLDER_BAR_WIDTH}" height="${PLACEHOLDER_BAR_HEIGHT}" rx="${PLACEHOLDER_BAR_RADIUS}" fill="${PLACEHOLDER_FILL}"/>`;
-};
-
 const providerBody = (row: ProviderRow, labelFont: Font): string => {
   const label = labelFont.getPath(row.label, 0, 0, CARD_LABEL_SIZE, {
     kerning: true,
@@ -175,11 +132,8 @@ const providerBody = (row: ProviderRow, labelFont: Font): string => {
   return `<g transform="translate(${CARD_ICON_INSET} ${format(CARD_ICON_Y)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(CARD_LABEL_X - box.x1)} ${format(textY)})"><path d="${cubicPathData(label, PATH_PRECISION)}" fill="${INK}"/></g>`;
 };
 
-const card = (row: Row, y: number, labelFont: Font): string => {
-  const body =
-    row.kind === "placeholder"
-      ? placeholderBody()
-      : providerBody(row, labelFont);
+const card = (row: ProviderRow, y: number, labelFont: Font): string => {
+  const body = providerBody(row, labelFont);
   return `<g transform="translate(0 ${format(y)})"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${CARD_STROKE}" stroke-width="${CARD_STROKE_WIDTH}"/>${body}</g>`;
 };
 
@@ -201,12 +155,9 @@ const openGraph = (): string => {
       card(row, columnTop + index * (CARD_HEIGHT + CARD_GAP), labelFont)
     )
     .join("");
-  const firstProvider = providerIndexes[0] ?? 0;
-  const lastProvider = providerIndexes.at(-1) ?? rows.length - 1;
-  const fadeStart =
-    (columnTop + firstProvider * (CARD_HEIGHT + CARD_GAP)) / OG_HEIGHT;
+  const fadeStart = (columnTop + (CARD_HEIGHT + CARD_GAP)) / OG_HEIGHT;
   const fadeEnd =
-    (columnTop + lastProvider * (CARD_HEIGHT + CARD_GAP) + CARD_HEIGHT) /
+    (columnTop + (rows.length - 2) * (CARD_HEIGHT + CARD_GAP) + CARD_HEIGHT) /
     OG_HEIGHT;
   const fade = `<linearGradient id="column-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="${format(fadeStart)}" stop-color="#ffffff"/><stop offset="${format(fadeEnd)}" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/></linearGradient><mask id="column-mask"><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#column-fade)"/></mask>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}"><defs>${fade}</defs><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="${BACKGROUND}"/><image href="data:image/svg+xml;base64,${logoData}" x="${OG_PADDING}" y="${format((OG_HEIGHT - logoDrawnHeight) / 2)}" width="${OG_LOGO_WIDTH}" height="${format(logoDrawnHeight)}"/><g mask="url(#column-mask)"><g transform="translate(${format(columnX)} 0)">${cards}</g></g></svg>`;

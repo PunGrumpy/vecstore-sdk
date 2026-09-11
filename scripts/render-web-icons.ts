@@ -104,6 +104,7 @@ const PGVECTOR_BLUE = "#4169e1";
 const SUPABASE_GREEN = "#3ecf8e";
 const UPSTASH_GREEN = "#00e9a3";
 const VECTORIZE_ORANGE = "#f6821f";
+const REDIS_RED = "#ff4438";
 
 interface ProviderRow {
   readonly file: string;
@@ -139,6 +140,7 @@ const providers: readonly ProviderRow[] = [
     label: "Vectorize",
     tint: VECTORIZE_ORANGE,
   },
+  { file: "redis.svg", id: "redis", label: "Redis", tint: REDIS_RED },
 ];
 
 const rows = providers.filter((row) => row.id !== "supabase");

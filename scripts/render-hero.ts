@@ -33,7 +33,7 @@ const HEADLINE = "One API for vector stores";
 const SUBTITLE = [
   "vecstore-sdk is an open-source TypeScript library that compiles one",
   "filter to Qdrant, pgvector, Pinecone, Supabase, Upstash Vector,",
-  "and Cloudflare Vectorize.",
+  "Cloudflare Vectorize, and Redis.",
 ];
 
 interface Theme {

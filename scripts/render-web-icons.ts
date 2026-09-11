@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { Resvg } from "@resvg/resvg-js";
@@ -12,6 +12,9 @@ const BACKGROUND = "#000000";
 const INK = "#ededed";
 const CARD_FILL = "#0a0a0a";
 const CARD_STROKE = "#2e2e2e";
+const CARD_STROKE_ACTIVE = "#666666";
+const CARD_DIM_NEAR = 0.35;
+const CARD_DIM_FAR = 0.18;
 const CARD_STROKE_WIDTH = 2;
 const CARD_WIDTH = 400;
 const CARD_HEIGHT = 112;
@@ -28,6 +31,8 @@ const MARK_SIZE = 103.68;
 const OG_WIDTH = 1200;
 const OG_HEIGHT = 630;
 const OG_PADDING = 80;
+const COLUMN_WINDOW = 5;
+const ACTIVE_SLOT = 2;
 const TAGLINE = "One filter language for every vector store.";
 const ICO_HEADER_BYTES = 6;
 const ICO_ENTRY_BYTES = 16;
@@ -37,6 +42,7 @@ const BITS_PER_PIXEL = 32;
 const root = path.join(import.meta.dir, "..");
 const assets = path.join(root, "assets");
 const output = path.join(root, "apps", "web", "app");
+const ogOutput = path.join(output, "og", "docs", "[...slug]");
 
 const loadFont = (file: string): Font => {
   const bytes = readFileSync(file);
@@ -95,22 +101,47 @@ const ico = (entries: readonly { size: number; png: Buffer }[]): Buffer => {
 const PINECONE_INK = INK;
 const QDRANT_RED = "#dc244c";
 const PGVECTOR_BLUE = "#4169e1";
+const SUPABASE_GREEN = "#3ecf8e";
 const UPSTASH_GREEN = "#00e9a3";
 const VECTORIZE_ORANGE = "#f6821f";
 
 interface ProviderRow {
   readonly file: string;
+  readonly id: string;
   readonly label: string;
   readonly tint: string;
 }
 
-const rows: readonly ProviderRow[] = [
-  { file: "qdrant.svg", label: "Qdrant", tint: QDRANT_RED },
-  { file: "postgresql.svg", label: "pgvector", tint: PGVECTOR_BLUE },
-  { file: "pinecone.svg", label: "Pinecone", tint: PINECONE_INK },
-  { file: "upstash.svg", label: "Upstash", tint: UPSTASH_GREEN },
-  { file: "cloudflare.svg", label: "Vectorize", tint: VECTORIZE_ORANGE },
+const providers: readonly ProviderRow[] = [
+  { file: "qdrant.svg", id: "qdrant", label: "Qdrant", tint: QDRANT_RED },
+  {
+    file: "postgresql.svg",
+    id: "pgvector",
+    label: "pgvector",
+    tint: PGVECTOR_BLUE,
+  },
+  {
+    file: "pinecone.svg",
+    id: "pinecone",
+    label: "Pinecone",
+    tint: PINECONE_INK,
+  },
+  {
+    file: "supabase.svg",
+    id: "supabase",
+    label: "Supabase",
+    tint: SUPABASE_GREEN,
+  },
+  { file: "upstash.svg", id: "upstash", label: "Upstash", tint: UPSTASH_GREEN },
+  {
+    file: "cloudflare.svg",
+    id: "vectorize",
+    label: "Vectorize",
+    tint: VECTORIZE_ORANGE,
+  },
 ];
+
+const rows = providers.filter((row) => row.id !== "supabase");
 
 const providerIcon = (file: string, size: number, tint: string): string => {
   const svg = readFileSync(path.join(assets, "providers", file), "utf-8");
@@ -132,35 +163,114 @@ const providerBody = (row: ProviderRow, labelFont: Font): string => {
   return `<g transform="translate(${CARD_ICON_INSET} ${format(CARD_ICON_Y)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(CARD_LABEL_X - box.x1)} ${format(textY)})"><path d="${cubicPathData(label, PATH_PRECISION)}" fill="${INK}"/></g>`;
 };
 
-const card = (row: ProviderRow, y: number, labelFont: Font): string => {
+interface CardStyle {
+  readonly active: boolean;
+  readonly opacity: number;
+}
+
+const card = (
+  row: ProviderRow,
+  y: number,
+  labelFont: Font,
+  style: CardStyle
+): string => {
   const body = providerBody(row, labelFont);
-  return `<g transform="translate(0 ${format(y)})"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${CARD_STROKE}" stroke-width="${CARD_STROKE_WIDTH}"/>${body}</g>`;
+  const stroke = style.active ? CARD_STROKE_ACTIVE : CARD_STROKE;
+  return `<g transform="translate(0 ${format(y)})" opacity="${format(style.opacity)}"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${stroke}" stroke-width="${CARD_STROKE_WIDTH}"/>${body}</g>`;
 };
 
-const openGraph = (): string => {
-  const logo = readFileSync(path.join(assets, "logo-dark.svg"), "utf-8");
-  const logoViewBox = /viewBox="0 0 (?<width>[\d.]+) (?<height>[\d.]+)"/u.exec(
-    logo
-  );
-  const logoWidth = Number(logoViewBox?.groups?.width ?? OG_LOGO_WIDTH);
-  const logoHeight = Number(logoViewBox?.groups?.height ?? OG_LOGO_WIDTH);
-  const logoDrawnHeight = (logoHeight * OG_LOGO_WIDTH) / logoWidth;
-  const logoData = Buffer.from(logo).toString("base64");
-  const labelFont = loadFont(path.join(assets, "fonts", "Geist-SemiBold.ttf"));
-  const columnHeight = rows.length * CARD_HEIGHT + (rows.length - 1) * CARD_GAP;
-  const columnTop = (OG_HEIGHT - columnHeight) / 2;
-  const columnX = OG_WIDTH - OG_PADDING - CARD_WIDTH;
-  const cards = rows
+const cardStyle = (distance: number): CardStyle => {
+  if (distance === 0) {
+    return { active: true, opacity: 1 };
+  }
+
+  return {
+    active: false,
+    opacity: distance === 1 ? CARD_DIM_NEAR : CARD_DIM_FAR,
+  };
+};
+
+interface Column {
+  readonly cards: string;
+  readonly mask: string;
+}
+
+const column = (
+  items: readonly ProviderRow[],
+  labelFont: Font,
+  activeId?: string
+): Column => {
+  const height = items.length * CARD_HEIGHT + (items.length - 1) * CARD_GAP;
+  const top = (OG_HEIGHT - height) / 2;
+  const activeIndex = items.findIndex((row) => row.id === activeId);
+  const cards = items
     .map((row, index) =>
-      card(row, columnTop + index * (CARD_HEIGHT + CARD_GAP), labelFont)
+      card(
+        row,
+        top + index * (CARD_HEIGHT + CARD_GAP),
+        labelFont,
+        activeIndex === -1
+          ? { active: false, opacity: 1 }
+          : cardStyle(Math.abs(index - activeIndex))
+      )
     )
     .join("");
-  const fadeStart = (columnTop + (CARD_HEIGHT + CARD_GAP)) / OG_HEIGHT;
+  const fadeStart = (top + (CARD_HEIGHT + CARD_GAP)) / OG_HEIGHT;
   const fadeEnd =
-    (columnTop + (rows.length - 2) * (CARD_HEIGHT + CARD_GAP) + CARD_HEIGHT) /
+    (top + (items.length - 2) * (CARD_HEIGHT + CARD_GAP) + CARD_HEIGHT) /
     OG_HEIGHT;
   const fade = `<linearGradient id="column-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="${format(fadeStart)}" stop-color="#ffffff"/><stop offset="${format(fadeEnd)}" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/></linearGradient><mask id="column-mask"><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#column-fade)"/></mask>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}"><defs>${fade}</defs><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="${BACKGROUND}"/><image href="data:image/svg+xml;base64,${logoData}" x="${OG_PADDING}" y="${format((OG_HEIGHT - logoDrawnHeight) / 2)}" width="${OG_LOGO_WIDTH}" height="${format(logoDrawnHeight)}"/><g mask="url(#column-mask)"><g transform="translate(${format(columnX)} 0)">${cards}</g></g></svg>`;
+  return { cards, mask: fade };
+};
+
+const columnX = OG_WIDTH - OG_PADDING - CARD_WIDTH;
+
+const frame = (mask: string, body: string): string =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}"><defs>${mask}</defs><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="${BACKGROUND}"/>${body}</svg>`;
+
+const logoSvg = readFileSync(path.join(assets, "logo-dark.svg"), "utf-8");
+const logoData = Buffer.from(logoSvg).toString("base64");
+const logoBox = /viewBox="0 0 (?<width>[\d.]+) (?<height>[\d.]+)"/u.exec(
+  logoSvg
+);
+const logoRatio =
+  Number(logoBox?.groups?.height ?? 1) / Number(logoBox?.groups?.width ?? 1);
+
+const logoImage = (width: number, y: number): string =>
+  `<image href="data:image/svg+xml;base64,${logoData}" x="${OG_PADDING}" y="${format(y)}" width="${width}" height="${format(width * logoRatio)}"/>`;
+
+const logoTop = (OG_HEIGHT - OG_LOGO_WIDTH * logoRatio) / 2;
+
+const labelFont = loadFont(path.join(assets, "fonts", "Geist-SemiBold.ttf"));
+
+const openGraph = (): string => {
+  const { cards, mask } = column(rows, labelFont);
+  return frame(
+    mask,
+    `${logoImage(OG_LOGO_WIDTH, logoTop)}<g mask="url(#column-mask)"><g transform="translate(${format(columnX)} 0)">${cards}</g></g>`
+  );
+};
+
+const rotate = (by: number): readonly ProviderRow[] => [
+  ...providers.slice(by),
+  ...providers.slice(0, by),
+];
+
+const windowFor = (activeId?: string): readonly ProviderRow[] => {
+  const index = providers.findIndex((row) => row.id === activeId);
+  if (index === -1) {
+    return providers.slice(0, COLUMN_WINDOW);
+  }
+  const offset = (index - ACTIVE_SLOT + providers.length) % providers.length;
+  return rotate(offset).slice(0, COLUMN_WINDOW);
+};
+
+const docsBackground = (activeId?: string): string => {
+  const { cards, mask } = column(windowFor(activeId), labelFont, activeId);
+  return frame(
+    mask,
+    `${logoImage(OG_LOGO_WIDTH, logoTop)}<g mask="url(#column-mask)"><g transform="translate(${format(columnX)} 0)">${cards}</g></g>`
+  );
 };
 
 const run = (): void => {
@@ -189,6 +299,17 @@ const run = (): void => {
     path.join(output, "opengraph-image.alt.txt"),
     `VecStore SDK. ${TAGLINE}\n`
   );
+  mkdirSync(ogOutput, { recursive: true });
+  writeFileSync(
+    path.join(ogOutput, "background.png"),
+    renderPng(docsBackground(), OG_WIDTH)
+  );
+  for (const row of providers) {
+    writeFileSync(
+      path.join(ogOutput, `background-${row.id}.png`),
+      renderPng(docsBackground(row.id), OG_WIDTH)
+    );
+  }
   process.stdout.write("icons rendered\n");
 };
 

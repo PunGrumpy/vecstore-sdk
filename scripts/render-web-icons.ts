@@ -143,8 +143,6 @@ const providers: readonly ProviderRow[] = [
   { file: "redis.svg", id: "redis", label: "Redis", tint: REDIS_RED },
 ];
 
-const rows = providers.filter((row) => row.id !== "supabase");
-
 const providerIcon = (file: string, size: number, tint: string): string => {
   const svg = readFileSync(path.join(assets, "providers", file), "utf-8");
   const viewBox =
@@ -245,14 +243,6 @@ const logoTop = (OG_HEIGHT - OG_LOGO_WIDTH * logoRatio) / 2;
 
 const labelFont = loadFont(path.join(assets, "fonts", "Geist-SemiBold.ttf"));
 
-const openGraph = (): string => {
-  const { cards, mask } = column(rows, labelFont);
-  return frame(
-    mask,
-    `${logoImage(OG_LOGO_WIDTH, logoTop)}<g mask="url(#column-mask)"><g transform="translate(${format(columnX)} 0)">${cards}</g></g>`
-  );
-};
-
 const rotate = (by: number): readonly ProviderRow[] => [
   ...providers.slice(by),
   ...providers.slice(0, by),
@@ -267,7 +257,7 @@ const windowFor = (activeId?: string): readonly ProviderRow[] => {
   return rotate(offset).slice(0, COLUMN_WINDOW);
 };
 
-const docsBackground = (activeId?: string): string => {
+const socialCard = (activeId?: string): string => {
   const { cards, mask } = column(windowFor(activeId), labelFont, activeId);
   return frame(
     mask,
@@ -293,23 +283,18 @@ const run = (): void => {
       }))
     )
   );
-  writeFileSync(
-    path.join(output, "opengraph-image.png"),
-    renderPng(openGraph(), OG_WIDTH)
-  );
+  const defaultCard = renderPng(socialCard(), OG_WIDTH);
+  writeFileSync(path.join(output, "opengraph-image.png"), defaultCard);
   writeFileSync(
     path.join(output, "opengraph-image.alt.txt"),
     `VecStore SDK. ${TAGLINE}\n`
   );
   mkdirSync(ogOutput, { recursive: true });
-  writeFileSync(
-    path.join(ogOutput, "background.png"),
-    renderPng(docsBackground(), OG_WIDTH)
-  );
+  writeFileSync(path.join(ogOutput, "background.png"), defaultCard);
   for (const row of providers) {
     writeFileSync(
       path.join(ogOutput, `background-${row.id}.png`),
-      renderPng(docsBackground(row.id), OG_WIDTH)
+      renderPng(socialCard(row.id), OG_WIDTH)
     );
   }
   process.stdout.write("icons rendered\n");

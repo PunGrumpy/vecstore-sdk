@@ -13,19 +13,19 @@ const INK = "#ededed";
 const CARD_FILL = "#0a0a0a";
 const CARD_STROKE = "#2e2e2e";
 const CARD_STROKE_ACTIVE = "#666666";
-const CARD_DIM_NEAR = 0.35;
-const CARD_DIM_FAR = 0.18;
 const CARD_STROKE_WIDTH = 2;
 const CARD_WIDTH = 400;
-const CARD_HEIGHT = 112;
-const CARD_GAP = 28;
-const CARD_RADIUS = 20;
-const CARD_ICON = 34;
+const CARD_HEIGHT = 104;
+const CARD_GAP = 25;
+const CARD_PITCH = CARD_HEIGHT + CARD_GAP;
+const CARD_RADIUS = 16;
+const CARD_ICON = 42;
 const CARD_ICON_INSET = 28;
 const CARD_ICON_Y = (CARD_HEIGHT - CARD_ICON) / 2;
 const CARD_LABEL_GAP = 20;
-const CARD_LABEL_SIZE = 32;
+const CARD_LABEL_SIZE = 42;
 const CARD_LABEL_X = CARD_ICON_INSET + CARD_ICON + CARD_LABEL_GAP;
+const COLUMN_LIFT = 24;
 const OG_LOGO_WIDTH = 580;
 const MARK_SIZE = 103.68;
 const OG_WIDTH = 1200;
@@ -143,8 +143,6 @@ const providers: readonly ProviderRow[] = [
   { file: "redis.svg", id: "redis", label: "Redis", tint: REDIS_RED },
 ];
 
-const rows = providers.filter((row) => row.id !== "supabase");
-
 const providerIcon = (file: string, size: number, tint: string): string => {
   const svg = readFileSync(path.join(assets, "providers", file), "utf-8");
   const viewBox =
@@ -165,31 +163,15 @@ const providerBody = (row: ProviderRow, labelFont: Font): string => {
   return `<g transform="translate(${CARD_ICON_INSET} ${format(CARD_ICON_Y)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(CARD_LABEL_X - box.x1)} ${format(textY)})"><path d="${cubicPathData(label, PATH_PRECISION)}" fill="${INK}"/></g>`;
 };
 
-interface CardStyle {
-  readonly active: boolean;
-  readonly opacity: number;
-}
-
 const card = (
   row: ProviderRow,
   y: number,
   labelFont: Font,
-  style: CardStyle
+  active: boolean
 ): string => {
   const body = providerBody(row, labelFont);
-  const stroke = style.active ? CARD_STROKE_ACTIVE : CARD_STROKE;
-  return `<g transform="translate(0 ${format(y)})" opacity="${format(style.opacity)}"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${stroke}" stroke-width="${CARD_STROKE_WIDTH}"/>${body}</g>`;
-};
-
-const cardStyle = (distance: number): CardStyle => {
-  if (distance === 0) {
-    return { active: true, opacity: 1 };
-  }
-
-  return {
-    active: false,
-    opacity: distance === 1 ? CARD_DIM_NEAR : CARD_DIM_FAR,
-  };
+  const stroke = active ? CARD_STROKE_ACTIVE : CARD_STROKE;
+  return `<g transform="translate(0 ${format(y)})"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${stroke}" stroke-width="${CARD_STROKE_WIDTH}"/>${body}</g>`;
 };
 
 interface Column {
@@ -203,25 +185,17 @@ const column = (
   activeId?: string
 ): Column => {
   const height = items.length * CARD_HEIGHT + (items.length - 1) * CARD_GAP;
-  const top = (OG_HEIGHT - height) / 2;
-  const activeIndex = items.findIndex((row) => row.id === activeId);
+  const top = (OG_HEIGHT - height) / 2 - COLUMN_LIFT;
+  const lastTop = top + (items.length - 1) * CARD_PITCH;
   const cards = items
     .map((row, index) =>
-      card(
-        row,
-        top + index * (CARD_HEIGHT + CARD_GAP),
-        labelFont,
-        activeIndex === -1
-          ? { active: false, opacity: 1 }
-          : cardStyle(Math.abs(index - activeIndex))
-      )
+      card(row, top + index * CARD_PITCH, labelFont, row.id === activeId)
     )
     .join("");
-  const fadeStart = (top + (CARD_HEIGHT + CARD_GAP)) / OG_HEIGHT;
-  const fadeEnd =
-    (top + (items.length - 2) * (CARD_HEIGHT + CARD_GAP) + CARD_HEIGHT) /
-    OG_HEIGHT;
-  const fade = `<linearGradient id="column-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="${format(fadeStart)}" stop-color="#ffffff"/><stop offset="${format(fadeEnd)}" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/></linearGradient><mask id="column-mask"><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#column-fade)"/></mask>`;
+  const solidFrom = (top + CARD_HEIGHT) / OG_HEIGHT;
+  const solidTo = lastTop / OG_HEIGHT;
+  const clearTo = (lastTop + CARD_PITCH) / OG_HEIGHT;
+  const fade = `<linearGradient id="column-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="${format(solidFrom)}" stop-color="#ffffff"/><stop offset="${format(solidTo)}" stop-color="#ffffff"/><stop offset="${format(clearTo)}" stop-color="#000000"/></linearGradient><mask id="column-mask"><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#column-fade)"/></mask>`;
   return { cards, mask: fade };
 };
 
@@ -245,14 +219,6 @@ const logoTop = (OG_HEIGHT - OG_LOGO_WIDTH * logoRatio) / 2;
 
 const labelFont = loadFont(path.join(assets, "fonts", "Geist-SemiBold.ttf"));
 
-const openGraph = (): string => {
-  const { cards, mask } = column(rows, labelFont);
-  return frame(
-    mask,
-    `${logoImage(OG_LOGO_WIDTH, logoTop)}<g mask="url(#column-mask)"><g transform="translate(${format(columnX)} 0)">${cards}</g></g>`
-  );
-};
-
 const rotate = (by: number): readonly ProviderRow[] => [
   ...providers.slice(by),
   ...providers.slice(0, by),
@@ -267,7 +233,7 @@ const windowFor = (activeId?: string): readonly ProviderRow[] => {
   return rotate(offset).slice(0, COLUMN_WINDOW);
 };
 
-const docsBackground = (activeId?: string): string => {
+const socialCard = (activeId?: string): string => {
   const { cards, mask } = column(windowFor(activeId), labelFont, activeId);
   return frame(
     mask,
@@ -293,23 +259,18 @@ const run = (): void => {
       }))
     )
   );
-  writeFileSync(
-    path.join(output, "opengraph-image.png"),
-    renderPng(openGraph(), OG_WIDTH)
-  );
+  const defaultCard = renderPng(socialCard(), OG_WIDTH);
+  writeFileSync(path.join(output, "opengraph-image.png"), defaultCard);
   writeFileSync(
     path.join(output, "opengraph-image.alt.txt"),
     `VecStore SDK. ${TAGLINE}\n`
   );
   mkdirSync(ogOutput, { recursive: true });
-  writeFileSync(
-    path.join(ogOutput, "background.png"),
-    renderPng(docsBackground(), OG_WIDTH)
-  );
+  writeFileSync(path.join(ogOutput, "background.png"), defaultCard);
   for (const row of providers) {
     writeFileSync(
       path.join(ogOutput, `background-${row.id}.png`),
-      renderPng(docsBackground(row.id), OG_WIDTH)
+      renderPng(socialCard(row.id), OG_WIDTH)
     );
   }
   process.stdout.write("icons rendered\n");

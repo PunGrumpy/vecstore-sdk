@@ -17,15 +17,17 @@ const CARD_DIM_NEAR = 0.35;
 const CARD_DIM_FAR = 0.18;
 const CARD_STROKE_WIDTH = 2;
 const CARD_WIDTH = 400;
-const CARD_HEIGHT = 112;
-const CARD_GAP = 28;
-const CARD_RADIUS = 20;
-const CARD_ICON = 34;
+const CARD_HEIGHT = 104;
+const CARD_GAP = 25;
+const CARD_PITCH = CARD_HEIGHT + CARD_GAP;
+const CARD_RADIUS = 16;
+const CARD_ICON = 42;
 const CARD_ICON_INSET = 28;
 const CARD_ICON_Y = (CARD_HEIGHT - CARD_ICON) / 2;
 const CARD_LABEL_GAP = 20;
-const CARD_LABEL_SIZE = 32;
+const CARD_LABEL_SIZE = 42;
 const CARD_LABEL_X = CARD_ICON_INSET + CARD_ICON + CARD_LABEL_GAP;
+const COLUMN_LIFT = 24;
 const OG_LOGO_WIDTH = 580;
 const MARK_SIZE = 103.68;
 const OG_WIDTH = 1200;
@@ -201,13 +203,14 @@ const column = (
   activeId?: string
 ): Column => {
   const height = items.length * CARD_HEIGHT + (items.length - 1) * CARD_GAP;
-  const top = (OG_HEIGHT - height) / 2;
+  const top = (OG_HEIGHT - height) / 2 - COLUMN_LIFT;
+  const lastTop = top + (items.length - 1) * CARD_PITCH;
   const activeIndex = items.findIndex((row) => row.id === activeId);
   const cards = items
     .map((row, index) =>
       card(
         row,
-        top + index * (CARD_HEIGHT + CARD_GAP),
+        top + index * CARD_PITCH,
         labelFont,
         activeIndex === -1
           ? { active: false, opacity: 1 }
@@ -215,11 +218,10 @@ const column = (
       )
     )
     .join("");
-  const fadeStart = (top + (CARD_HEIGHT + CARD_GAP)) / OG_HEIGHT;
-  const fadeEnd =
-    (top + (items.length - 2) * (CARD_HEIGHT + CARD_GAP) + CARD_HEIGHT) /
-    OG_HEIGHT;
-  const fade = `<linearGradient id="column-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="${format(fadeStart)}" stop-color="#ffffff"/><stop offset="${format(fadeEnd)}" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/></linearGradient><mask id="column-mask"><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#column-fade)"/></mask>`;
+  const solidFrom = (top + CARD_HEIGHT) / OG_HEIGHT;
+  const solidTo = lastTop / OG_HEIGHT;
+  const clearTo = (lastTop + CARD_PITCH) / OG_HEIGHT;
+  const fade = `<linearGradient id="column-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="${format(solidFrom)}" stop-color="#ffffff"/><stop offset="${format(solidTo)}" stop-color="#ffffff"/><stop offset="${format(clearTo)}" stop-color="#000000"/></linearGradient><mask id="column-mask"><rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#column-fade)"/></mask>`;
   return { cards, mask: fade };
 };
 

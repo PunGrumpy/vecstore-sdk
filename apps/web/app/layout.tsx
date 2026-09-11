@@ -5,13 +5,30 @@ import type { ReactNode } from "react";
 
 import { SiteSearchDialog } from "@/components/search-dialog";
 import { fonts } from "@/lib/fonts";
+import { url } from "@/lib/url";
+
+const siteName = "VecStore SDK";
+const siteDescription =
+  "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, and Cloudflare Vectorize, so you can switch providers without rewriting queries.";
 
 export const metadata: Metadata = {
-  description:
-    "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, and Cloudflare Vectorize, so you can switch providers without rewriting queries.",
+  description: siteDescription,
+  metadataBase: new URL(url),
+  openGraph: {
+    description: siteDescription,
+    siteName,
+    title: siteName,
+    type: "website",
+    url: "/",
+  },
   title: {
-    default: "VecStore SDK",
-    template: "%s | VecStore SDK",
+    default: siteName,
+    template: `%s | ${siteName}`,
+  },
+  twitter: {
+    card: "summary_large_image",
+    description: siteDescription,
+    title: siteName,
   },
 };
 

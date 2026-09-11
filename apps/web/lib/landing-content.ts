@@ -1,10 +1,13 @@
-export type ProviderId =
-  | "qdrant"
-  | "pgvector"
-  | "pinecone"
-  | "supabase"
-  | "upstash"
-  | "vectorize";
+export const providerIds = [
+  "qdrant",
+  "pgvector",
+  "pinecone",
+  "supabase",
+  "upstash",
+  "vectorize",
+] as const;
+
+export type ProviderId = (typeof providerIds)[number];
 
 export const installCommand = "bun add vecstore-sdk";
 

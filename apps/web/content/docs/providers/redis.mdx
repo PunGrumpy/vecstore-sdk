@@ -1,0 +1,189 @@
+---
+title: Redis
+description: Reference for the Redis adapter, which stores records as JSON documents, indexes them with the Redis Query Engine, and compiles filters to the Redis query language.
+---
+
+The Redis adapter drives the Redis Query Engine over JSON documents. One store reaches every index in the database the client is connected to.
+
+```ts
+import { createClient } from "redis";
+import { createRedisStore } from "vecstore-sdk/redis";
+
+const client = createClient({ url: "redis://localhost:6379" });
+await client.connect();
+
+const store = createRedisStore({
+  client,
+  metadataFields: [
+    { field: "genre", type: "tag" },
+    { field: "year", type: "numeric" },
+  ],
+});
+```
+
+Install the client alongside the SDK:
+
+```bash
+bun add vecstore-sdk redis
+```
+
+Connect the client before the first verb. `node-redis` queues commands while it is offline and rejects them once it closes, and a rejected command comes back as a `connection` error.
+
+## What the server needs
+
+The adapter uses the Redis Query Engine (`FT.CREATE`, `FT.SEARCH`) and JSON (`JSON.SET`, `JSON.MGET`). Both ship with Redis 8, with Redis Stack 7.4 or later, and with Redis Cloud. A plain `redis-server` build has neither, and every verb then returns:
+
+```ts
+{
+  kind: "unsupported",
+  feature: "queryEngine",
+  message: "This Redis server has no query engine or no JSON support. …",
+}
+```
+
+The query engine has to be 2.10 or later, because the schema uses `INDEXMISSING` and `INDEXEMPTY`. Redis Stack 7.4 ships 2.10.
+
+The client is structural. Anything with the `ft`, `json`, and `unlink` calls that `node-redis` 5 or later gives you fits, including a cluster client.
+
+## What the adapter stores
+
+`createIndex` runs one `FT.CREATE` over JSON keys:
+
+```text
+FT.CREATE docs ON JSON PREFIX 1 vecstore:docs:
+  SCHEMA
+    $.vector AS vector VECTOR FLAT 6 TYPE FLOAT32 DIM 1536 DISTANCE_METRIC COSINE
+    $.namespace AS namespace TAG CASESENSITIVE INDEXEMPTY
+    $.metadata.genre AS genre TAG CASESENSITIVE INDEXEMPTY INDEXMISSING
+    $.metadata.year AS year NUMERIC INDEXMISSING
+```
+
+A record is one JSON document:
+
+```json title="vecstore:docs:tenant_1:doc-1"
+{
+  "namespace": "tenant_1",
+  "vector": [0.12, -0.03, 0.98],
+  "metadata": { "genre": "drama", "year": 2010 }
+}
+```
+
+| Concern | Where it lives |
+| --- | --- |
+| Index | A Redis index created by `FT.CREATE` |
+| Key | `vecstore:{index}:{namespace}:{id}`, with the namespace percent-encoded |
+| Namespace | The `namespace` tag on the document, and the key prefix |
+| Id | The part of the key after the prefix, so it round-trips exactly |
+| Metadata | The `metadata` object, stored as you wrote it |
+| Vector | A JSON array of numbers, stored at full precision and indexed as `FLOAT32` |
+| Metric | `COSINE`, `L2`, or `IP`, fixed when the index is created |
+
+Pass `keyPrefix` to move the keyspace off `vecstore:`, and `algorithm: "HNSW"` to trade exact search for scale. The default, `FLAT`, searches every vector and is what Redis recommends below a million of them.
+
+Because ids live in the key rather than in a reserved metadata field, nothing is hidden from the metadata you read back.
+
+## Declare the fields you filter on
+
+Redis searches a metadata field only when the index schema declares it. `metadataFields` names those fields, and `createIndex` adds one schema entry per name:
+
+| Field | Values |
+| --- | --- |
+| `field` | The metadata key, matching `^[A-Za-z_][A-Za-z0-9_]*$`. |
+| `type` | `"tag"` for strings, booleans, and string lists, `"numeric"` for numbers. |
+
+`namespace`, `vector`, and `vector_distance` are the names the adapter keeps for itself, and `createIndex` rejects a metadata field that takes one.
+
+A filter on a field the list does not name returns `invalid_argument` and never reaches the server:
+
+```ts
+const result = await docs.query({
+  vector,
+  topK: 5,
+  filter: eq("director", "lynch"),
+});
+// ok: false, error.kind: "invalid_argument"
+// 'Redis matches nothing on "director", because the index schema has no such field.'
+```
+
+Redis itself would answer that query with an empty result, which reads like data that is not there. The compiler holds the same list the schema was built from, so it can say what is wrong instead.
+
+A type has to match too. Redis indexes a number as `NUMERIC` and never as `TAG`, so `gt("genre", 5)` on a tag field and `eq("year", "1999")` on a numeric field both return `invalid_argument`.
+
+The same check runs on the way in. Redis leaves a whole document out of the index when one value contradicts the schema, so `upsert` rejects the record rather than writing a document that no query can find:
+
+```ts
+await docs.upsert([{ id: "doc-1", vector, metadata: { year: "1999" } }]);
+// ok: false, error.kind: "invalid_argument"
+```
+
+Adding a field to `metadataFields` later changes the schema of indexes you create after that. To filter on a new field in an index that already exists, drop the index and create it again. Redis reindexes the documents, which stay where they are as long as you keep the same `keyPrefix`.
+
+## Namespaces
+
+A namespace is a tag on the document and a segment in the key. Every query, every filtered delete, and every delete-all carries the tag:
+
+```text
+(@namespace:{"tenant_1"} @genre:{"drama"})=>[KNN 5 @vector $BLOB AS vector_distance]
+```
+
+The default namespace stores the empty tag. Redis skips an empty value unless the field carries `INDEXEMPTY`, so the adapter sets it on every tag field, and `@namespace:{""}` then matches the records no namespace option was passed for.
+
+`fetch` and `delete({ ids })` skip the search entirely and address the keys directly, so both cost one round trip.
+
+## Filter compilation
+
+`compileRedisFilter` takes the filter and the same field list the schema was built from, and returns a `Result`:
+
+```ts
+import { and, eq, gt } from "vecstore-sdk";
+import { compileRedisFilter } from "vecstore-sdk/redis";
+
+compileRedisFilter(and(eq("genre", "drama"), gt("year", 2000)), [
+  { field: "genre", type: "tag" },
+  { field: "year", type: "numeric" },
+]);
+// ok: true, value: '(@genre:{"drama"} @year:[(2000 +inf])'
+```
+
+| Builder | Query |
+| --- | --- |
+| `eq` on a tag | `@genre:{"drama"}` |
+| `eq` on a number | `@year:[1999 1999]` |
+| `gt`, `gte`, `lt`, `lte` | `@year:[(2000 +inf]`, `@year:[2000 +inf]`, `@year:[-inf (2000]`, `@year:[-inf 2000]` |
+| `isIn` on a tag | `@genre:{"drama" \| "comedy"}` |
+| `isIn` on a number | `(@year:[1999 1999] \| @year:[2010 2010])` |
+| `exists` | `-ismissing(@genre)` |
+| `and`, `or` | `(a b)`, `(a \| b)` |
+| `ne`, `notIn`, `not` | `-(...)` around the clause |
+
+Tag values are written inside double quotes, which the Redis query parser reads as one tag whatever punctuation or spaces it holds. Only `"` and `\` are escaped. Every metadata field is created with `INDEXMISSING`, which is what gives `exists` an operator to compile to.
+
+Each element of a string list is its own tag, so `eq("tags", "x")` and `isIn("tags", ["x"])` mean "contains x", the way they do on Qdrant and pgvector.
+
+A tag match is case-sensitive, because the adapter creates tag fields with `CASESENSITIVE`. `eq("genre", "Drama")` does not match `drama`.
+
+## Scores are distances
+
+A Redis score is the distance the metric defines, and lower is closer:
+
+| Metric      | `DISTANCE_METRIC` | Score                                |
+| ----------- | ----------------- | ------------------------------------ |
+| `cosine`    | `COSINE`          | `1 - cosine similarity`, from 0 to 2 |
+| `dot`       | `IP`              | `1 - inner product`                  |
+| `euclidean` | `L2`              | The euclidean distance               |
+
+Every other adapter returns a higher-is-better score for `cosine` and `dot`. A threshold written for one of them inverts here.
+
+## Deleting
+
+`delete({ ids })` unlinks the keys. `delete({ filter })` and `delete({ all: true })` search the namespace, unlink what comes back, and repeat until a page comes back empty, 500 keys at a time. Both cost one search and one unlink per page.
+
+`deleteIndex` runs `FT.DROPINDEX … DD`, which drops the index and the documents it holds.
+
+## listIndexes returns every index in the database
+
+`FT._LIST` reports the names the server holds and nothing about who created them, so an index another application made shows up next to yours.
+
+## Writes are searchable at once
+
+Redis indexes a JSON document as part of the write, so a record is searchable as soon as `upsert` returns. No polling, and no window where a query misses a record that `upsert` has already stored.

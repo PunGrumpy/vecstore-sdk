@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { PgvectorIcon } from "@/components/icons/pgvector";
 import { PineconeIcon } from "@/components/icons/pinecone";
 import { QdrantIcon } from "@/components/icons/qdrant";
+import { RedisIcon } from "@/components/icons/redis";
 import { SupabaseIcon } from "@/components/icons/supabase";
 import { UpstashIcon } from "@/components/icons/upstash";
 import { VectorizeIcon } from "@/components/icons/vectorize";
@@ -28,6 +29,9 @@ export const ProviderIcon = ({ id, ...props }: ProviderIconProps) => {
     }
     case "vectorize": {
       return <VectorizeIcon {...props} />;
+    }
+    case "redis": {
+      return <RedisIcon {...props} />;
     }
     default: {
       return <PineconeIcon {...props} />;

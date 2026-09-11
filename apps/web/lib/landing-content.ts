@@ -5,6 +5,7 @@ export const providerIds = [
   "supabase",
   "upstash",
   "vectorize",
+  "redis",
 ] as const;
 
 export type ProviderId = (typeof providerIds)[number];
@@ -142,6 +143,20 @@ const store = createVectorizeStore({
 
 ${query(expression)}`,
   },
+  {
+    id: "redis",
+    label: "Redis",
+    snippet: (expression) => `import { createClient } from "redis";
+import { ${builderImports(expression)} } from "vecstore-sdk";
+import { createRedisStore } from "vecstore-sdk/redis";
+
+const store = createRedisStore({
+  client,
+  metadataFields,
+});
+
+${query(expression)}`,
+  },
 ];
 
 export const demoExamples: readonly DemoExample[] = [
@@ -180,6 +195,8 @@ $3 = '2000'`,
     }
   ]
 }`,
+      redis: `(@genre:{"drama"}
+  @year:[(2000 +inf])`,
       supabase: `(metadata @> '{"genre": "drama"}'::jsonb
   AND (jsonb_typeof((metadata -> 'year'::text))
         = 'number'
@@ -227,6 +244,8 @@ $3 = 'price'   $4 = '100'`,
     }
   ]
 }`,
+      redis: `(@price:[10 +inf]
+  @price:[-inf 100])`,
       supabase: `((jsonb_typeof((metadata -> 'price'::text))
       = 'number'
   AND (metadata -> 'price'::text) >= '10'::jsonb)
@@ -273,6 +292,8 @@ $3 = 'status'  $4 = '["draft"]'`,
     }
   ]
 }`,
+      redis: `(@lang:{"en" | "th"}
+  -(@status:{"draft"}))`,
       supabase: `((metadata -> 'lang'::text)
     <@ '["en", "th"]'::jsonb
   AND NOT COALESCE(
@@ -321,6 +342,8 @@ $2 = '{"region":"eu"}'`,
     }
   ]
 }`,
+      redis: `(@tier:{"pro"}
+  | -(@region:{"eu"}))`,
       supabase: `(metadata @> '{"tier": "pro"}'::jsonb
   OR NOT (metadata @> '{"region": "eu"}'::jsonb))`,
       upstash: `(tier = 'pro' OR region != 'eu')`,
@@ -333,7 +356,7 @@ $2 = '{"region":"eu"}'`,
 ];
 
 export const stats = [
-  { label: "Providers", value: "6" },
+  { label: "Providers", value: "7" },
   { label: "Filter builders", value: "12" },
   { label: "Runtime dependencies", value: "0" },
   { label: "License", value: "MIT" },
@@ -349,7 +372,7 @@ export const highlights = [
     title: "Errors as values, never thrown.",
   },
   {
-    body: "Pinecone, Upstash, and Vectorize have them. Qdrant, pgvector, and Supabase get them emulated with the same API.",
+    body: "Pinecone, Upstash, and Vectorize have them. Qdrant, pgvector, Supabase, and Redis get them emulated with the same API.",
     title: "Namespaces on every provider.",
   },
 ] as const;
@@ -464,6 +487,10 @@ export const footerColumns = [
       {
         href: "https://developers.cloudflare.com/vectorize",
         label: "Cloudflare Vectorize",
+      },
+      {
+        href: "https://redis.io/solutions/vector-database/",
+        label: "Redis",
       },
     ],
     title: "Providers",

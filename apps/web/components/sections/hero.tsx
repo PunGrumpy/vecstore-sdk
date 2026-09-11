@@ -16,8 +16,8 @@ export const Hero = () => (
         </h1>
         <p className="text-copy-20 mt-6 text-balance text-gray-900">
           A unified TypeScript SDK for Qdrant, pgvector, Pinecone, Supabase,
-          Upstash Vector, and Cloudflare Vectorize. Write one metadata filter
-          and each adapter compiles it to the provider’s native syntax.
+          Upstash Vector, Cloudflare Vectorize, and Redis. Write one metadata
+          filter and each adapter compiles it to the provider’s native syntax.
         </p>
         <CopyCommand className="mt-8" command={installCommand} />
       </div>

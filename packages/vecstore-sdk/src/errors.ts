@@ -4,6 +4,7 @@ export type Provider =
   | "qdrant"
   | "pgvector"
   | "pinecone"
+  | "redis"
   | "supabase"
   | "upstash"
   | "vectorize";

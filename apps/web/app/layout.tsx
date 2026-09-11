@@ -9,7 +9,7 @@ import { url } from "@/lib/url";
 
 const siteName = "VecStore SDK";
 const siteDescription =
-  "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, and Cloudflare Vectorize, so you can switch providers without rewriting queries.";
+  "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, Cloudflare Vectorize, and Redis, so you can switch providers without rewriting queries.";
 
 export const metadata: Metadata = {
   description: siteDescription,

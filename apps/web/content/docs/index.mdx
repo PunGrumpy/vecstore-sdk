@@ -1,11 +1,11 @@
 ---
 title: Introduction
-description: One TypeScript API for Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, and Cloudflare Vectorize. Write a filter once and each adapter compiles it to the provider's native syntax.
+description: One TypeScript API for Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, Cloudflare Vectorize, and Redis. Write a filter once and each adapter compiles it to the provider's native syntax.
 ---
 
-VecStore SDK gives you one TypeScript API for six vector databases. You write one metadata filter, and each adapter compiles it to the provider's native syntax.
+VecStore SDK gives you one TypeScript API for seven vector databases. You write one metadata filter, and each adapter compiles it to the provider's native syntax.
 
-Vector databases agree on the verbs (upsert, query, fetch, delete) and disagree on the rest. Pinecone filters use MongoDB-style operators, Qdrant uses `must` and `should` clauses, pgvector uses SQL, Upstash uses a SQL-like string, and Vectorize joins every clause with AND and has no OR at all. Qdrant accepts only UUID point ids, and Vectorize caps an id at 64 bytes. Pinecone and Vectorize have native namespaces and the others do not. Supabase reaches Postgres over HTTP, where no vector operator exists. Each SDK throws its own error classes.
+Vector databases agree on the verbs (upsert, query, fetch, delete) and disagree on the rest. Pinecone filters use MongoDB-style operators, Qdrant uses `must` and `should` clauses, pgvector uses SQL, Upstash uses a SQL-like string, Redis uses its own query language, and Vectorize joins every clause with AND and has no OR at all. Qdrant accepts only UUID point ids, and Vectorize caps an id at 64 bytes. Pinecone and Vectorize have native namespaces and the others do not. Redis searches a metadata field only when the index schema declares it. Supabase reaches Postgres over HTTP, where no vector operator exists. Each SDK throws its own error classes.
 
 VecStore SDK hides those differences behind a small adapter API:
 
@@ -19,7 +19,7 @@ Embedding is out of scope. Generate vectors with your model provider and pass th
 
 ## Providers
 
-VecStore SDK supports six providers. Every verb and every filter builder works on all of them, except where Vectorize has no equivalent. The badges show what each adapter does differently.
+VecStore SDK supports seven providers. Every verb and every filter builder works on all of them, except where Vectorize has no equivalent. The badges show what each adapter does differently.
 
 <ProviderCards />
 

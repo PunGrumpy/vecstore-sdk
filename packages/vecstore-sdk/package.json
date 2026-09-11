@@ -1,7 +1,7 @@
 {
   "name": "vecstore-sdk",
   "version": "0.1.0",
-  "description": "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, and Cloudflare Vectorize, so you can switch providers without rewriting queries.",
+  "description": "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, Cloudflare Vectorize, and Redis, so you can switch providers without rewriting queries.",
   "keywords": [
     "cloudflare",
     "embeddings",
@@ -9,6 +9,7 @@
     "pinecone",
     "qdrant",
     "rag",
+    "redis",
     "supabase",
     "typescript",
     "upstash",
@@ -50,6 +51,11 @@
       "types": "./dist/qdrant.d.mts",
       "import": "./dist/qdrant.mjs",
       "default": "./dist/qdrant.mjs"
+    },
+    "./redis": {
+      "types": "./dist/redis.d.mts",
+      "import": "./dist/redis.mjs",
+      "default": "./dist/redis.mjs"
     },
     "./pgvector": {
       "types": "./dist/pgvector.d.mts",
@@ -99,6 +105,7 @@
     "@upstash/vector": "^1.2.3",
     "cloudflare": "^7",
     "pg": "^8.23.0",
+    "redis": "^6.2.1",
     "tsdown": "^0.23.0"
   },
   "peerDependencies": {
@@ -106,7 +113,8 @@
     "@qdrant/js-client-rest": ">=1.12.0",
     "@supabase/supabase-js": ">=2.40.0",
     "@upstash/vector": ">=1.2.0",
-    "cloudflare": ">=7.0.0"
+    "cloudflare": ">=7.0.0",
+    "redis": ">=5.0.0"
   },
   "peerDependenciesMeta": {
     "@pinecone-database/pinecone": {
@@ -122,6 +130,9 @@
       "optional": true
     },
     "cloudflare": {
+      "optional": true
+    },
+    "redis": {
       "optional": true
     }
   }

@@ -13,8 +13,6 @@ const INK = "#ededed";
 const CARD_FILL = "#0a0a0a";
 const CARD_STROKE = "#2e2e2e";
 const CARD_STROKE_ACTIVE = "#666666";
-const CARD_DIM_NEAR = 0.35;
-const CARD_DIM_FAR = 0.18;
 const CARD_STROKE_WIDTH = 2;
 const CARD_WIDTH = 400;
 const CARD_HEIGHT = 104;
@@ -165,31 +163,15 @@ const providerBody = (row: ProviderRow, labelFont: Font): string => {
   return `<g transform="translate(${CARD_ICON_INSET} ${format(CARD_ICON_Y)})">${providerIcon(row.file, CARD_ICON, row.tint)}</g><g transform="translate(${format(CARD_LABEL_X - box.x1)} ${format(textY)})"><path d="${cubicPathData(label, PATH_PRECISION)}" fill="${INK}"/></g>`;
 };
 
-interface CardStyle {
-  readonly active: boolean;
-  readonly opacity: number;
-}
-
 const card = (
   row: ProviderRow,
   y: number,
   labelFont: Font,
-  style: CardStyle
+  active: boolean
 ): string => {
   const body = providerBody(row, labelFont);
-  const stroke = style.active ? CARD_STROKE_ACTIVE : CARD_STROKE;
-  return `<g transform="translate(0 ${format(y)})" opacity="${format(style.opacity)}"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${stroke}" stroke-width="${CARD_STROKE_WIDTH}"/>${body}</g>`;
-};
-
-const cardStyle = (distance: number): CardStyle => {
-  if (distance === 0) {
-    return { active: true, opacity: 1 };
-  }
-
-  return {
-    active: false,
-    opacity: distance === 1 ? CARD_DIM_NEAR : CARD_DIM_FAR,
-  };
+  const stroke = active ? CARD_STROKE_ACTIVE : CARD_STROKE;
+  return `<g transform="translate(0 ${format(y)})"><rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="${CARD_RADIUS}" fill="${CARD_FILL}" stroke="${stroke}" stroke-width="${CARD_STROKE_WIDTH}"/>${body}</g>`;
 };
 
 interface Column {
@@ -205,17 +187,9 @@ const column = (
   const height = items.length * CARD_HEIGHT + (items.length - 1) * CARD_GAP;
   const top = (OG_HEIGHT - height) / 2 - COLUMN_LIFT;
   const lastTop = top + (items.length - 1) * CARD_PITCH;
-  const activeIndex = items.findIndex((row) => row.id === activeId);
   const cards = items
     .map((row, index) =>
-      card(
-        row,
-        top + index * CARD_PITCH,
-        labelFont,
-        activeIndex === -1
-          ? { active: false, opacity: 1 }
-          : cardStyle(Math.abs(index - activeIndex))
-      )
+      card(row, top + index * CARD_PITCH, labelFont, row.id === activeId)
     )
     .join("");
   const solidFrom = (top + CARD_HEIGHT) / OG_HEIGHT;

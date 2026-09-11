@@ -7,7 +7,7 @@ A store owns the index lifecycle and hands out index handles. An index handle is
 
 ## Store
 
-Create a store with the adapter for your provider: `createQdrantStore`, `createPgvectorStore`, `createPineconeStore`, `createSupabaseStore`, `createUpstashStore`, or `createVectorizeStore`. Each takes the native client under `client`.
+Create a store with the adapter for your provider: `createQdrantStore`, `createPgvectorStore`, `createPineconeStore`, `createSupabaseStore`, `createUpstashStore`, `createVectorizeStore`, or `createRedisStore`. Each takes the native client under `client`.
 
 | Method | Description |
 | --- | --- |
@@ -15,12 +15,12 @@ Create a store with the adapter for your provider: `createQdrantStore`, `createP
 | `deleteIndex(name)` | Drops the index. Returns `not_found` if the index does not exist. |
 | `listIndexes()` | Returns the index names. |
 | `index(name, { namespace? })` | Returns an index handle scoped to one namespace. |
-| `provider` | `"qdrant"`, `"pgvector"`, `"pinecone"`, `"supabase"`, `"upstash"`, or `"vectorize"`. |
+| `provider` | `"qdrant"`, `"pgvector"`, `"pinecone"`, `"supabase"`, `"upstash"`, `"vectorize"`, or `"redis"`. |
 | `raw` | The client you passed in, with its original type. |
 
 ## Index
 
-Every provider gets namespaces. Pinecone and Vectorize have them natively. On Qdrant, pgvector, Supabase, and Upstash the adapter emulates them, as described on each provider page.
+Every provider gets namespaces. Pinecone and Vectorize have them natively. On Qdrant, pgvector, Supabase, Upstash, and Redis the adapter emulates them, as described on each provider page.
 
 | Method | Description |
 | --- | --- |
@@ -42,16 +42,16 @@ type MetadataValue = string | number | boolean | string[];
 type Metadata = Readonly<Record<string, MetadataValue>>;
 ```
 
-Metadata values are `string`, `number`, `boolean`, or `string[]`. That is the intersection of what the six providers accept, so a record that upserts on one provider upserts on all of them.
+Metadata values are `string`, `number`, `boolean`, or `string[]`. That is the intersection of what the seven providers accept, so a record that upserts on one provider upserts on all of them.
 
 ## Scores
 
-Qdrant, pgvector, Pinecone, and Vectorize return the provider's native score for the index metric. Higher is better for `cosine` and `dot`, and lower is better for `euclidean`. Upstash normalizes every metric to the range 0 to 1, where higher is always better.
+Qdrant, pgvector, Pinecone, and Vectorize return the provider's native score for the index metric. Higher is better for `cosine` and `dot`, and lower is better for `euclidean`. Upstash normalizes every metric to the range 0 to 1, where higher is always better. Redis returns a distance for every metric, where lower is closer.
 
-| Metric | Qdrant | pgvector and Supabase | Pinecone | Upstash | Vectorize |
-| --- | --- | --- | --- | --- | --- |
-| `cosine` | Similarity, higher is better | `1 - distance`, higher is better | Similarity, higher is better | `(1 + similarity) / 2`, higher is better | Similarity, higher is better |
-| `dot` | Dot product, higher is better | Dot product, higher is better | Dot product, higher is better | Normalized, higher is better | Dot product, higher is better |
-| `euclidean` | Distance, lower is better | Distance, lower is better | Squared distance, lower is better | `1 / (1 + squared distance)`, higher is better | Distance, lower is better |
+| Metric | Qdrant | pgvector and Supabase | Pinecone | Upstash | Vectorize | Redis |
+| --- | --- | --- | --- | --- | --- | --- |
+| `cosine` | Similarity, higher is better | `1 - distance`, higher is better | Similarity, higher is better | `(1 + similarity) / 2`, higher is better | Similarity, higher is better | `1 - similarity`, lower is better |
+| `dot` | Dot product, higher is better | Dot product, higher is better | Dot product, higher is better | Normalized, higher is better | Dot product, higher is better | `1 - dot product`, lower is better |
+| `euclidean` | Distance, lower is better | Distance, lower is better | Squared distance, lower is better | `1 / (1 + squared distance)`, higher is better | Distance, lower is better | Distance, lower is better |
 
 A score threshold tuned on one provider does not carry over to another. Check it against real data after a move.

@@ -1,18 +1,18 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/PunGrumpy/vecstore-sdk/raw/HEAD/assets/hero-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/PunGrumpy/vecstore-sdk/raw/HEAD/assets/hero-light.png">
-  <img alt="One API for vector stores. vecstore-sdk is an open-source TypeScript library that compiles one filter to Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, and Cloudflare Vectorize." src="https://github.com/PunGrumpy/vecstore-sdk/raw/HEAD/assets/hero-light.png">
+  <img alt="One API for vector stores. vecstore-sdk is an open-source TypeScript library that compiles one filter to Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, Cloudflare Vectorize, and Redis." src="https://github.com/PunGrumpy/vecstore-sdk/raw/HEAD/assets/hero-light.png">
 </picture>
 
 # VecStore SDK
 
-One TypeScript API for Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, and Cloudflare Vectorize. You write one metadata filter, and each adapter compiles it to the provider's native syntax, so switching providers changes one import and one config object.
+One TypeScript API for Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, Cloudflare Vectorize, and Redis. You write one metadata filter, and each adapter compiles it to the provider's native syntax, so switching providers changes one import and one config object.
 
 [![npm version](https://img.shields.io/npm/v/vecstore-sdk?style=flat&colorA=000000&colorB=000000)](https://npmjs.com/package/vecstore-sdk) [![npm downloads](https://img.shields.io/npm/dm/vecstore-sdk?style=flat&colorA=000000&colorB=000000)](https://www.npmjs.com/package/vecstore-sdk) [![MIT License](https://img.shields.io/badge/License-MIT-000?style=flat-square&logo=opensourceinitiative&logoColor=white&labelColor=000&color=000)](LICENSE)
 
 ## Why
 
-Vector databases agree on the verbs (upsert, query, fetch, delete) and disagree on the rest. Pinecone filters use MongoDB-style operators, Qdrant uses `must` and `should` clauses, pgvector uses SQL, Upstash uses a SQL-like string, and Vectorize joins every clause with AND and has no OR at all. Qdrant only accepts UUID point ids, and Vectorize caps an id at 64 bytes. Pinecone and Vectorize have native namespaces. The others do not. Supabase reaches Postgres over HTTP, where no vector operator exists. Each SDK throws its own error classes.
+Vector databases agree on the verbs (upsert, query, fetch, delete) and disagree on the rest. Pinecone filters use MongoDB-style operators, Qdrant uses `must` and `should` clauses, pgvector uses SQL, Upstash uses a SQL-like string, Redis uses its own query language, and Vectorize joins every clause with AND and has no OR at all. Qdrant only accepts UUID point ids, and Vectorize caps an id at 64 bytes. Pinecone and Vectorize have native namespaces. The others do not. Redis indexes a metadata field only when the schema declares it. Supabase reaches Postgres over HTTP, where no vector operator exists. Each SDK throws its own error classes.
 
 vecstore-sdk hides those differences behind a small adapter API:
 
@@ -35,6 +35,7 @@ bun add vecstore-sdk @pinecone-database/pinecone
 bun add vecstore-sdk @supabase/supabase-js
 bun add vecstore-sdk @upstash/vector
 bun add vecstore-sdk cloudflare
+bun add vecstore-sdk redis
 ```
 
 ## Get started
@@ -105,30 +106,30 @@ Every verb returns a `Result`, either `{ ok: true, value }` or `{ ok: false, err
 | `fetch(ids, { includeVector? })` | Returns the records that exist, in request order. |
 | `delete({ ids })`, `delete({ filter })`, `delete({ all: true })` | Removes records in the namespace. |
 
-Metadata values are `string`, `number`, `boolean`, or `string[]`. That is the intersection the six providers accept.
+Metadata values are `string`, `number`, `boolean`, or `string[]`. That is the intersection the seven providers accept.
 
-Qdrant, pgvector, Pinecone, and Vectorize return the provider's native score for the index metric. Higher is better for `cosine` and `dot`, lower is better for `euclidean`. Upstash normalizes every metric to the range 0 to 1, where higher is always better.
+Qdrant, pgvector, Pinecone, and Vectorize return the provider's native score for the index metric. Higher is better for `cosine` and `dot`, lower is better for `euclidean`. Upstash normalizes every metric to the range 0 to 1, where higher is always better. Redis returns a distance for every metric, where lower is closer.
 
 ### Filters
 
 Build filters with the exported helpers. Each compiler is also exported from its adapter, so you can inspect or reuse the native output.
 
-| Builder | Qdrant | pgvector and Supabase | Pinecone | Upstash | Vectorize |
-| --- | --- | --- | --- | --- | --- |
-| `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}'` | `{ field: { $eq } }` | `field = value` | `{ field: { $eq } }` |
-| `ne(field, value)` | `must_not` of the above | `NOT (metadata @> ...)` | `$ne` | `field != value` | `$ne` |
-| `gt`, `gte`, `lt`, `lte` | `range` | jsonb comparison guarded by `jsonb_typeof` | `$gt`, `$gte`, `$lt`, `$lte` | `>`, `>=`, `<`, `<=` | `$gt`, `$gte`, `$lt`, `$lte` |
-| `isIn(field, values)` | `match.any`, or `should` for mixed types | `metadata->field <@ values` | `$in`, or `$or` of `$eq` for booleans | `field IN (...)` | `$in` |
-| `notIn(field, values)` | `match.except`, or `must_not` | `NOT COALESCE(... <@ ..., false)` | `$nin`, or `$and` of `$ne` for booleans | `field NOT IN (...)` | `$nin` |
-| `exists(field)` | `must_not is_empty` | `IS NOT NULL AND jsonb_typeof <> 'null'` | `$exists: true` | `HAS FIELD field` | `unsupported` |
-| `and`, `or` | `must`, `should` | `AND`, `OR` | `$and`, `$or` | `AND`, `OR` | `and` merges fields into one object, `or` is `unsupported` |
-| `not(filter)` | `must_not` | `NOT (...)` | Pushed to the leaves with De Morgan's laws | Pushed to the leaves with De Morgan's laws | Pushed to the leaves with De Morgan's laws |
+| Builder | Qdrant | pgvector and Supabase | Pinecone | Upstash | Vectorize | Redis |
+| --- | --- | --- | --- | --- | --- | --- |
+| `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}'` | `{ field: { $eq } }` | `field = value` | `{ field: { $eq } }` | `@field:{"value"}` on a tag, `@field:[v v]` on a number |
+| `ne(field, value)` | `must_not` of the above | `NOT (metadata @> ...)` | `$ne` | `field != value` | `$ne` | `-(...)` of the above |
+| `gt`, `gte`, `lt`, `lte` | `range` | jsonb comparison guarded by `jsonb_typeof` | `$gt`, `$gte`, `$lt`, `$lte` | `>`, `>=`, `<`, `<=` | `$gt`, `$gte`, `$lt`, `$lte` | `@field:[(v +inf]` and the other three bounds |
+| `isIn(field, values)` | `match.any`, or `should` for mixed types | `metadata->field <@ values` | `$in`, or `$or` of `$eq` for booleans | `field IN (...)` | `$in` | `@field:{"a" \| "b"}` on a tag, a union of ranges on a number |
+| `notIn(field, values)` | `match.except`, or `must_not` | `NOT COALESCE(... <@ ..., false)` | `$nin`, or `$and` of `$ne` for booleans | `field NOT IN (...)` | `$nin` | `-(...)` of the above |
+| `exists(field)` | `must_not is_empty` | `IS NOT NULL AND jsonb_typeof <> 'null'` | `$exists: true` | `HAS FIELD field` | `unsupported` | `-ismissing(@field)` |
+| `and`, `or` | `must`, `should` | `AND`, `OR` | `$and`, `$or` | `AND`, `OR` | `and` merges fields into one object, `or` is `unsupported` | a space, `\|` |
+| `not(filter)` | `must_not` | `NOT (...)` | Pushed to the leaves with De Morgan's laws | Pushed to the leaves with De Morgan's laws | Pushed to the leaves with De Morgan's laws | `-(...)` around the clause |
 
 `isIn`, `notIn`, `and`, and `or` require at least one element, and the types enforce it.
 
 Supabase has no compiler to import. The filter travels to Postgres as JSON and `vecstore_filter_sql` emits the pgvector predicates there.
 
-Vectorize is the one provider a filter can fail to compile for. `compileVectorizeFilter` returns a `Result`, and the verb turns a failure into an `unsupported` or `invalid_argument` error before it sends the request.
+Two compilers return a `Result`, and the verb turns a failure into an error before it sends the request. `compileVectorizeFilter` fails because a Vectorize filter is smaller than the filter AST. `compileRedisFilter` fails because it holds the index schema and knows which fields Redis can match on.
 
 ### Errors
 
@@ -139,7 +140,7 @@ Vectorize is the one provider a filter can fail to compile for. `compileVectoriz
 | `not_found` | The index does not exist. Carries `name`. |
 | `already_exists` | `createIndex` hit an existing index. |
 | `invalid_argument` | The provider rejected the request: wrong dimension, bad id, bad metadata. |
-| `unsupported` | The provider cannot do this. Carries `feature`, for example `deleteByFilter` on Pinecone serverless, `orFilter` on Vectorize, or a `vecstore_` function that Supabase has no install for. |
+| `unsupported` | The provider cannot do this. Carries `feature`, for example `deleteByFilter` on Pinecone serverless, `orFilter` on Vectorize, `queryEngine` on a Redis server without the query engine, or a `vecstore_` function that Supabase has no install for. |
 | `unauthorized` | Bad credentials or missing permission. |
 | `connection` | The provider was unreachable or timed out. |
 | `provider` | Anything else. `cause` holds the original error. |
@@ -255,12 +256,40 @@ Three things Vectorize cannot do come back as `unsupported`:
 
 Two Vectorize limits shape a query. Every result carries metadata, because that is where the original id lives, so `topK` caps at 50 rather than 100. Writes are asynchronous: an upsert returns a mutation id and the records become searchable a moment later.
 
+### Redis
+
+```ts
+import { createClient } from "redis";
+import { createRedisStore } from "vecstore-sdk/redis";
+
+const client = createClient({ url });
+await client.connect();
+
+const store = createRedisStore({
+  client,
+  metadataFields: [
+    { field: "genre", type: "tag" },
+    { field: "year", type: "numeric" },
+  ],
+});
+```
+
+The adapter needs the Redis Query Engine and JSON, which ship with Redis 8, Redis Stack 7.4 or later, and Redis Cloud. A server without them returns `unsupported` with `feature: "queryEngine"`. The client is anything with the `ft`, `json`, and `unlink` calls that `node-redis` 5 or later gives you, so a cluster client works too.
+
+An index is a real Redis index over JSON documents. `createIndex` runs `FT.CREATE ... ON JSON PREFIX 1 vecstore:{index}:`, and a record is stored at `vecstore:{index}:{namespace}:{id}` as `{ namespace, vector, metadata }`. Pass `keyPrefix` to move the keyspace, and `algorithm` to pick `"HNSW"` over the exact `"FLAT"` default. `listIndexes` returns every index in the database, because `FT._LIST` has no way to tell one owner from another.
+
+Redis searches a metadata field only when the index schema declares it, so `metadataFields` names the fields you filter on: `tag` for strings, booleans, and string lists, `numeric` for numbers. A name must match `^[A-Za-z_][A-Za-z0-9_]*$` and cannot be `namespace`, `vector`, or `vector_distance`, which the adapter keeps for itself. A filter on any other field returns `invalid_argument` rather than the empty result Redis would give you. Redis also drops a whole document from the index when one value contradicts the schema, so `upsert` rejects such a record before it writes.
+
+Namespaces are a tag on each document and a prefix on each key. The default namespace stores the empty tag, which is why the adapter creates every tag field with `INDEXEMPTY`, and it creates every metadata field with `INDEXMISSING` so `exists` has an operator to compile to. `delete({ filter })` and `delete({ all: true })` search the namespace and unlink the matches in pages of 500.
+
+A score is the vector distance the metric defines, and lower is closer: `1 - cosine similarity` for `cosine`, `1 - inner product` for `dot`, and the euclidean distance for `euclidean`. Writes are synchronous, so a record is searchable as soon as `upsert` returns.
+
 ## Semantics that differ
 
 The compilers are exact for scalar fields. Two cases differ across providers:
 
-- Negations (`ne`, `notIn`, `not`) match records that lack the field on Qdrant, pgvector, and Supabase. Pinecone, Upstash, and Vectorize apply operators to present fields only.
-- `eq` and `isIn` on array-valued fields mean "contains" on Qdrant, pgvector, and Supabase. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself. Reach an element with the accessors it documents, such as `eq("tags[0]", "x")`. Vectorize indexes string, number, and boolean properties only, so an array-valued field is not filterable there.
+- Negations (`ne`, `notIn`, `not`) match records that lack the field on Qdrant, pgvector, Supabase, and Redis. Pinecone, Upstash, and Vectorize apply operators to present fields only.
+- `eq` and `isIn` on array-valued fields mean "contains" on Qdrant, pgvector, Supabase, and Redis, where each element of a string list is its own tag. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself. Reach an element with the accessors it documents, such as `eq("tags[0]", "x")`. Vectorize indexes string, number, and boolean properties only, so an array-valued field is not filterable there.
 
 ## Testing
 
@@ -282,10 +311,11 @@ UPSTASH_VECTOR_REST_URL=https://your-index.upstash.io \
 UPSTASH_VECTOR_REST_TOKEN=your_upstash_token \
 CLOUDFLARE_ACCOUNT_ID=your_account_id_here \
 CLOUDFLARE_API_TOKEN=your_api_token_here \
+REDIS_URL=redis://localhost:6379 \
 bun run test:live
 ```
 
-The suite skips providers without a variable. Supabase needs the SQL functions installed and the service role key, because the suite creates and drops tables. Point the Upstash variables at a scratch index with dimension 3 and the cosine similarity function, since the adapter cannot create one. The Vectorize run skips the `delete({ all: true })` case and asserts the `unsupported` error instead.
+The suite skips providers without a variable. Supabase needs the SQL functions installed and the service role key, because the suite creates and drops tables. Point the Upstash variables at a scratch index with dimension 3 and the cosine similarity function, since the adapter cannot create one. The Vectorize run skips the `delete({ all: true })` case and asserts the `unsupported` error instead. Point `REDIS_URL` at a server that carries the query engine and JSON; the Redis run adds cases for the default namespace, `exists`, list fields, and delete by filter.
 
 ## Not in v0
 

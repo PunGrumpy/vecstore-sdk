@@ -7,11 +7,11 @@ The compilers agree on scalar fields with present values. Two cases differ acros
 
 ## Negation and missing fields
 
-`ne`, `notIn`, and `not` match records that lack the field on Qdrant, pgvector, and Supabase. Pinecone, Upstash, and Vectorize evaluate operators against present fields only. A record without `genre` does not match `ne("genre", "drama")` on those three but does match it on the other three.
+`ne`, `notIn`, and `not` match records that lack the field on Qdrant, pgvector, Supabase, and Redis. Pinecone, Upstash, and Vectorize evaluate operators against present fields only. A record without `genre` does not match `ne("genre", "drama")` on those three but does match it on the other four.
 
 ## Array-valued fields
 
-`eq("tags", "x")` and `isIn("tags", ["x"])` mean “contains x” on Qdrant, pgvector, and Supabase. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself, so neither builder matches an element. Reach an element with the accessors Upstash documents, such as `eq("tags[0]", "x")`. Vectorize indexes string, number, and boolean properties only, so an array-valued field is not filterable there at all.
+`eq("tags", "x")` and `isIn("tags", ["x"])` mean “contains x” on Qdrant, pgvector, Supabase, and Redis, where each element of a string list is indexed as its own tag. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself, so neither builder matches an element. Reach an element with the accessors Upstash documents, such as `eq("tags[0]", "x")`. Vectorize indexes string, number, and boolean properties only, so an array-valued field is not filterable there at all.
 
 ## Features one provider lacks
 
@@ -28,3 +28,8 @@ The compilers agree on scalar fields with present values. Two cases differ acros
 - Vectorize deletes by id only, so `delete({ filter })` and `delete({ all: true })` return `{ kind: "unsupported" }`.
 - Vectorize filters match nothing on a property with no metadata index, and a metadata index has to exist before you insert. Pass `metadataIndexes` so `createIndex` opens them.
 - Vectorize writes are asynchronous. An upsert returns once the mutation is enqueued, and the records become searchable a moment later.
+- Redis needs the query engine and JSON, which ship with Redis 8, Redis Stack 7.4 or later, and Redis Cloud. On a server without them every verb returns `{ kind: "unsupported", feature: "queryEngine" }`.
+- Redis searches a metadata field only when the index schema declares it, so `createRedisStore` takes `metadataFields` and the compiler rejects a filter on any other field with `invalid_argument`. A number belongs to a `numeric` field and everything else to a `tag` field, and `upsert` rejects a record that contradicts that, because Redis would leave the whole document out of the index.
+- Redis tag matching is case-sensitive, so `eq("genre", "Drama")` does not match `drama`.
+- Redis returns the vector distance as the score, where lower is closer, for every metric. See [Redis](/docs/providers/redis).
+- Redis `listIndexes` returns every index in the database, including indexes another application created.

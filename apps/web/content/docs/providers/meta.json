@@ -8,6 +8,7 @@
     "supabase",
     "upstash",
     "vectorize",
+    "redis",
     "differences"
   ]
 }

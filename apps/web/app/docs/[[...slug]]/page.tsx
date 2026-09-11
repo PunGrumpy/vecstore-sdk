@@ -11,7 +11,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { getMDXComponents } from "@/components/mdx";
-import { source } from "@/lib/source";
+import { getPageImage, source } from "@/lib/source";
 
 type DocsPageProps = PageProps<"/docs/[[...slug]]">;
 
@@ -62,9 +62,23 @@ export const generateMetadata = async ({
     notFound();
   }
 
+  const image = getPageImage(page).url;
+
   return {
     description: page.data.description,
+    openGraph: {
+      description: page.data.description,
+      images: image,
+      siteName: "VecStore SDK",
+      type: "article",
+      url: page.url,
+    },
     title: page.data.title,
+    twitter: {
+      card: "summary_large_image",
+      description: page.data.description,
+      images: image,
+    },
   };
 };
 

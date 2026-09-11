@@ -113,6 +113,19 @@ const providers: readonly ProviderCard[] = [
     logoClass: "text-[#f6821f]",
     name: "Cloudflare Vectorize",
   },
+  {
+    capabilities: [
+      { icon: LayersIcon, label: emulatedNamespaces },
+      { icon: CodeIcon, label: "Metadata schema upfront" },
+      { icon: FilterXIcon, label: deleteByFilter },
+      { icon: DatabaseIcon, label: indexIsIndex },
+    ],
+    glow: "#ff4438",
+    href: "/docs/providers/redis",
+    id: "redis",
+    logoClass: "text-[#ff4438]",
+    name: "Redis",
+  },
 ];
 
 const Glow = ({

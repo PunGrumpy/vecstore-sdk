@@ -21,7 +21,7 @@ export const Adapters = () => (
           className="text-copy-16 text-gray-1000 group mt-4 inline-flex items-center gap-1"
           href="/docs/providers/differences"
         >
-          See all six providers
+          See all seven providers
           <ArrowUpRightIcon
             aria-hidden
             className="group-hover:text-gray-1000 size-4 text-gray-700 transition-colors"

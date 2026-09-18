@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { chunk, sortByIds } from "../src/internal/collections";
-import { isMetadataEntry, metadataFromEntries } from "../src/internal/metadata";
+import {
+  isMetadataEntry,
+  metadataFromEntries,
+  reservedKeyError,
+} from "../src/internal/metadata";
 import { namespaceError } from "../src/internal/namespace";
 import { deterministicUuid, isUuid } from "../src/internal/uuid";
 
@@ -45,6 +49,22 @@ describe("metadata entries", () => {
       c: true,
       d: ["y"],
     });
+  });
+});
+
+describe(reservedKeyError, () => {
+  test("names the first record that sets a reserved key", () => {
+    const reserved = new Set(["_id"]);
+    expect(
+      reservedKeyError("qdrant", [{ id: "a", vector: [1] }], reserved)
+    ).toBeUndefined();
+    const error = reservedKeyError(
+      "qdrant",
+      [{ id: "a", metadata: { _id: "other" }, vector: [1] }],
+      reserved
+    );
+    expect(error?.kind).toBe("invalid_argument");
+    expect(error?.message).toContain('Record "a"');
   });
 });
 

@@ -14,7 +14,11 @@ import { compileUpstashFilter, isUpstashFilterError } from "../filter/upstash";
 import { attempt } from "../internal/attempt";
 import { chunk, sortByIds } from "../internal/collections";
 import { isString } from "../internal/guards";
-import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
+import {
+  isMetadataEntry,
+  metadataFromEntries,
+  reservedKeyError,
+} from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
 import { err } from "../result";
@@ -288,6 +292,7 @@ interface UpstashLayout {
   ) => Promise<string[]>;
   readonly readId: (record: UpstashResultRecord) => string;
   readonly readMetadata: (record: UpstashResultRecord) => Metadata;
+  readonly reservedKeys: ReadonlySet<string>;
   readonly indexOf: (upstashNamespace: string) => string;
   readonly owns: (index: string, upstashNamespace: string) => boolean;
 }
@@ -341,6 +346,7 @@ const METADATA_LAYOUT: UpstashLayout = {
   readId: readStoredId,
   readMetadata: (record) =>
     metadataFromEntries(metadataEntries(record), RESERVED_KEYS),
+  reservedKeys: RESERVED_KEYS,
   storedId: toStoredId,
   storedRecord: toStoredRecord,
   upstashNamespace: metadataNamespace,
@@ -376,6 +382,7 @@ const NATIVE_LAYOUT: UpstashLayout = {
     upstashNamespace.startsWith(`${index}${NAMESPACE_SEPARATOR}`),
   readId: (record) => String(record.id),
   readMetadata: (record) => metadataFromEntries(metadataEntries(record)),
+  reservedKeys: new Set<string>(),
   storedId: (_namespace, id) => id,
   storedRecord: (_namespace, record) => ({
     id: record.id,
@@ -527,8 +534,10 @@ const createIndex = (
     },
 
     upsert: (records): VecResult<void> => {
-      if (invalid !== undefined) {
-        return Promise.resolve(err(invalid));
+      const rejected =
+        invalid ?? reservedKeyError(PROVIDER, records, layout.reservedKeys);
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
       }
       return run(name, async () => {
         const target = scope();

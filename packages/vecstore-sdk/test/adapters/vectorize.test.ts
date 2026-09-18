@@ -436,6 +436,18 @@ describe(createVectorizeStore, () => {
     expect(bodiesFor(calls, "/upsert")).toStrictEqual([]);
   });
 
+  test("upsert rejects a record that sets a reserved metadata key", async () => {
+    const { calls, client } = fakeCloudflare();
+    const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .upsert([{ id: "x", metadata: { _id: "other" }, vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "vectorize" },
+      ok: false,
+    });
+    expect(bodiesFor(calls, "/upsert")).toStrictEqual([]);
+  });
+
   test("listIndexes reads the names off the page", async () => {
     const { client } = fakeCloudflare();
     await expect(

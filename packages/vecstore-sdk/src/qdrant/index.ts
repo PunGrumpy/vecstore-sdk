@@ -14,7 +14,11 @@ import type { QdrantCondition, QdrantFilter } from "../filter/qdrant";
 import { attempt } from "../internal/attempt";
 import { sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
-import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
+import {
+  isMetadataEntry,
+  metadataFromEntries,
+  reservedKeyError,
+} from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
 import { deterministicUuid, isUuid } from "../internal/uuid";
@@ -365,8 +369,10 @@ const createIndex = (
     },
 
     upsert: (records): VecResult<void> => {
-      if (invalid !== undefined) {
-        return Promise.resolve(err(invalid));
+      const rejected =
+        invalid ?? reservedKeyError(PROVIDER, records, RESERVED_KEYS);
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
       }
       return run(name, async () => {
         if (records.length === 0) {

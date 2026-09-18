@@ -371,6 +371,18 @@ describe(createUpstashStore, () => {
     expect(recorded.upserts).toStrictEqual([]);
   });
 
+  test("metadata mode rejects a record that sets a reserved metadata key", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createUpstashStore({ client })
+      .index("docs")
+      .upsert([{ id: "x", metadata: { _id: "other" }, vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "upstash" },
+      ok: false,
+    });
+    expect(recorded.upserts).toStrictEqual([]);
+  });
+
   test("a filter Upstash cannot express is an invalid argument", async () => {
     const { client } = fakeClient();
     const result = await createUpstashStore({ client })
@@ -527,6 +539,18 @@ describe("upstash native namespaces", () => {
       ok: false,
     });
     expect(recorded.upserts).toStrictEqual([]);
+  });
+
+  test("a reserved key is an ordinary metadata field in native mode", async () => {
+    const { client } = fakeClient();
+    const index = nativeStore(client).index("docs");
+    await index.upsert([
+      { id: "x", metadata: { _id: "other" }, vector: [1, 0, 0] },
+    ]);
+    await expect(index.fetch(["x"])).resolves.toStrictEqual({
+      ok: true,
+      value: [{ id: "x", metadata: { _id: "other" }, vector: [] }],
+    });
   });
 
   test("metadata mode rejects an index name that needs URL escaping", async () => {

@@ -116,6 +116,21 @@ describe(createPgvectorStore, () => {
     });
   });
 
+  test("upsert keeps the last record when a batch repeats an id", async () => {
+    const { client, calls } = fakeClient();
+    await createPgvectorStore({ client })
+      .index("docs")
+      .upsert([
+        { id: "a", vector: [1] },
+        { id: "a", vector: [2] },
+      ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.params).toStrictEqual(["a", "", "[2]", "{}"]);
+    expect(calls[0]?.text).toStartWith(
+      `INSERT INTO "docs" (id, namespace, embedding, metadata) VALUES ($1, $2, $3::vector, $4::jsonb) ON CONFLICT`
+    );
+  });
+
   test("upsert restarts placeholder numbering in every batch", async () => {
     const { client, calls } = fakeClient();
     await createPgvectorStore({ client })

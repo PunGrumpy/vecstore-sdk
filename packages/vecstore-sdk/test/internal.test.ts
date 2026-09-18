@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { chunk, sortByIds } from "../src/internal/collections";
+import { chunk, lastById, sortByIds } from "../src/internal/collections";
 import { indexSpecError } from "../src/internal/index-spec";
 import {
   isMetadataEntry,
@@ -97,6 +97,19 @@ describe("collections", () => {
   test("chunk splits into fixed-size groups", () => {
     expect(chunk([1, 2, 3, 4, 5], 2)).toStrictEqual([[1, 2], [3, 4], [5]]);
     expect(chunk([], 2)).toStrictEqual([]);
+  });
+
+  test("lastById keeps the first position and the last data", () => {
+    expect(
+      lastById([
+        { id: "a", n: 1 },
+        { id: "b", n: 2 },
+        { id: "a", n: 3 },
+      ])
+    ).toStrictEqual([
+      { id: "a", n: 3 },
+      { id: "b", n: 2 },
+    ]);
   });
 
   test("sortByIds follows the requested order and skips misses", () => {

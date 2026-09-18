@@ -2,7 +2,7 @@ import type { VecstoreError } from "../errors";
 import { compilePgvectorFilter } from "../filter/pgvector";
 import type { PgvectorSql } from "../filter/pgvector";
 import { attempt } from "../internal/attempt";
-import { chunk, sortByIds } from "../internal/collections";
+import { chunk, lastById, sortByIds } from "../internal/collections";
 import { isObjectLike } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -266,7 +266,7 @@ const createIndex = (
     upsert: (records) =>
       run(name, async () => {
         await Promise.all(
-          chunk(records, UPSERT_BATCH).map((batch) => {
+          chunk(lastById(records), UPSERT_BATCH).map((batch) => {
             const statement = upsertStatement(table, namespace, batch);
             return client.query(statement.text, statement.params);
           })

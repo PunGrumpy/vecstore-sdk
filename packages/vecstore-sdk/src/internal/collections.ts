@@ -6,6 +6,16 @@ export const chunk = <T>(items: readonly T[], size: number): T[][] => {
   return chunks;
 };
 
+export const lastById = <T extends { readonly id: string }>(
+  records: readonly T[]
+): T[] => {
+  const byId = new Map<string, T>();
+  for (const record of records) {
+    byId.set(record.id, record);
+  }
+  return [...byId.values()];
+};
+
 export const sortByIds = <T extends { readonly id: string }>(
   ids: readonly string[],
   records: readonly T[]

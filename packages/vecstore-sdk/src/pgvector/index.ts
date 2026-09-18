@@ -307,17 +307,8 @@ export const createPgvectorStore = <Client extends PgQueryable>(
         const embeddingIndex = quoteIdent(`${spec.name}_embedding_idx`);
         const metadataIndex = quoteIdent(`${spec.name}_metadata_idx`);
         const opclass = OPCLASSES[spec.metric ?? "cosine"];
-        await client.query("CREATE EXTENSION IF NOT EXISTS vector", []);
         await client.query(
-          `CREATE TABLE ${table} (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(${spec.dimension}) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id))`,
-          []
-        );
-        await client.query(
-          `CREATE INDEX ${embeddingIndex} ON ${table} USING hnsw (embedding ${opclass})`,
-          []
-        );
-        await client.query(
-          `CREATE INDEX ${metadataIndex} ON ${table} USING gin (metadata)`,
+          `DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE ${table} (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(${spec.dimension}) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id)); CREATE INDEX ${embeddingIndex} ON ${table} USING hnsw (embedding ${opclass}); CREATE INDEX ${metadataIndex} ON ${table} USING gin (metadata); END $$`,
           []
         );
       });

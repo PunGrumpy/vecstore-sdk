@@ -59,12 +59,20 @@ describe(createPgvectorStore, () => {
       name: "docs",
     });
     expect(result.ok).toBeTruthy();
-    expect(calls.map((call) => call.text)).toStrictEqual([
-      "CREATE EXTENSION IF NOT EXISTS vector",
-      `CREATE TABLE "docs" (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(3) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id))`,
-      `CREATE INDEX "docs_embedding_idx" ON "docs" USING hnsw (embedding vector_l2_ops)`,
-      `CREATE INDEX "docs_metadata_idx" ON "docs" USING gin (metadata)`,
-    ]);
+    expect(calls).toHaveLength(1);
+    const statement = calls[0]?.text ?? "";
+    expect(
+      statement.startsWith("DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector;")
+    ).toBeTruthy();
+    expect(statement).toContain(
+      `CREATE TABLE "docs" (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(3) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id))`
+    );
+    expect(statement).toContain(
+      `CREATE INDEX "docs_embedding_idx" ON "docs" USING hnsw (embedding vector_l2_ops)`
+    );
+    expect(statement).toContain(
+      `CREATE INDEX "docs_metadata_idx" ON "docs" USING gin (metadata)`
+    );
   });
 
   test("createIndex rejects a non-integer dimension before touching the database", async () => {

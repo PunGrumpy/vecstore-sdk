@@ -97,7 +97,7 @@
     "test:live": "VECSTORE_LIVE=1 bun test test/live"
   },
   "devDependencies": {
-    "@pinecone-database/pinecone": "^8.2.0",
+    "@pinecone-database/pinecone": "^9.0.0",
     "@qdrant/js-client-rest": "^1.19.0",
     "@supabase/supabase-js": "^2.58.0",
     "@types/bun": "^1.4.2",

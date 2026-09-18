@@ -14,6 +14,8 @@ import {
   normalizeSupabaseError,
 } from "../../src/supabase";
 
+const UPSERT_BATCH = 100;
+
 const rpcError = (code: string): SupabaseRpcError => ({ code, message: code });
 
 const postgrestError = (code: string) =>
@@ -132,6 +134,28 @@ describe(createSupabaseStore, () => {
         },
         fn: "vecstore_upsert",
       },
+    ]);
+  });
+
+  test("upsert splits into batches of 100", async () => {
+    const { client, calls } = fakeClient();
+    await createSupabaseStore({ client })
+      .index("docs", { namespace: "tenant-a" })
+      .upsert(
+        Array.from({ length: UPSERT_BATCH + 1 }, (_, i) => ({
+          id: `r${i}`,
+          vector: [i],
+        }))
+      );
+    expect(
+      calls.map((call) => [
+        call.fn,
+        "match_namespace" in call.args ? call.args.match_namespace : null,
+        "records" in call.args ? call.args.records.length : null,
+      ])
+    ).toStrictEqual([
+      ["vecstore_upsert", "tenant-a", UPSERT_BATCH],
+      ["vecstore_upsert", "tenant-a", 1],
     ]);
   });
 

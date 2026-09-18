@@ -252,6 +252,17 @@ describe(createUpstashStore, () => {
     ]);
   });
 
+  test("a default namespace delete leaves another namespace's record alone", async () => {
+    const { client, recorded } = fakeClient();
+    const store = createUpstashStore({ client });
+    await store
+      .index("docs", { namespace: "tenant-a" })
+      .upsert([{ id: "doc-1", vector: [1, 2, 3] }]);
+    await store.index("docs").delete({ ids: ["tenant-a/5/doc-1"] });
+    expect(recorded.deletes).toStrictEqual([]);
+    expect(recorded.fetches[0]?.ids).toStrictEqual(["tenant-a/5/doc-1"]);
+  });
+
   test("fetch returns the vector only when asked", async () => {
     const { client } = fakeClient();
     const index = createUpstashStore({ client }).index("docs");
@@ -348,6 +359,30 @@ describe(createUpstashStore, () => {
     expect(!missing.ok && missing.error.kind).toBe("not_found");
   });
 
+  test("metadata mode rejects a namespace containing a slash", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createUpstashStore({ client })
+      .index("docs", { namespace: "a/3" })
+      .upsert([{ id: "b", vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "upstash" },
+      ok: false,
+    });
+    expect(recorded.upserts).toStrictEqual([]);
+  });
+
+  test("metadata mode rejects a record that sets a reserved metadata key", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createUpstashStore({ client })
+      .index("docs")
+      .upsert([{ id: "x", metadata: { _id: "other" }, vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "upstash" },
+      ok: false,
+    });
+    expect(recorded.upserts).toStrictEqual([]);
+  });
+
   test("a filter Upstash cannot express is an invalid argument", async () => {
     const { client } = fakeClient();
     const result = await createUpstashStore({ client })
@@ -435,6 +470,17 @@ describe("upstash native namespaces", () => {
     ]);
   });
 
+  test("delete by id goes straight to the namespace with no pre-fetch", async () => {
+    const { client, recorded } = fakeClient();
+    await nativeStore(client)
+      .index("docs")
+      .delete({ ids: ["a"] });
+    expect(recorded.deletes).toStrictEqual([
+      { args: { ids: ["a"] }, namespace: "docs" },
+    ]);
+    expect(recorded.fetches).toStrictEqual([]);
+  });
+
   test("delete all resets the namespace instead of deleting by filter", async () => {
     const { client, recorded } = fakeClient();
     const index = nativeStore(client).index("docs", { namespace: "tenant-a" });
@@ -481,6 +527,30 @@ describe("upstash native namespaces", () => {
       .index("docs", { namespace: "tenant a" })
       .upsert([{ id: "a", vector: [1, 0, 0] }]);
     expect(!escaped.ok && escaped.error.kind).toBe("invalid_argument");
+  });
+
+  test("native mode rejects a namespace containing a slash too", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await nativeStore(client)
+      .index("docs", { namespace: "a/3" })
+      .upsert([{ id: "b", vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "upstash" },
+      ok: false,
+    });
+    expect(recorded.upserts).toStrictEqual([]);
+  });
+
+  test("a reserved key is an ordinary metadata field in native mode", async () => {
+    const { client } = fakeClient();
+    const index = nativeStore(client).index("docs");
+    await index.upsert([
+      { id: "x", metadata: { _id: "other" }, vector: [1, 0, 0] },
+    ]);
+    await expect(index.fetch(["x"])).resolves.toStrictEqual({
+      ok: true,
+      value: [{ id: "x", metadata: { _id: "other" }, vector: [] }],
+    });
   });
 
   test("metadata mode rejects an index name that needs URL escaping", async () => {

@@ -390,6 +390,23 @@ describe(createVectorizeStore, () => {
       toVectorizeId("tenant-a", "doc-1"),
       toVectorizeId("tenant-a", "doc-2"),
     ]);
+    expect(bodiesFor(calls, "/get_by_ids")).toStrictEqual([]);
+  });
+
+  test("a default namespace delete leaves another namespace's vector alone", async () => {
+    const { calls, client, stored } = fakeCloudflare();
+    const foreign = toVectorizeId("tenant-b", "doc-1");
+    stored.set(foreign, {
+      id: foreign,
+      metadata: { _id: "doc-1" },
+      namespace: "tenant-b",
+      values: [1],
+    });
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .delete({ ids: [foreign] });
+    expect(bodiesFor(calls, "/delete_by_ids")).toStrictEqual([]);
+    expect(stored.size).toBe(1);
   });
 
   test("delete by filter and delete all are unsupported", async () => {
@@ -405,6 +422,30 @@ describe(createVectorizeStore, () => {
       error: { feature: "deleteAll", kind: "unsupported" },
       ok: false,
     });
+  });
+
+  test("a namespace containing a slash is rejected before the request", async () => {
+    const { calls, client } = fakeCloudflare();
+    const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs", { namespace: "a/3" })
+      .upsert([{ id: "b", vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "vectorize" },
+      ok: false,
+    });
+    expect(bodiesFor(calls, "/upsert")).toStrictEqual([]);
+  });
+
+  test("upsert rejects a record that sets a reserved metadata key", async () => {
+    const { calls, client } = fakeCloudflare();
+    const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .upsert([{ id: "x", metadata: { _id: "other" }, vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "vectorize" },
+      ok: false,
+    });
+    expect(bodiesFor(calls, "/upsert")).toStrictEqual([]);
   });
 
   test("listIndexes reads the names off the page", async () => {

@@ -33,10 +33,15 @@ export interface QdrantIsEmptyCondition {
   readonly is_empty: { readonly key: string };
 }
 
+export interface QdrantHasIdCondition {
+  readonly has_id: (string | number)[];
+}
+
 export type QdrantCondition =
   | QdrantMatchCondition
   | QdrantRangeCondition
   | QdrantIsEmptyCondition
+  | QdrantHasIdCondition
   | QdrantFilter;
 
 export interface QdrantFilter {
@@ -126,7 +131,9 @@ const toCondition = (filter: Filter): QdrantCondition => {
 const isQdrantFilter = (
   condition: QdrantCondition
 ): condition is QdrantFilter =>
-  !("key" in condition) && !("is_empty" in condition);
+  !("key" in condition) &&
+  !("is_empty" in condition) &&
+  !("has_id" in condition);
 
 export const compileQdrantFilter = (filter: Filter): QdrantFilter => {
   const condition = toCondition(filter);

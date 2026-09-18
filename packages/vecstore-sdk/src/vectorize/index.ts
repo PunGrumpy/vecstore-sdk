@@ -20,8 +20,13 @@ import type {
 import { attempt } from "../internal/attempt";
 import { chunk, sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
-import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
+import {
+  isMetadataEntry,
+  metadataFromEntries,
+  reservedKeyError,
+} from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
+import { namespaceError } from "../internal/namespace";
 import { deterministicUuid } from "../internal/uuid";
 import { err } from "../result";
 import type { Result } from "../result";
@@ -252,6 +257,29 @@ const toLine = (namespace: string, record: VectorRecord): string => {
 const toNdjson = (lines: readonly string[]): File =>
   new File([lines.join("\n")], NDJSON_NAME, { type: NDJSON_TYPE });
 
+const deletableIds = async (
+  indexes: VectorizeIndexes,
+  accountId: string,
+  name: string,
+  namespace: string,
+  ids: readonly string[]
+): Promise<string[]> => {
+  if (namespace !== DEFAULT_NAMESPACE) {
+    return [...ids];
+  }
+  const response = await indexes.getByIDs(name, {
+    account_id: accountId,
+    ids: [...ids],
+  });
+  const owned: string[] = [];
+  for (const found of isUnknownArray(response) ? response : []) {
+    if (isStoredVector(found) && belongsToNamespace(namespace, found)) {
+      owned.push(found.id);
+    }
+  }
+  return owned;
+};
+
 const createIndex = (
   indexes: VectorizeIndexes,
   accountId: string,
@@ -259,15 +287,28 @@ const createIndex = (
   options: IndexOptions
 ): VectorIndex => {
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
+  const invalid = namespaceError(PROVIDER, namespace);
   return {
     delete: (selector: DeleteSelector): VecResult<void> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
       if ("ids" in selector) {
         return run(name, async () => {
           const stored = selector.ids.map((id) => toVectorizeId(namespace, id));
           await Promise.all(
-            chunk(stored, ID_BATCH).map((ids) =>
-              indexes.deleteByIDs(name, { account_id: accountId, ids })
-            )
+            chunk(stored, ID_BATCH).map(async (batch) => {
+              const ids = await deletableIds(
+                indexes,
+                accountId,
+                name,
+                namespace,
+                batch
+              );
+              if (ids.length > 0) {
+                await indexes.deleteByIDs(name, { account_id: accountId, ids });
+              }
+            })
           );
         });
       }
@@ -281,8 +322,14 @@ const createIndex = (
       );
     },
 
-    fetch: (ids, fetchOptions: FetchOptions = {}) =>
-      run(name, async () => {
+    fetch: (
+      ids,
+      fetchOptions: FetchOptions = {}
+    ): VecResult<VectorRecord[]> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         if (ids.length === 0) {
           return [];
         }
@@ -306,13 +353,17 @@ const createIndex = (
           }
         }
         return sortByIds(ids, records);
-      }),
+      });
+    },
 
     name,
 
     namespace: options.namespace,
 
     query: (query: QueryOptions): VecResult<ScoredRecord[]> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
       const compiled =
         query.filter === undefined ? undefined : compileFilter(query.filter);
       if (compiled?.ok === false) {
@@ -346,8 +397,13 @@ const createIndex = (
       });
     },
 
-    upsert: (records) =>
-      run(name, async () => {
+    upsert: (records): VecResult<void> => {
+      const rejected =
+        invalid ?? reservedKeyError(PROVIDER, records, RESERVED_KEYS);
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+      return run(name, async () => {
         if (records.length === 0) {
           return;
         }
@@ -361,7 +417,8 @@ const createIndex = (
             })
           )
         );
-      }),
+      });
+    },
   };
 };
 

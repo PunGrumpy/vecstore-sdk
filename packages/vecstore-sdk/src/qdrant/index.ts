@@ -14,9 +14,15 @@ import type { QdrantCondition, QdrantFilter } from "../filter/qdrant";
 import { attempt } from "../internal/attempt";
 import { sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
-import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
+import {
+  isMetadataEntry,
+  metadataFromEntries,
+  reservedKeyError,
+} from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
+import { namespaceError } from "../internal/namespace";
 import { deterministicUuid, isUuid } from "../internal/uuid";
+import { err } from "../result";
 import type {
   DeleteSelector,
   FetchOptions,
@@ -37,6 +43,7 @@ export {
   compileQdrantFilter,
   type QdrantCondition,
   type QdrantFilter,
+  type QdrantHasIdCondition,
 } from "../filter/qdrant";
 
 export type QdrantDistance = "Cosine" | "Euclid" | "Dot";
@@ -150,6 +157,14 @@ const fromPoint = (point: QdrantStoredPoint): string => {
 
 const readMetadata = (point: QdrantStoredPoint): Metadata =>
   metadataFromEntries(payloadEntries(point), RESERVED_KEYS);
+
+const inNamespace = (namespace: string, point: QdrantStoredPoint): boolean => {
+  const stored = payloadEntries(point).find(
+    ([key]) => key === QDRANT_NAMESPACE_KEY
+  );
+  const reported = stored !== undefined && isString(stored[1]) ? stored[1] : "";
+  return reported === namespace;
+};
 
 const readVector = (point: QdrantStoredPoint): number[] | undefined =>
   isNumberArray(point.vector) ? point.vector : undefined;
@@ -270,12 +285,21 @@ const createIndex = (
   options: IndexOptions
 ): VectorIndex => {
   const namespace = options.namespace ?? "";
+  const invalid = namespaceError(PROVIDER, namespace);
   return {
-    delete: (selector: DeleteSelector) =>
-      run(name, async () => {
+    delete: (selector: DeleteSelector): VecResult<void> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         if ("ids" in selector) {
           await client.delete(name, {
-            points: selector.ids.map((id) => toPointId(namespace, id)),
+            filter: {
+              must: [
+                namespaceCondition(namespace),
+                { has_id: selector.ids.map((id) => toPointId(namespace, id)) },
+              ],
+            },
             wait: true,
           });
           return;
@@ -285,10 +309,17 @@ const createIndex = (
           filter: scopeQdrantFilter(options.namespace, filter),
           wait: true,
         });
-      }),
+      });
+    },
 
-    fetch: (ids, fetchOptions: FetchOptions = {}) =>
-      run(name, async () => {
+    fetch: (
+      ids,
+      fetchOptions: FetchOptions = {}
+    ): VecResult<VectorRecord[]> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         if (ids.length === 0) {
           return [];
         }
@@ -297,20 +328,29 @@ const createIndex = (
           with_payload: true,
           with_vector: fetchOptions.includeVector ?? false,
         });
-        const records = points.map((point): VectorRecord => ({
-          id: fromPoint(point),
-          metadata: readMetadata(point),
-          vector: readVector(point) ?? [],
-        }));
+        const records: VectorRecord[] = [];
+        for (const point of points) {
+          if (inNamespace(namespace, point)) {
+            records.push({
+              id: fromPoint(point),
+              metadata: readMetadata(point),
+              vector: readVector(point) ?? [],
+            });
+          }
+        }
         return sortByIds(ids, records);
-      }),
+      });
+    },
 
     name,
 
     namespace: options.namespace,
 
-    query: (query: QueryOptions) =>
-      run(name, async () => {
+    query: (query: QueryOptions): VecResult<ScoredRecord[]> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         const includeMetadata = query.includeMetadata ?? true;
         const response = await client.query(name, {
           filter: scopeQdrantFilter(options.namespace, query.filter),
@@ -325,10 +365,16 @@ const createIndex = (
           score: point.score,
           vector: readVector(point),
         }));
-      }),
+      });
+    },
 
-    upsert: (records) =>
-      run(name, async () => {
+    upsert: (records): VecResult<void> => {
+      const rejected =
+        invalid ?? reservedKeyError(PROVIDER, records, RESERVED_KEYS);
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+      return run(name, async () => {
         if (records.length === 0) {
           return;
         }
@@ -341,7 +387,8 @@ const createIndex = (
           };
         });
         await client.upsert(name, { points, wait: true });
-      }),
+      });
+    },
   };
 };
 

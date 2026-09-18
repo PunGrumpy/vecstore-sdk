@@ -16,6 +16,7 @@ import type { VectorRecord } from "../../src/types";
 const INDEX = "docs";
 const NAMESPACE = "tenant-a";
 const DIMENSION = 3;
+const DELETE_PAGE = 500;
 
 interface CreateCall {
   readonly index: string;
@@ -97,8 +98,9 @@ const createFakeClient = (): FakeClient => {
         const matched = [...documents].filter(
           ([, stored]) => jsonEntry(stored, "namespace") === namespace
         );
+        const size = options?.LIMIT?.size ?? matched.length;
         return Promise.resolve({
-          documents: matched.map(([id, stored]) => ({
+          documents: matched.slice(0, size).map(([id, stored]) => ({
             id,
             value: documentValue(stored, options),
           })),
@@ -346,6 +348,28 @@ describe(createRedisStore, () => {
     expect(fake.searches[0]?.query).toBe(
       '@namespace:{"tenant-a"} @genre:{"drama"}'
     );
+  });
+
+  test("delete all pages through more than one search when the namespace holds over 500 documents", async () => {
+    const { fake, index } = await setup();
+    await index.upsert(
+      Array.from({ length: DELETE_PAGE + 1 - records.length }, (_, i) => ({
+        id: `r${i}`,
+        vector: [i, 0, 0],
+      }))
+    );
+    await index.delete({ all: true });
+    expect(fake.searches).toHaveLength(2);
+    expect(fake.unlinked).toHaveLength(2);
+    expect(fake.unlinked[0]).toHaveLength(DELETE_PAGE);
+    expect(fake.documents.size).toBe(0);
+  });
+
+  test("delete by filter rejects a filter the schema cannot run before searching", async () => {
+    const { fake, index } = await setup();
+    const result = await index.delete({ filter: eq("director", "lynch") });
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(fake.searches).toHaveLength(0);
   });
 
   test("the default namespace scopes on an empty tag", async () => {

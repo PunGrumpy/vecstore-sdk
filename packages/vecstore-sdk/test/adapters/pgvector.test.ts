@@ -15,6 +15,9 @@ interface Call {
   readonly params: PgParam[];
 }
 
+const UPSERT_BATCH = 500;
+const UPSERT_COLUMNS = 4;
+
 const pgError = (code: string) => Object.assign(new Error(code), { code });
 
 const fakeClient = (responses: object[][] = []) => {
@@ -103,6 +106,23 @@ describe(createPgvectorStore, () => {
       ],
       text: `INSERT INTO "docs" (id, namespace, embedding, metadata) VALUES ($1, $2, $3::vector, $4::jsonb), ($5, $6, $7::vector, $8::jsonb) ON CONFLICT (namespace, id) DO UPDATE SET embedding = EXCLUDED.embedding, metadata = EXCLUDED.metadata`,
     });
+  });
+
+  test("upsert restarts placeholder numbering in every batch", async () => {
+    const { client, calls } = fakeClient();
+    await createPgvectorStore({ client })
+      .index("docs")
+      .upsert(
+        Array.from({ length: UPSERT_BATCH + 1 }, (_, i) => ({
+          id: `r${i}`,
+          vector: [i],
+        }))
+      );
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.params).toHaveLength(UPSERT_COLUMNS);
+    expect(calls[1]?.text).toStartWith(
+      `INSERT INTO "docs" (id, namespace, embedding, metadata) VALUES ($1, $2, $3::vector, $4::jsonb) ON CONFLICT`
+    );
   });
 
   test("query resolves the metric once and compiles the filter", async () => {

@@ -208,6 +208,16 @@ describe(createRedisStore, () => {
     });
   });
 
+  test("createIndex rejects a non-positive dimension before touching the client", async () => {
+    const fake = createFakeClient();
+    const result = await createRedisStore({ client: fake.client }).createIndex({
+      dimension: 0,
+      name: INDEX,
+    });
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(fake.creates).toHaveLength(0);
+  });
+
   test("createIndex refuses a metadata field the adapter keeps", async () => {
     const fake = createFakeClient();
     const store = createRedisStore({
@@ -339,6 +349,37 @@ describe(createRedisStore, () => {
     await index.delete({ all: true });
     expect(fake.searches[0]?.query).toBe('@namespace:{"tenant-a"}');
     expect(fake.searches[0]?.options?.RETURN).toStrictEqual([]);
+    expect(fake.documents.size).toBe(0);
+  });
+
+  test("delete all leaves keys of another index alone even when the search returns them", async () => {
+    const { fake, index } = await setup();
+    const foreign = "vecstore:docs:v2:tenant-a:x";
+    fake.documents.set(foreign, {
+      metadata: {},
+      namespace: NAMESPACE,
+      vector: [0, 0, 1],
+    });
+    await index.delete({ all: true });
+    expect(fake.documents.has(foreign)).toBe(true);
+    for (const keys of fake.unlinked) {
+      expect(keys).not.toContain(foreign);
+    }
+  });
+
+  test("an index name with a colon is rejected before any request", async () => {
+    const fake = createFakeClient();
+    const store = createRedisStore({ client: fake.client });
+    const created = await store.createIndex({
+      dimension: DIMENSION,
+      name: "docs:v2",
+    });
+    expect(created).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(fake.creates).toHaveLength(0);
+    const upserted = await store
+      .index("docs:v2")
+      .upsert([{ id: "a", vector: [0, 0, 1] }]);
+    expect(upserted).toMatchObject({ error: { kind: "invalid_argument" } });
     expect(fake.documents.size).toBe(0);
   });
 

@@ -1,10 +1,10 @@
-import { invalidArgument } from "../errors";
 import type { VecstoreError } from "../errors";
 import { compilePgvectorFilter } from "../filter/pgvector";
 import type { PgvectorSql } from "../filter/pgvector";
 import { attempt } from "../internal/attempt";
-import { chunk, sortByIds } from "../internal/collections";
+import { chunk, lastById, sortByIds } from "../internal/collections";
 import { isObjectLike } from "../internal/guards";
+import { indexSpecError } from "../internal/index-spec";
 import {
   isNamedRow,
   isPostgresRow,
@@ -266,7 +266,7 @@ const createIndex = (
     upsert: (records) =>
       run(name, async () => {
         await Promise.all(
-          chunk(records, UPSERT_BATCH).map((batch) => {
+          chunk(lastById(records), UPSERT_BATCH).map((batch) => {
             const statement = upsertStatement(table, namespace, batch);
             return client.query(statement.text, statement.params);
           })
@@ -292,15 +292,9 @@ export const createPgvectorStore = <Client extends PgQueryable>(
 
   return {
     createIndex: (spec: IndexSpec) => {
-      if (!Number.isInteger(spec.dimension) || spec.dimension <= 0) {
-        return Promise.resolve(
-          err(
-            invalidArgument(
-              PROVIDER,
-              `dimension must be a positive integer, got ${spec.dimension}`
-            )
-          )
-        );
+      const invalid = indexSpecError(PROVIDER, spec);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
       }
       return run(spec.name, async () => {
         const table = tableRef(spec.name);

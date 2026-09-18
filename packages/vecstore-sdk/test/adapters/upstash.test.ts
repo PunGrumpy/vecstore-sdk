@@ -309,6 +309,15 @@ describe(createUpstashStore, () => {
     expect(recorded.fetches).toHaveLength(2);
   });
 
+  test("createIndex rejects a non-positive dimension before touching the client", async () => {
+    const { client } = fakeClient();
+    const result = await createUpstashStore({ client }).createIndex({
+      dimension: 0,
+      name: "docs",
+    });
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+  });
+
   test("createIndex rejects a dimension the Upstash index cannot serve", async () => {
     const { client } = fakeClient();
     const result = await createUpstashStore({ client }).createIndex({

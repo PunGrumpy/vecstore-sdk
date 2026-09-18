@@ -14,6 +14,7 @@ import type { QdrantCondition, QdrantFilter } from "../filter/qdrant";
 import { attempt } from "../internal/attempt";
 import { sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
+import { indexSpecError } from "../internal/index-spec";
 import {
   isMetadataEntry,
   metadataFromEntries,
@@ -235,6 +236,13 @@ const isApiFailure = (cause: unknown): cause is ApiFailure =>
 const failureMessage = (cause: unknown): string =>
   isApiFailure(cause) ? cause.data.status.error : errorMessage(cause);
 
+const MISSING_COLLECTION_ERROR = "QdrantMissingCollectionError";
+
+const missingCollection = (name: string): Error =>
+  Object.assign(new Error(`Collection "${name}" does not exist`), {
+    name: MISSING_COLLECTION_ERROR,
+  });
+
 const isConnectionFailure = (cause: unknown): boolean => {
   if (!(cause instanceof Error)) {
     return false;
@@ -249,6 +257,9 @@ export const normalizeQdrantError = (
   cause: unknown,
   index: string
 ): VecstoreError => {
+  if (cause instanceof Error && cause.name === MISSING_COLLECTION_ERROR) {
+    return notFound(PROVIDER, index, cause);
+  }
   if (isHttpFailure(cause)) {
     switch (cause.status) {
       case HTTP_NOT_FOUND: {
@@ -397,8 +408,12 @@ export const createQdrantStore = <Client extends QdrantClientLike>(
 ): VectorStore<Client> => {
   const { client } = options;
   return {
-    createIndex: (spec: IndexSpec) =>
-      run(spec.name, async () => {
+    createIndex: (spec: IndexSpec) => {
+      const invalid = indexSpecError(PROVIDER, spec);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(spec.name, async () => {
         await client.createCollection(spec.name, {
           vectors: {
             distance: DISTANCES[spec.metric ?? "cosine"],
@@ -418,11 +433,15 @@ export const createQdrantStore = <Client extends QdrantClientLike>(
           );
           throw error;
         }
-      }),
+      });
+    },
 
     deleteIndex: (name) =>
       run(name, async () => {
-        await client.deleteCollection(name);
+        const deleted = await client.deleteCollection(name);
+        if (!deleted) {
+          throw missingCollection(name);
+        }
       }),
 
     index: (name, indexOptions = {}) => createIndex(client, name, indexOptions),

@@ -137,6 +137,23 @@ describe(createSupabaseStore, () => {
     ]);
   });
 
+  test("upsert keeps the last record when a batch repeats an id", async () => {
+    const { client, calls } = fakeClient();
+    await createSupabaseStore({ client })
+      .index("docs")
+      .upsert([
+        { id: "a", vector: [1] },
+        { id: "a", vector: [2] },
+      ]);
+    expect(calls).toHaveLength(1);
+    const [call] = calls;
+    const records =
+      call !== undefined && "records" in call.args ? call.args.records : [];
+    expect(records).toStrictEqual([
+      { embedding: "[2]", id: "a", metadata: {} },
+    ]);
+  });
+
   test("upsert splits into batches of 100", async () => {
     const { client, calls } = fakeClient();
     await createSupabaseStore({ client })
@@ -310,6 +327,14 @@ describe(createSupabaseStore, () => {
       index: "docs",
     });
     expect(error.kind).toBe("connection");
+  });
+
+  test("a TypeError that is not a fetch failure is a provider error", () => {
+    const error = normalizeSupabaseError(new TypeError("x is not a function"), {
+      fn: "vecstore_query",
+      index: "docs",
+    });
+    expect(error.kind).toBe("provider");
   });
 
   test("an error without a code is a provider error", () => {

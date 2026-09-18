@@ -14,6 +14,7 @@ import { compileUpstashFilter, isUpstashFilterError } from "../filter/upstash";
 import { attempt } from "../internal/attempt";
 import { chunk, sortByIds } from "../internal/collections";
 import { isString } from "../internal/guards";
+import { indexSpecError } from "../internal/index-spec";
 import {
   isMetadataEntry,
   metadataFromEntries,
@@ -560,8 +561,12 @@ export const createUpstashStore = <Client extends UpstashIndexLike>(
   const { client } = options;
   const layout = LAYOUTS[options.namespaceMode ?? "metadata"];
   return {
-    createIndex: (spec: IndexSpec) =>
-      run(spec.name, async () => {
+    createIndex: (spec: IndexSpec) => {
+      const invalid = indexSpecError(PROVIDER, spec);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(spec.name, async () => {
         const info = await client.info();
         const mismatch = describeSpecMismatch(spec, info);
         if (mismatch !== undefined) {
@@ -574,7 +579,8 @@ export const createUpstashStore = <Client extends UpstashIndexLike>(
             `The Upstash index already has a namespace for "${spec.name}".`
           );
         }
-      }),
+      });
+    },
 
     deleteIndex: (name) =>
       run(name, async () => {

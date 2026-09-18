@@ -1,13 +1,9 @@
-import {
-  connection,
-  invalidArgument,
-  unauthorized,
-  unsupported,
-} from "../errors";
+import { connection, unauthorized, unsupported } from "../errors";
 import type { VecstoreError } from "../errors";
 import type { Filter } from "../filter/ast";
 import { attempt } from "../internal/attempt";
-import { chunk, sortByIds } from "../internal/collections";
+import { chunk, lastById, sortByIds } from "../internal/collections";
+import { indexSpecError } from "../internal/index-spec";
 import {
   hasCode,
   isNamedRow,
@@ -130,8 +126,7 @@ interface CallContext {
 }
 
 const isFetchFailure = (cause: unknown): boolean =>
-  cause instanceof TypeError ||
-  (cause instanceof Error && FETCH_FAILURE.test(cause.message));
+  cause instanceof Error && FETCH_FAILURE.test(cause.message);
 
 export const normalizeSupabaseError = (
   cause: unknown,
@@ -279,7 +274,7 @@ const createIndexHandle = (
     upsert: (records) =>
       run(context("vecstore_upsert"), async () => {
         await Promise.all(
-          chunk(records, UPSERT_BATCH).map((batch) =>
+          chunk(lastById(records), UPSERT_BATCH).map((batch) =>
             invoke(client, {
               args: { ...scope, records: batch.map(toUpsertRow) },
               fn: "vecstore_upsert",
@@ -302,15 +297,9 @@ export const createSupabaseStore = <Client extends SupabaseClientLike>(
 
   return {
     createIndex: (spec: IndexSpec) => {
-      if (!Number.isInteger(spec.dimension) || spec.dimension <= 0) {
-        return Promise.resolve(
-          err(
-            invalidArgument(
-              PROVIDER,
-              `dimension must be a positive integer, got ${spec.dimension}`
-            )
-          )
-        );
+      const invalid = indexSpecError(PROVIDER, spec);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
       }
       return run(
         { fn: "vecstore_create_index", index: spec.name },

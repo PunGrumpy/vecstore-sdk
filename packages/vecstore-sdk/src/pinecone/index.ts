@@ -13,6 +13,8 @@ import { compilePineconeFilter } from "../filter/pinecone";
 import type { PineconeFilter } from "../filter/pinecone";
 import { attempt } from "../internal/attempt";
 import { chunk, sortByIds } from "../internal/collections";
+import { indexSpecError } from "../internal/index-spec";
+import { err } from "../result";
 import type {
   DeleteSelector,
   FetchOptions,
@@ -206,11 +208,15 @@ const recordsOf = (
     toVectorRecord(record, includeVector)
   );
 
-const toScoredRecord = (match: PineconeScoredRecordLike): ScoredRecord => ({
+const toScoredRecord = (
+  match: PineconeScoredRecordLike,
+  includeMetadata: boolean,
+  includeVector: boolean
+): ScoredRecord => ({
   id: match.id,
-  metadata: match.metadata,
+  metadata: includeMetadata ? match.metadata : undefined,
   score: match.score ?? 0,
-  vector: match.values,
+  vector: includeVector ? match.values : undefined,
 });
 
 const createIndex = (
@@ -259,18 +265,22 @@ const createIndex = (
 
     query: (query: QueryOptions) =>
       run(context, async () => {
+        const includeMetadata = query.includeMetadata ?? true;
+        const includeVector = query.includeVector ?? false;
         const response = await target.query({
           ...scope,
           filter:
             query.filter === undefined
               ? undefined
               : compilePineconeFilter(query.filter),
-          includeMetadata: query.includeMetadata ?? true,
-          includeValues: query.includeVector ?? false,
+          includeMetadata,
+          includeValues: includeVector,
           topK: query.topK,
           vector: [...query.vector],
         });
-        return response.matches.map(toScoredRecord);
+        return response.matches.map((match) =>
+          toScoredRecord(match, includeMetadata, includeVector)
+        );
       }),
 
     upsert: (records) =>
@@ -292,8 +302,12 @@ export const createPineconeStore = <
   const { client } = options;
   const spec = options.indexSpec ?? DEFAULT_SPEC;
   return {
-    createIndex: (indexSpec: IndexSpec) =>
-      run({ index: indexSpec.name }, async () => {
+    createIndex: (indexSpec: IndexSpec) => {
+      const invalid = indexSpecError(PROVIDER, indexSpec);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run({ index: indexSpec.name }, async () => {
         await client.createIndex({
           dimension: indexSpec.dimension,
           metric: METRICS[indexSpec.metric ?? "cosine"],
@@ -301,7 +315,8 @@ export const createPineconeStore = <
           spec,
           waitUntilReady: true,
         });
-      }),
+      });
+    },
 
     deleteIndex: (name) => run({ index: name }, () => client.deleteIndex(name)),
 

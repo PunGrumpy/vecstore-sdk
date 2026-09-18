@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { eq, gt } from "../../src/filter/ast";
+import type { NonEmpty } from "../../src/filter/ast";
 import { isObjectLike } from "../../src/internal/guards";
 import type {
   RedisClientLike,
@@ -342,6 +343,31 @@ describe(createRedisStore, () => {
     expect([...fake.documents.keys()]).toStrictEqual([
       "vecstore:docs:tenant-a:doc-b",
     ]);
+  });
+
+  test("upsert writes in bounded batches", async () => {
+    const { fake, index } = await setup();
+    const result = await index.upsert(
+      Array.from({ length: 1001 }, (_, i) => ({
+        id: `r${i}`,
+        vector: [i, 0, 0],
+      }))
+    );
+    expect(result.ok).toBeTruthy();
+    expect(fake.documents.size).toBe(1003);
+  });
+
+  test("delete by id unlinks in bounded batches", async () => {
+    const { fake, index } = await setup();
+    const ids: NonEmpty<string> = [
+      "r0",
+      ...Array.from({ length: 1000 }, (_, i) => `r${i + 1}`),
+    ];
+    await index.delete({ ids });
+    expect(fake.unlinked).toHaveLength(3);
+    expect(fake.unlinked[0]).toHaveLength(500);
+    expect(fake.unlinked[1]).toHaveLength(500);
+    expect(fake.unlinked[2]).toHaveLength(1);
   });
 
   test("delete all empties the namespace", async () => {

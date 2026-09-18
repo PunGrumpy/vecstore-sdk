@@ -254,6 +254,15 @@ const readStoredId = (record: UpstashResultRecord): string => {
     : String(record.id);
 };
 
+const readStoredNamespace = (record: UpstashResultRecord): string => {
+  const stored = metadataEntries(record).find(
+    ([key]) => key === UPSTASH_NAMESPACE_KEY
+  );
+  return stored !== undefined && isString(stored[1])
+    ? stored[1]
+    : DEFAULT_NAMESPACE;
+};
+
 interface UpstashLayout {
   readonly upstashNamespace: (index: string, namespace: string) => string;
   readonly storedId: (namespace: string, id: string) => string;
@@ -268,6 +277,12 @@ interface UpstashLayout {
     index: string,
     namespace: string
   ) => Promise<void>;
+  readonly deletableIds: (
+    client: UpstashIndexLike,
+    index: string,
+    namespace: string,
+    storedIds: readonly string[]
+  ) => Promise<string[]>;
   readonly readId: (record: UpstashResultRecord) => string;
   readonly readMetadata: (record: UpstashResultRecord) => Metadata;
   readonly indexOf: (upstashNamespace: string) => string;
@@ -281,6 +296,32 @@ const metadataNamespace = (index: string): string => {
   return index;
 };
 
+const metadataDeletableIds = async (
+  client: UpstashIndexLike,
+  index: string,
+  namespace: string,
+  storedIds: readonly string[]
+): Promise<string[]> => {
+  if (namespace !== DEFAULT_NAMESPACE) {
+    return [...storedIds];
+  }
+  const responses = await Promise.all(
+    chunk(storedIds, ID_BATCH).map((batch) =>
+      client.fetch(batch, {
+        includeMetadata: true,
+        namespace: metadataNamespace(index),
+      })
+    )
+  );
+  const owned: string[] = [];
+  for (const record of responses.flat()) {
+    if (record !== null && readStoredNamespace(record) === DEFAULT_NAMESPACE) {
+      owned.push(record.id);
+    }
+  }
+  return owned;
+};
+
 const METADATA_LAYOUT: UpstashLayout = {
   clear: async (client, index, namespace) => {
     await client.delete(
@@ -290,6 +331,7 @@ const METADATA_LAYOUT: UpstashLayout = {
   },
   compileFilter: (namespace, filter) => scopeUpstashFilter(namespace, filter),
   defaultFilter: (namespace) => scopeUpstashFilter(namespace),
+  deletableIds: metadataDeletableIds,
   indexOf: (upstashNamespace) => upstashNamespace,
   owns: (index, upstashNamespace) => upstashNamespace === index,
   readId: readStoredId,
@@ -320,6 +362,8 @@ const NATIVE_LAYOUT: UpstashLayout = {
     await client.reset({ namespace: nativeNamespace(index, namespace) });
   },
   compileFilter: (_namespace, filter) => compileUpstashFilter(filter),
+  deletableIds: (_client, _index, _namespace, storedIds) =>
+    Promise.resolve([...storedIds]),
   indexOf: (upstashNamespace) =>
     upstashNamespace.split(NAMESPACE_SEPARATOR)[0] ?? upstashNamespace,
   owns: (index, upstashNamespace) =>
@@ -371,7 +415,18 @@ const createIndex = (
     delete: (selector: DeleteSelector) =>
       run(name, async () => {
         if ("ids" in selector) {
-          const ids = selector.ids.map((id) => layout.storedId(namespace, id));
+          const stored = selector.ids.map((id) =>
+            layout.storedId(namespace, id)
+          );
+          const ids = await layout.deletableIds(
+            client,
+            name,
+            namespace,
+            stored
+          );
+          if (ids.length === 0) {
+            return;
+          }
           const target = scope();
           await Promise.all(
             chunk(ids, ID_BATCH).map((batch) =>

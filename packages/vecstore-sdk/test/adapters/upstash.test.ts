@@ -252,6 +252,17 @@ describe(createUpstashStore, () => {
     ]);
   });
 
+  test("a default namespace delete leaves another namespace's record alone", async () => {
+    const { client, recorded } = fakeClient();
+    const store = createUpstashStore({ client });
+    await store
+      .index("docs", { namespace: "tenant-a" })
+      .upsert([{ id: "doc-1", vector: [1, 2, 3] }]);
+    await store.index("docs").delete({ ids: ["tenant-a/5/doc-1"] });
+    expect(recorded.deletes).toStrictEqual([]);
+    expect(recorded.fetches[0]?.ids).toStrictEqual(["tenant-a/5/doc-1"]);
+  });
+
   test("fetch returns the vector only when asked", async () => {
     const { client } = fakeClient();
     const index = createUpstashStore({ client }).index("docs");
@@ -433,6 +444,17 @@ describe("upstash native namespaces", () => {
     expect(recorded.fetches).toStrictEqual([
       { ids: ["doc-1"], namespace: "docs~tenant-a" },
     ]);
+  });
+
+  test("delete by id goes straight to the namespace with no pre-fetch", async () => {
+    const { client, recorded } = fakeClient();
+    await nativeStore(client)
+      .index("docs")
+      .delete({ ids: ["a"] });
+    expect(recorded.deletes).toStrictEqual([
+      { args: { ids: ["a"] }, namespace: "docs" },
+    ]);
+    expect(recorded.fetches).toStrictEqual([]);
   });
 
   test("delete all resets the namespace instead of deleting by filter", async () => {

@@ -15,6 +15,8 @@ import {
   normalizePineconeError,
 } from "../../src/pinecone";
 
+const UPSERT_BATCH = 100;
+
 const namedError = (name: string, message = name) =>
   Object.assign(new Error(message), { name });
 
@@ -164,6 +166,27 @@ describe(createPineconeStore, () => {
       },
     ]);
     expect(recorded.deleteAlls).toStrictEqual([{ namespace: "tenant-a" }]);
+  });
+
+  test("upsert splits into batches of 100", async () => {
+    const { client, recorded } = fakeClient();
+    await createPineconeStore({ client })
+      .index("docs", { namespace: "tenant-a" })
+      .upsert(
+        Array.from({ length: UPSERT_BATCH + 1 }, (_, i) => ({
+          id: `r${i}`,
+          vector: [i],
+        }))
+      );
+    expect(
+      recorded.upserts.map((upsert) => [
+        upsert.namespace,
+        upsert.records.length,
+      ])
+    ).toStrictEqual([
+      ["tenant-a", UPSERT_BATCH],
+      ["tenant-a", 1],
+    ]);
   });
 
   test("the default namespace sends no namespace key", async () => {

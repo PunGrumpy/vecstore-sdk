@@ -25,6 +25,7 @@ interface Recorded {
     vectors: { size: number; distance: string };
   }[];
   readonly payloadIndexes: string[];
+  readonly deletedCollections: string[];
   readonly deletes: (
     | { points: (string | number)[]; wait?: boolean }
     | { filter: QdrantFilter; wait?: boolean }
@@ -37,6 +38,7 @@ const fakeClient = () => {
   const stored: QdrantStoredPoint[] = [];
   const recorded: Recorded = {
     createCollections: [],
+    deletedCollections: [],
     deletes: [],
     payloadIndexes: [],
     queries: [],
@@ -55,7 +57,10 @@ const fakeClient = () => {
       recorded.deletes.push(args);
       return Promise.resolve({ status: "completed" });
     },
-    deleteCollection: () => Promise.resolve(true),
+    deleteCollection: (name) => {
+      recorded.deletedCollections.push(name);
+      return Promise.resolve(true);
+    },
     getCollections: () =>
       Promise.resolve({ collections: [{ name: "a" }, { name: "b" }] }),
     query: (_name, args) => {
@@ -120,6 +125,23 @@ describe(createQdrantStore, () => {
       { name: "docs", vectors: { distance: "Dot", size: 3 } },
     ]);
     expect(recorded.payloadIndexes).toStrictEqual(["_namespace"]);
+  });
+
+  test("createIndex drops the collection when the tenant index cannot be created", async () => {
+    const { client, recorded } = fakeClient();
+    const failing: QdrantClientLike = {
+      ...client,
+      createPayloadIndex: () => Promise.reject(httpFailure(400)),
+    };
+    const result = await createQdrantStore({ client: failing }).createIndex({
+      dimension: 3,
+      name: "docs",
+    });
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "qdrant" },
+      ok: false,
+    });
+    expect(recorded.deletedCollections).toStrictEqual(["docs"]);
   });
 
   test("listIndexes returns collection names", async () => {

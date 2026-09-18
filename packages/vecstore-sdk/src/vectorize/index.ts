@@ -439,15 +439,23 @@ export const createVectorizeStore = <Client extends VectorizeClient>(
           },
           name: spec.name,
         });
-        await Promise.all(
-          metadataIndexes.map((metadataIndex) =>
-            indexes.metadataIndex.create(spec.name, {
-              account_id: accountId,
-              indexType: metadataIndex.type,
-              propertyName: metadataIndex.property,
-            })
-          )
-        );
+        try {
+          await Promise.all(
+            metadataIndexes.map((metadataIndex) =>
+              indexes.metadataIndex.create(spec.name, {
+                account_id: accountId,
+                indexType: metadataIndex.type,
+                propertyName: metadataIndex.property,
+              })
+            )
+          );
+        } catch (error) {
+          await attempt(
+            () => providerError(PROVIDER, error),
+            () => indexes.delete(spec.name, { account_id: accountId })
+          );
+          throw error;
+        }
       }),
 
     deleteIndex: (name) =>

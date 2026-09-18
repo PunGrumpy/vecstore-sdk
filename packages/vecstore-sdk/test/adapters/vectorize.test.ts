@@ -137,7 +137,7 @@ const runAction = (action: string, body: string, stored: Store): Response => {
   }
 };
 
-const fakeCloudflare = () => {
+const fakeCloudflare = (failing: ReadonlySet<string> = new Set()) => {
   const stored: Store = new Map();
   const calls: Call[] = [];
 
@@ -154,9 +154,21 @@ const fakeCloudflare = () => {
         ? envelope([{ name: "docs" }, { name: "logs" }])
         : envelope({ name: parse<CreateBody>(body).name });
     }
-    return action === undefined
-      ? envelope(null)
-      : runAction(action, body, stored);
+    if (action === undefined) {
+      return envelope(null);
+    }
+    if (failing.has(action)) {
+      return Response.json(
+        {
+          errors: [{ code: 1000, message: "metadata index limit reached" }],
+          messages: [],
+          result: null,
+          success: false,
+        },
+        { status: 400 }
+      );
+    }
+    return runAction(action, body, stored);
   };
 
   const client = new Cloudflare({
@@ -233,6 +245,27 @@ describe(createVectorizeStore, () => {
       indexType: "string",
       propertyName: "genre",
     });
+  });
+
+  test("createIndex deletes the index when a metadata index cannot be created", async () => {
+    const { calls, client } = fakeCloudflare(new Set(["metadata_index"]));
+    const result = await createVectorizeStore({
+      accountId: ACCOUNT_ID,
+      client,
+      metadataIndexes: [{ property: "genre", type: "string" }],
+    }).createIndex({ dimension: 3, name: "docs" });
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "vectorize" },
+      ok: false,
+    });
+    const metadataIndexCall = calls.findIndex((call) =>
+      call.path.endsWith("/metadata_index/create")
+    );
+    const deleteCall = calls.findIndex(
+      (call) => call.method === "DELETE" && call.path === "/docs"
+    );
+    expect(metadataIndexCall).toBeGreaterThanOrEqual(0);
+    expect(deleteCall).toBeGreaterThan(metadataIndexCall);
   });
 
   test("a namespaced upsert hashes the id and keeps the original in _id", async () => {

@@ -1,5 +1,47 @@
 # vecstore-sdk
 
+## 0.1.2
+
+### Patch Changes
+
+- f245c79: Make `createIndex` all-or-nothing on the pgvector, Qdrant, and Cloudflare Vectorize adapters. Each one runs several provider calls in sequence, and a failure partway through used to leave the earlier calls standing, so the caller got an error and a half-built index that reported `already_exists` on the retry.
+
+  The pgvector adapter sends `CREATE EXTENSION`, `CREATE TABLE`, and the two `CREATE INDEX` statements as one `DO` block, which the server runs in a single implicit transaction. The HNSW index caps a `vector` column at 2000 dimensions, so a 3072-dimension index used to leave a table with no vector index on it and every later `query` fell back to an exact scan. Nothing changes for `PgQueryable`, so a `pg` Pool, a `pg` Client, and postgres.js through `sql.unsafe` all keep working.
+
+  The Qdrant adapter deletes the collection it just created when the `_namespace` tenant index fails, and the Vectorize adapter deletes the index it just created when a metadata index fails. Both return the original error rather than whatever the cleanup call reports.
+
+- 6fc74f0: Batch the Qdrant and Redis writes the way the other adapters already do, and cache the pgvector distance metric on the store.
+
+  Qdrant used to put the whole list in one request. Ten thousand records of 1536 dimensions is a body far past the 32 MB the REST API accepts by default, so the call failed where the other adapters split the work. `upsert` now goes out 500 points at a time, and `fetch` and `delete({ ids })` chunk their point ids at 1000 per request.
+
+  Redis used to issue one `JSON.SET` per record with nothing holding the fan-out back, and `delete({ ids })` handed the whole key list to a single `UNLINK`. Writes now run 500 records at a time, one batch after the previous one resolves, and the unlink keys are chunked the same way.
+
+  A large `upsert` is now several provider requests, so a failure can leave some of the records written. Retry the whole call: an upsert replaces by id.
+
+  The pgvector adapter read the distance metric from `pg_indexes` once per index handle, so `store.index("docs").query(...)`, the idiom the docs teach, paid a catalog round trip before every search. The cache now lives on the store, keyed by schema and table, and holds the in-flight promise, so concurrent first queries share one lookup. A lookup that fails is retried on the next query.
+
+- 9835cfc: Align six contract edges where one adapter answered a call differently from the rest.
+
+  Qdrant `deleteIndex` returns `not_found` for a collection the server does not hold. The client returns the server's boolean and the adapter used to discard it, so deleting a name that never existed came back `ok` while the other six adapters report `not_found`.
+
+  `createIndex` rejects a `dimension` that is not a positive integer on every adapter, with the message pgvector and Supabase already used. The check used to live on those two only, so `dimension: 0` was a clean `invalid_argument` on two providers and a provider-shaped error on the rest, and Redis went as far as sending `FT.CREATE` with `DIM 0`. The check in `sql/supabase.sql` stays where it is.
+
+  Pinecone `query` honors `includeMetadata` and `includeVector` on the records it returns. The adapter used to forward both flags and return whatever came back, and Pinecone answers with `values: []` rather than leaving the field out, so a `ScoredRecord` from Pinecone had a different shape than one from the other six adapters.
+
+  An upsert batch that repeats an id keeps the last record on pgvector and Supabase. Postgres refuses an `INSERT ... ON CONFLICT DO UPDATE` that names the same key twice in one statement, so such a batch used to come back as a `provider` error where the other five adapters accepted it.
+
+  Supabase reports a `TypeError` that is not a failed fetch as a `provider` error. Every `TypeError` used to count as a connection failure, so a bug in the adapter or in `supabase-js` reached the caller as `kind: "connection"` and a retry policy kept retrying a call that can never succeed.
+
+  Redis delete by filter unlinks only keys under the index prefix, and an index name holding a `:` is now rejected with `invalid_argument` on `createIndex` and on every verb. `FT.SEARCH` scopes on the namespace field rather than on the key prefix, so an index named `docs` and one named `docs:v2` shared a keyspace and a delete in the first took the second one's documents with it. If you already run an index whose name holds a colon, rename it before you upgrade.
+
+- 507195c: Close three gaps in the namespace emulation the Qdrant, Cloudflare Vectorize, and Upstash metadata-mode adapters share.
+
+  A default-namespace handle could reach a record that belongs to another namespace through an id. Qdrant `delete({ ids })` now sends the `_namespace` condition next to a `has_id` condition instead of a bare point list, and Qdrant `fetch` drops a point whose payload reports a different namespace. Vectorize and Upstash read a default-namespace delete back before they send it and remove only the ids whose stored record reports no namespace. A handle with a namespace is unchanged, and Upstash native mode, which has real namespaces, keeps its single call.
+
+  The three adapters join the namespace and the id with a slash when they build a stored id, and the join is ambiguous: namespace `a` with id `1/b` and namespace `a/3` with id `b` produce the same string. `upsert`, `query`, `fetch`, and `delete` now return `invalid_argument` for a namespace that contains a slash rather than letting two tenants collide on one stored id.
+
+  `upsert` also returns `invalid_argument` for a record whose metadata sets a key the adapter keeps for itself, `_id` or `_namespace`, which previously let a caller decide the id a record reads back under.
+
 ## 0.1.1
 
 ### Patch Changes

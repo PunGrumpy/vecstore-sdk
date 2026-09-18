@@ -37,6 +37,7 @@ export {
   compileQdrantFilter,
   type QdrantCondition,
   type QdrantFilter,
+  type QdrantHasIdCondition,
 } from "../filter/qdrant";
 
 export type QdrantDistance = "Cosine" | "Euclid" | "Dot";
@@ -150,6 +151,14 @@ const fromPoint = (point: QdrantStoredPoint): string => {
 
 const readMetadata = (point: QdrantStoredPoint): Metadata =>
   metadataFromEntries(payloadEntries(point), RESERVED_KEYS);
+
+const inNamespace = (namespace: string, point: QdrantStoredPoint): boolean => {
+  const stored = payloadEntries(point).find(
+    ([key]) => key === QDRANT_NAMESPACE_KEY
+  );
+  const reported = stored !== undefined && isString(stored[1]) ? stored[1] : "";
+  return reported === namespace;
+};
 
 const readVector = (point: QdrantStoredPoint): number[] | undefined =>
   isNumberArray(point.vector) ? point.vector : undefined;
@@ -275,7 +284,12 @@ const createIndex = (
       run(name, async () => {
         if ("ids" in selector) {
           await client.delete(name, {
-            points: selector.ids.map((id) => toPointId(namespace, id)),
+            filter: {
+              must: [
+                namespaceCondition(namespace),
+                { has_id: selector.ids.map((id) => toPointId(namespace, id)) },
+              ],
+            },
             wait: true,
           });
           return;
@@ -297,11 +311,16 @@ const createIndex = (
           with_payload: true,
           with_vector: fetchOptions.includeVector ?? false,
         });
-        const records = points.map((point): VectorRecord => ({
-          id: fromPoint(point),
-          metadata: readMetadata(point),
-          vector: readVector(point) ?? [],
-        }));
+        const records: VectorRecord[] = [];
+        for (const point of points) {
+          if (inNamespace(namespace, point)) {
+            records.push({
+              id: fromPoint(point),
+              metadata: readMetadata(point),
+              vector: readVector(point) ?? [],
+            });
+          }
+        }
         return sortByIds(ids, records);
       }),
 

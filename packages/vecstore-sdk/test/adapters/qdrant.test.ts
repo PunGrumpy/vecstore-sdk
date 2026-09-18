@@ -202,7 +202,10 @@ describe(createQdrantStore, () => {
     await index.delete({ filter: eq("genre", "drama") });
     await index.delete({ all: true });
     expect(recorded.deletes).toStrictEqual([
-      { points: [UUID], wait: true },
+      {
+        filter: { must: [defaultScope, { has_id: [UUID] }] },
+        wait: true,
+      },
       {
         filter: {
           must: [
@@ -214,6 +217,29 @@ describe(createQdrantStore, () => {
       },
       { filter: { must: [defaultScope] }, wait: true },
     ]);
+  });
+
+  test("a default namespace handle cannot fetch a point from another namespace", async () => {
+    const { client, recorded } = fakeClient();
+    const store = createQdrantStore({ client });
+    await store
+      .index("docs", { namespace: "tenant-a" })
+      .upsert([{ id: "doc-1", vector: [1] }]);
+    const stored = recorded.upserts[0]?.[0]?.id;
+    await expect(
+      store.index("docs").fetch([String(stored)])
+    ).resolves.toStrictEqual({ ok: true, value: [] });
+  });
+
+  test("a default namespace handle scopes an id delete to the default namespace", async () => {
+    const { client, recorded } = fakeClient();
+    await createQdrantStore({ client })
+      .index("docs")
+      .delete({ ids: [UUID] });
+    expect(recorded.deletes[0]).toStrictEqual({
+      filter: { must: [defaultScope, { has_id: [UUID] }] },
+      wait: true,
+    });
   });
 
   test.each(statusKinds)("HTTP %i becomes %s", (status, kind) => {

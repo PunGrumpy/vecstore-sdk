@@ -16,7 +16,9 @@ import { sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
 import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
+import { namespaceError } from "../internal/namespace";
 import { deterministicUuid, isUuid } from "../internal/uuid";
+import { err } from "../result";
 import type {
   DeleteSelector,
   FetchOptions,
@@ -279,9 +281,13 @@ const createIndex = (
   options: IndexOptions
 ): VectorIndex => {
   const namespace = options.namespace ?? "";
+  const invalid = namespaceError(PROVIDER, namespace);
   return {
-    delete: (selector: DeleteSelector) =>
-      run(name, async () => {
+    delete: (selector: DeleteSelector): VecResult<void> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         if ("ids" in selector) {
           await client.delete(name, {
             filter: {
@@ -299,10 +305,17 @@ const createIndex = (
           filter: scopeQdrantFilter(options.namespace, filter),
           wait: true,
         });
-      }),
+      });
+    },
 
-    fetch: (ids, fetchOptions: FetchOptions = {}) =>
-      run(name, async () => {
+    fetch: (
+      ids,
+      fetchOptions: FetchOptions = {}
+    ): VecResult<VectorRecord[]> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         if (ids.length === 0) {
           return [];
         }
@@ -322,14 +335,18 @@ const createIndex = (
           }
         }
         return sortByIds(ids, records);
-      }),
+      });
+    },
 
     name,
 
     namespace: options.namespace,
 
-    query: (query: QueryOptions) =>
-      run(name, async () => {
+    query: (query: QueryOptions): VecResult<ScoredRecord[]> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         const includeMetadata = query.includeMetadata ?? true;
         const response = await client.query(name, {
           filter: scopeQdrantFilter(options.namespace, query.filter),
@@ -344,10 +361,14 @@ const createIndex = (
           score: point.score,
           vector: readVector(point),
         }));
-      }),
+      });
+    },
 
-    upsert: (records) =>
-      run(name, async () => {
+    upsert: (records): VecResult<void> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         if (records.length === 0) {
           return;
         }
@@ -360,7 +381,8 @@ const createIndex = (
           };
         });
         await client.upsert(name, { points, wait: true });
-      }),
+      });
+    },
   };
 };
 

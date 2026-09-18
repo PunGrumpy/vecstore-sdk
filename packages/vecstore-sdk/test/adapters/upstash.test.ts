@@ -359,6 +359,18 @@ describe(createUpstashStore, () => {
     expect(!missing.ok && missing.error.kind).toBe("not_found");
   });
 
+  test("metadata mode rejects a namespace containing a slash", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createUpstashStore({ client })
+      .index("docs", { namespace: "a/3" })
+      .upsert([{ id: "b", vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "upstash" },
+      ok: false,
+    });
+    expect(recorded.upserts).toStrictEqual([]);
+  });
+
   test("a filter Upstash cannot express is an invalid argument", async () => {
     const { client } = fakeClient();
     const result = await createUpstashStore({ client })
@@ -503,6 +515,18 @@ describe("upstash native namespaces", () => {
       .index("docs", { namespace: "tenant a" })
       .upsert([{ id: "a", vector: [1, 0, 0] }]);
     expect(!escaped.ok && escaped.error.kind).toBe("invalid_argument");
+  });
+
+  test("native mode rejects a namespace containing a slash too", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await nativeStore(client)
+      .index("docs", { namespace: "a/3" })
+      .upsert([{ id: "b", vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "upstash" },
+      ok: false,
+    });
+    expect(recorded.upserts).toStrictEqual([]);
   });
 
   test("metadata mode rejects an index name that needs URL escaping", async () => {

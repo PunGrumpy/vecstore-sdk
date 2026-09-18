@@ -16,6 +16,8 @@ import { chunk, sortByIds } from "../internal/collections";
 import { isString } from "../internal/guards";
 import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
+import { namespaceError } from "../internal/namespace";
+import { err } from "../result";
 import type {
   DeleteSelector,
   FetchOptions,
@@ -272,6 +274,7 @@ interface UpstashLayout {
   ) => UpstashRecordLike;
   readonly compileFilter: (namespace: string, filter: Filter) => string;
   readonly defaultFilter?: (namespace: string) => string;
+  readonly emulatesNamespace: boolean;
   readonly clear: (
     client: UpstashIndexLike,
     index: string,
@@ -332,6 +335,7 @@ const METADATA_LAYOUT: UpstashLayout = {
   compileFilter: (namespace, filter) => scopeUpstashFilter(namespace, filter),
   defaultFilter: (namespace) => scopeUpstashFilter(namespace),
   deletableIds: metadataDeletableIds,
+  emulatesNamespace: true,
   indexOf: (upstashNamespace) => upstashNamespace,
   owns: (index, upstashNamespace) => upstashNamespace === index,
   readId: readStoredId,
@@ -364,6 +368,7 @@ const NATIVE_LAYOUT: UpstashLayout = {
   compileFilter: (_namespace, filter) => compileUpstashFilter(filter),
   deletableIds: (_client, _index, _namespace, storedIds) =>
     Promise.resolve([...storedIds]),
+  emulatesNamespace: false,
   indexOf: (upstashNamespace) =>
     upstashNamespace.split(NAMESPACE_SEPARATOR)[0] ?? upstashNamespace,
   owns: (index, upstashNamespace) =>
@@ -411,9 +416,15 @@ const createIndex = (
   const scope = (): UpstashNamespaceOptions => ({
     namespace: layout.upstashNamespace(name, namespace),
   });
+  const invalid = layout.emulatesNamespace
+    ? namespaceError(PROVIDER, namespace)
+    : undefined;
   return {
-    delete: (selector: DeleteSelector) =>
-      run(name, async () => {
+    delete: (selector: DeleteSelector): VecResult<void> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         if ("ids" in selector) {
           const stored = selector.ids.map((id) =>
             layout.storedId(namespace, id)
@@ -443,10 +454,17 @@ const createIndex = (
           return;
         }
         await layout.clear(client, name, namespace);
-      }),
+      });
+    },
 
-    fetch: (ids, fetchOptions: FetchOptions = {}) =>
-      run(name, async () => {
+    fetch: (
+      ids,
+      fetchOptions: FetchOptions = {}
+    ): VecResult<VectorRecord[]> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         const includeVectors = fetchOptions.includeVector ?? false;
         const target = scope();
         const batches = chunk(
@@ -473,14 +491,18 @@ const createIndex = (
           }
         }
         return sortByIds(ids, records);
-      }),
+      });
+    },
 
     name,
 
     namespace: options.namespace,
 
-    query: (query: QueryOptions) =>
-      run(name, async () => {
+    query: (query: QueryOptions): VecResult<ScoredRecord[]> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         const includeMetadata = query.includeMetadata ?? true;
         const matches = await client.query(
           {
@@ -501,10 +523,14 @@ const createIndex = (
           score: match.score,
           vector: match.vector,
         }));
-      }),
+      });
+    },
 
-    upsert: (records) =>
-      run(name, async () => {
+    upsert: (records): VecResult<void> => {
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         const target = scope();
         const stored = records.map((record) =>
           layout.storedRecord(namespace, record)
@@ -514,7 +540,8 @@ const createIndex = (
             client.upsert(batch, target)
           )
         );
-      }),
+      });
+    },
   };
 };
 

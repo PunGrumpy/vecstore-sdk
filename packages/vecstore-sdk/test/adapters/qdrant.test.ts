@@ -242,6 +242,18 @@ describe(createQdrantStore, () => {
     });
   });
 
+  test("a namespace containing a slash is rejected before the request", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createQdrantStore({ client })
+      .index("docs", { namespace: "a/3" })
+      .upsert([{ id: "b", vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "qdrant" },
+      ok: false,
+    });
+    expect(recorded.upserts).toStrictEqual([]);
+  });
+
   test.each(statusKinds)("HTTP %i becomes %s", (status, kind) => {
     expect(normalizeQdrantError(httpFailure(status), "docs").kind).toBe(kind);
   });

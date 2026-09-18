@@ -424,6 +424,18 @@ describe(createVectorizeStore, () => {
     });
   });
 
+  test("a namespace containing a slash is rejected before the request", async () => {
+    const { calls, client } = fakeCloudflare();
+    const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs", { namespace: "a/3" })
+      .upsert([{ id: "b", vector: [1] }]);
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "vectorize" },
+      ok: false,
+    });
+    expect(bodiesFor(calls, "/upsert")).toStrictEqual([]);
+  });
+
   test("listIndexes reads the names off the page", async () => {
     const { client } = fakeCloudflare();
     await expect(

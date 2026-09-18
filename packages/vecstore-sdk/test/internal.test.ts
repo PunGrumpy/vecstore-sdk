@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { chunk, sortByIds } from "../src/internal/collections";
 import { isMetadataEntry, metadataFromEntries } from "../src/internal/metadata";
+import { namespaceError } from "../src/internal/namespace";
 import { deterministicUuid, isUuid } from "../src/internal/uuid";
 
 describe(deterministicUuid, () => {
@@ -44,6 +45,13 @@ describe("metadata entries", () => {
       c: true,
       d: ["y"],
     });
+  });
+});
+
+describe(namespaceError, () => {
+  test("only a namespace holding the encoding separator is an error", () => {
+    expect(namespaceError("qdrant", "tenant-a")).toBeUndefined();
+    expect(namespaceError("qdrant", "a/3")?.kind).toBe("invalid_argument");
   });
 });
 

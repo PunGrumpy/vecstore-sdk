@@ -156,7 +156,7 @@ import { createQdrantStore } from "vecstore-sdk/qdrant";
 const store = createQdrantStore({ client: new QdrantClient({ url, apiKey }) });
 ```
 
-An index is a collection. Qdrant accepts only UUID or integer point ids. The adapter hashes other ids to a deterministic UUID and stores your id in the `_id` payload key. Lowercase UUID ids in the default namespace pass through unchanged. Namespaces live in the `_namespace` payload key, and `createIndex` adds a tenant keyword index on it. The adapter strips both keys from returned metadata.
+An index is a collection. Qdrant accepts only UUID or integer point ids. The adapter hashes other ids to a deterministic UUID and stores your id in the `_id` payload key. Lowercase UUID ids in the default namespace pass through unchanged. Namespaces live in the `_namespace` payload key, and `createIndex` adds a tenant keyword index on it. The adapter strips both keys from returned metadata. A namespace cannot contain `/`.
 
 ### pgvector
 
@@ -218,7 +218,7 @@ const store = createUpstashStore({ client: new Index({ url, token }) });
 
 One store talks to one Upstash vector index. `@upstash/vector` cannot create an index, so create it in the Upstash console first. The dimension and the similarity function are fixed there. An index name is an Upstash namespace inside it, so `createIndex` checks your spec against `info()`, `deleteIndex` deletes the namespace, and `listIndexes` returns them.
 
-The index name already uses the one namespace Upstash gives you, so `namespaceMode` picks where the `namespace` option lives. The default, `"metadata"`, keeps it in the `_namespace` metadata key, which the adapter adds to every query and filtered delete, and stores ids as `{namespace}/{length}/{id}` with the original in `_id`. Records in the default namespace keep their id and carry neither key, and the adapter strips both keys from returned metadata.
+The index name already uses the one namespace Upstash gives you, so `namespaceMode` picks where the `namespace` option lives. The default, `"metadata"`, keeps it in the `_namespace` metadata key, which the adapter adds to every query and filtered delete, and stores ids as `{namespace}/{length}/{id}` with the original in `_id`. Records in the default namespace keep their id and carry neither key, and the adapter strips both keys from returned metadata. In this mode a namespace cannot contain `/`.
 
 `"native"` gives each index and namespace pair its own Upstash namespace, named `{index}` or `{index}~{namespace}`. Ids and metadata are stored as you wrote them, queries carry no namespace filter, and `delete({ all: true })` resets the namespace in one call. Upstash caps namespaces at 100 on the free plan and 10,000 on the paid plans, so choose this mode when you can name your namespaces up front. Nothing migrates between the two modes.
 
@@ -246,7 +246,7 @@ The adapter drives the Vectorize v2 HTTP API through the official `cloudflare` c
 
 Vectorize filters only work on properties that carry a metadata index, and a metadata index has to exist before you insert. `metadataIndexes` opens them, and `createIndex` creates them right after the index. Vectorize allows ten per index, and you cannot add one for data already written.
 
-Namespaces are native. The adapter sends the namespace with every vector and scopes every query to it. A Vectorize id is unique across the whole index rather than within a namespace, so the adapter hashes the id of a namespaced record to a deterministic UUID and keeps your id in the `_id` metadata key, the way the Qdrant adapter does. Records in the default namespace keep their id unless it exceeds the 64 byte Vectorize limit. The adapter strips `_id` from returned metadata.
+Namespaces are native. The adapter sends the namespace with every vector and scopes every query to it. A Vectorize id is unique across the whole index rather than within a namespace, so the adapter hashes the id of a namespaced record to a deterministic UUID and keeps your id in the `_id` metadata key, the way the Qdrant adapter does. Records in the default namespace keep their id unless it exceeds the 64 byte Vectorize limit. The adapter strips `_id` from returned metadata. A namespace cannot contain `/`.
 
 Three things Vectorize cannot do come back as `unsupported`:
 

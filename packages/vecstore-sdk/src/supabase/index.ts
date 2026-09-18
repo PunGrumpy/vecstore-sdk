@@ -126,8 +126,7 @@ interface CallContext {
 }
 
 const isFetchFailure = (cause: unknown): boolean =>
-  cause instanceof TypeError ||
-  (cause instanceof Error && FETCH_FAILURE.test(cause.message));
+  cause instanceof Error && FETCH_FAILURE.test(cause.message);
 
 export const normalizeSupabaseError = (
   cause: unknown,

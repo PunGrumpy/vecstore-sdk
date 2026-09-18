@@ -329,6 +329,14 @@ describe(createSupabaseStore, () => {
     expect(error.kind).toBe("connection");
   });
 
+  test("a TypeError that is not a fetch failure is a provider error", () => {
+    const error = normalizeSupabaseError(new TypeError("x is not a function"), {
+      fn: "vecstore_query",
+      index: "docs",
+    });
+    expect(error.kind).toBe("provider");
+  });
+
   test("an error without a code is a provider error", () => {
     const error = normalizeSupabaseError(new Error("plain"), {
       fn: "vecstore_query",

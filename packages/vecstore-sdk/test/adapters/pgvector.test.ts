@@ -20,17 +20,25 @@ const UPSERT_COLUMNS = 4;
 
 const pgError = (code: string) => Object.assign(new Error(code), { code });
 
-const fakeClient = (responses: object[][] = []) => {
+const fakeClient = (responses: object[][] = [], failures = 0) => {
   const calls: Call[] = [];
   const pending = [...responses];
+  let remaining = failures;
   const client: PgQueryable = {
     query: (text, params) => {
       calls.push({ params, text });
+      if (remaining > 0) {
+        remaining -= 1;
+        return Promise.reject(pgError("XX000"));
+      }
       return Promise.resolve({ rows: pending.shift() ?? [] });
     },
   };
   return { calls, client };
 };
+
+const catalogCalls = (calls: readonly Call[]): number =>
+  calls.filter((call) => call.text.startsWith("SELECT indexdef")).length;
 
 const codeKinds: [string, VecstoreError["kind"]][] = [
   ["42P01", "not_found"],
@@ -165,8 +173,8 @@ describe(createPgvectorStore, () => {
         },
       ],
     ]);
-    const index = createPgvectorStore({ client }).index("docs");
-    const result = await index.query({
+    const store = createPgvectorStore({ client });
+    const result = await store.index("docs").query({
       filter: and(eq("genre", "drama"), gt("year", 2000)),
       includeVector: true,
       topK: 3,
@@ -187,8 +195,36 @@ describe(createPgvectorStore, () => {
       params: ["", "[1,2]", '{"genre":"drama"}', "year", "2000", 3],
       text: `SELECT id, metadata, embedding::text AS embedding, -(embedding <#> $2::vector) AS score FROM "docs" WHERE namespace = $1 AND (metadata @> $3::jsonb AND (jsonb_typeof((metadata->$4::text)) = 'number' AND (metadata->$4::text) > $5::jsonb)) ORDER BY embedding <#> $2::vector LIMIT $6`,
     });
-    await index.query({ topK: 1, vector: [0, 0] });
+    await store.index("docs").query({ topK: 1, vector: [0, 0] });
     expect(calls).toHaveLength(3);
+  });
+
+  test("the metric is resolved once even when the first two queries run together", async () => {
+    const { client, calls } = fakeClient([
+      [
+        {
+          indexdef:
+            "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_ip_ops)",
+        },
+      ],
+    ]);
+    const store = createPgvectorStore({ client });
+    await Promise.all([
+      store.index("docs").query({ topK: 1, vector: [1, 2] }),
+      store.index("docs").query({ topK: 1, vector: [3, 4] }),
+    ]);
+    expect(catalogCalls(calls)).toBe(1);
+    expect(calls).toHaveLength(3);
+  });
+
+  test("a failed metric lookup is retried on the next query", async () => {
+    const { client, calls } = fakeClient([], 1);
+    const index = createPgvectorStore({ client }).index("docs");
+    const failed = await index.query({ topK: 1, vector: [1, 2] });
+    expect(failed).toMatchObject({ ok: false });
+    const retried = await index.query({ topK: 1, vector: [1, 2] });
+    expect(retried.ok).toBeTruthy();
+    expect(catalogCalls(calls)).toBe(2);
   });
 
   test("fetch and delete scope by namespace", async () => {

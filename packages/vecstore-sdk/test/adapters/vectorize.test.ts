@@ -16,6 +16,7 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 const MAX_ID_BYTES = 64;
+const UPSERT_BATCH = 1000;
 const ACCOUNT_ID = "account-1";
 
 interface StoredVector {
@@ -271,6 +272,44 @@ describe(createVectorizeStore, () => {
     const upsert = calls.find((call) => call.path.endsWith("/upsert"));
     const params = new URLSearchParams(upsert?.search);
     expect(params.get("unparsable-behavior")).toBe("error");
+  });
+
+  test("upsert splits into 1000-line NDJSON bodies", async () => {
+    const { calls, client } = fakeCloudflare();
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .upsert(
+        Array.from({ length: UPSERT_BATCH + 1 }, (_, i) => ({
+          id: `r${i}`,
+          vector: [i],
+        }))
+      );
+    const bodies = bodiesFor(calls, "/upsert");
+    expect(bodies.map((body) => body.split("\n").length)).toStrictEqual([
+      UPSERT_BATCH,
+      1,
+    ]);
+  });
+
+  test("fetch currently keeps a stored vector that reports no namespace and drops one from another namespace", async () => {
+    const { client, stored } = fakeCloudflare();
+    const bare = toVectorizeId("tenant-a", "doc-x");
+    const foreign = toVectorizeId("tenant-a", "doc-y");
+    stored.set(bare, { id: bare, metadata: { _id: "doc-x" }, values: [1] });
+    stored.set(foreign, {
+      id: foreign,
+      metadata: { _id: "doc-y" },
+      namespace: "tenant-b",
+      values: [2],
+    });
+    await expect(
+      createVectorizeStore({ accountId: ACCOUNT_ID, client })
+        .index("docs", { namespace: "tenant-a" })
+        .fetch(["doc-x", "doc-y"])
+    ).resolves.toStrictEqual({
+      ok: true,
+      value: [{ id: "doc-x", metadata: {}, vector: [] }],
+    });
   });
 
   test("query scopes by namespace and returns the original id", async () => {

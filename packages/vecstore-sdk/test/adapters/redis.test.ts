@@ -208,6 +208,16 @@ describe(createRedisStore, () => {
     });
   });
 
+  test("createIndex rejects a non-positive dimension before touching the client", async () => {
+    const fake = createFakeClient();
+    const result = await createRedisStore({ client: fake.client }).createIndex({
+      dimension: 0,
+      name: INDEX,
+    });
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(fake.creates).toHaveLength(0);
+  });
+
   test("createIndex refuses a metadata field the adapter keeps", async () => {
     const fake = createFakeClient();
     const store = createRedisStore({

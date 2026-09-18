@@ -13,6 +13,8 @@ import { compilePineconeFilter } from "../filter/pinecone";
 import type { PineconeFilter } from "../filter/pinecone";
 import { attempt } from "../internal/attempt";
 import { chunk, sortByIds } from "../internal/collections";
+import { indexSpecError } from "../internal/index-spec";
+import { err } from "../result";
 import type {
   DeleteSelector,
   FetchOptions,
@@ -292,8 +294,12 @@ export const createPineconeStore = <
   const { client } = options;
   const spec = options.indexSpec ?? DEFAULT_SPEC;
   return {
-    createIndex: (indexSpec: IndexSpec) =>
-      run({ index: indexSpec.name }, async () => {
+    createIndex: (indexSpec: IndexSpec) => {
+      const invalid = indexSpecError(PROVIDER, indexSpec);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run({ index: indexSpec.name }, async () => {
         await client.createIndex({
           dimension: indexSpec.dimension,
           metric: METRICS[indexSpec.metric ?? "cosine"],
@@ -301,7 +307,8 @@ export const createPineconeStore = <
           spec,
           waitUntilReady: true,
         });
-      }),
+      });
+    },
 
     deleteIndex: (name) => run({ index: name }, () => client.deleteIndex(name)),
 

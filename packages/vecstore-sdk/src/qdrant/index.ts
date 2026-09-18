@@ -14,6 +14,7 @@ import type { QdrantCondition, QdrantFilter } from "../filter/qdrant";
 import { attempt } from "../internal/attempt";
 import { sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
+import { indexSpecError } from "../internal/index-spec";
 import {
   isMetadataEntry,
   metadataFromEntries,
@@ -407,8 +408,12 @@ export const createQdrantStore = <Client extends QdrantClientLike>(
 ): VectorStore<Client> => {
   const { client } = options;
   return {
-    createIndex: (spec: IndexSpec) =>
-      run(spec.name, async () => {
+    createIndex: (spec: IndexSpec) => {
+      const invalid = indexSpecError(PROVIDER, spec);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(spec.name, async () => {
         await client.createCollection(spec.name, {
           vectors: {
             distance: DISTANCES[spec.metric ?? "cosine"],
@@ -428,7 +433,8 @@ export const createQdrantStore = <Client extends QdrantClientLike>(
           );
           throw error;
         }
-      }),
+      });
+    },
 
     deleteIndex: (name) =>
       run(name, async () => {

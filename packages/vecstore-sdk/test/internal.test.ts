@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { chunk, sortByIds } from "../src/internal/collections";
+import { indexSpecError } from "../src/internal/index-spec";
 import {
   isMetadataEntry,
   metadataFromEntries,
@@ -72,6 +73,23 @@ describe(namespaceError, () => {
   test("only a namespace holding the encoding separator is an error", () => {
     expect(namespaceError("qdrant", "tenant-a")).toBeUndefined();
     expect(namespaceError("qdrant", "a/3")?.kind).toBe("invalid_argument");
+  });
+});
+
+describe(indexSpecError, () => {
+  test("only a positive integer dimension is accepted", () => {
+    expect(
+      indexSpecError("qdrant", { dimension: 3, name: "docs" })
+    ).toBeUndefined();
+    expect(
+      indexSpecError("qdrant", { dimension: 1.5, name: "docs" })?.kind
+    ).toBe("invalid_argument");
+    expect(indexSpecError("qdrant", { dimension: 0, name: "docs" })?.kind).toBe(
+      "invalid_argument"
+    );
+    expect(
+      indexSpecError("qdrant", { dimension: -3, name: "docs" })?.kind
+    ).toBe("invalid_argument");
   });
 });
 

@@ -29,6 +29,7 @@ import {
   isObjectLike,
   isString,
 } from "../internal/guards";
+import { indexSpecError } from "../internal/index-spec";
 import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
 import { err, ok } from "../result";
 import type { Result } from "../result";
@@ -696,6 +697,10 @@ export const createRedisStore = <Client extends RedisClientLike>(
   const algorithm = options.algorithm ?? DEFAULT_ALGORITHM;
   return {
     createIndex: (spec: IndexSpec) => {
+      const invalid = indexSpecError(PROVIDER, spec);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
       for (const field of fields) {
         const message = redisFieldError(field);
         if (message !== undefined) {

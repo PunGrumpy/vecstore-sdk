@@ -144,6 +144,16 @@ describe(createQdrantStore, () => {
     expect(recorded.deletedCollections).toStrictEqual(["docs"]);
   });
 
+  test("createIndex rejects a non-positive dimension before touching the client", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createQdrantStore({ client }).createIndex({
+      dimension: 0,
+      name: "docs",
+    });
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded.createCollections).toHaveLength(0);
+  });
+
   test("deleteIndex succeeds when the server deleted the collection", async () => {
     const { client, recorded } = fakeClient();
     await expect(

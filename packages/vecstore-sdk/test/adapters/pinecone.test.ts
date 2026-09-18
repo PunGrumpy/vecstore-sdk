@@ -137,6 +137,16 @@ describe(createPineconeStore, () => {
     ]);
   });
 
+  test("createIndex rejects a non-positive dimension before touching the client", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createPineconeStore({ client }).createIndex({
+      dimension: 0,
+      name: "docs",
+    });
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded.createIndexes).toHaveLength(0);
+  });
+
   test("namespaced verbs pass the namespace through", async () => {
     const { client, recorded } = fakeClient();
     const index = createPineconeStore({ client }).index("docs", {

@@ -20,6 +20,7 @@ import type {
 import { attempt } from "../internal/attempt";
 import { chunk, sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
+import { indexSpecError } from "../internal/index-spec";
 import {
   isMetadataEntry,
   metadataFromEntries,
@@ -429,8 +430,12 @@ export const createVectorizeStore = <Client extends VectorizeClient>(
   const { indexes } = client.vectorize;
   const metadataIndexes = options.metadataIndexes ?? [];
   return {
-    createIndex: (spec: IndexSpec) =>
-      run(spec.name, async () => {
+    createIndex: (spec: IndexSpec) => {
+      const invalid = indexSpecError(PROVIDER, spec);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(spec.name, async () => {
         await indexes.create({
           account_id: accountId,
           config: {
@@ -456,7 +461,8 @@ export const createVectorizeStore = <Client extends VectorizeClient>(
           );
           throw error;
         }
-      }),
+      });
+    },
 
     deleteIndex: (name) =>
       run(name, async () => {

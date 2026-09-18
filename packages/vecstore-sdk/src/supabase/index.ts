@@ -1,13 +1,9 @@
-import {
-  connection,
-  invalidArgument,
-  unauthorized,
-  unsupported,
-} from "../errors";
+import { connection, unauthorized, unsupported } from "../errors";
 import type { VecstoreError } from "../errors";
 import type { Filter } from "../filter/ast";
 import { attempt } from "../internal/attempt";
 import { chunk, sortByIds } from "../internal/collections";
+import { indexSpecError } from "../internal/index-spec";
 import {
   hasCode,
   isNamedRow,
@@ -302,15 +298,9 @@ export const createSupabaseStore = <Client extends SupabaseClientLike>(
 
   return {
     createIndex: (spec: IndexSpec) => {
-      if (!Number.isInteger(spec.dimension) || spec.dimension <= 0) {
-        return Promise.resolve(
-          err(
-            invalidArgument(
-              PROVIDER,
-              `dimension must be a positive integer, got ${spec.dimension}`
-            )
-          )
-        );
+      const invalid = indexSpecError(PROVIDER, spec);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
       }
       return run(
         { fn: "vecstore_create_index", index: spec.name },

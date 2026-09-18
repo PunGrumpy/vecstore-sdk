@@ -247,6 +247,19 @@ describe(createVectorizeStore, () => {
     });
   });
 
+  test("createIndex rejects a non-positive dimension before touching the client", async () => {
+    const { calls, client } = fakeCloudflare();
+    const result = await createVectorizeStore({
+      accountId: ACCOUNT_ID,
+      client,
+    }).createIndex({ dimension: 0, name: "docs" });
+    expect(result).toMatchObject({
+      error: { kind: "invalid_argument", provider: "vectorize" },
+      ok: false,
+    });
+    expect(calls).toHaveLength(0);
+  });
+
   test("createIndex deletes the index when a metadata index cannot be created", async () => {
     const { calls, client } = fakeCloudflare(new Set(["metadata_index"]));
     const result = await createVectorizeStore({

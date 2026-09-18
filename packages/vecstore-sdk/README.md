@@ -303,6 +303,7 @@ Live tests run the same conformance suite against real backends. Set `VECSTORE_L
 
 ```bash
 QDRANT_URL=http://localhost:6333 \
+QDRANT_API_KEY=your_qdrant_api_key \
 PGVECTOR_URL=postgres://postgres:postgres@localhost:5432/postgres \
 PINECONE_API_KEY=pcsk_1234567890 \
 SUPABASE_URL=https://your_project_ref_here.supabase.co \
@@ -315,7 +316,7 @@ REDIS_URL=redis://localhost:6379 \
 bun run test:live
 ```
 
-The suite skips providers without a variable. Supabase needs the SQL functions installed and the service role key, because the suite creates and drops tables. Point the Upstash variables at a scratch index with dimension 3 and the cosine similarity function, since the adapter cannot create one. The Vectorize run skips the `delete({ all: true })` case and asserts the `unsupported` error instead. Point `REDIS_URL` at a server that carries the query engine and JSON; the Redis run adds cases for the default namespace, `exists`, list fields, and delete by filter.
+The suite skips providers without a variable. `QDRANT_API_KEY` is optional for a local Qdrant and required for Qdrant Cloud. Supabase needs the SQL functions installed and the service role key, because the suite creates and drops tables. Point the Upstash variables at a scratch index with dimension 3 and the cosine similarity function, since the adapter cannot create one. The Vectorize run skips the `delete({ all: true })` case and asserts the `unsupported` error instead. Point `REDIS_URL` at a server that carries the query engine and JSON; the Redis run adds cases for the default namespace, `exists`, list fields, and delete by filter.
 
 ## Not in v0
 

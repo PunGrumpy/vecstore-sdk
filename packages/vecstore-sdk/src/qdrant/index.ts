@@ -405,11 +405,19 @@ export const createQdrantStore = <Client extends QdrantClientLike>(
             size: spec.dimension,
           },
         });
-        await client.createPayloadIndex(spec.name, {
-          field_name: QDRANT_NAMESPACE_KEY,
-          field_schema: { is_tenant: true, type: "keyword" },
-          wait: true,
-        });
+        try {
+          await client.createPayloadIndex(spec.name, {
+            field_name: QDRANT_NAMESPACE_KEY,
+            field_schema: { is_tenant: true, type: "keyword" },
+            wait: true,
+          });
+        } catch (error) {
+          await attempt(
+            () => providerError(PROVIDER, error),
+            () => client.deleteCollection(spec.name)
+          );
+          throw error;
+        }
       }),
 
     deleteIndex: (name) =>

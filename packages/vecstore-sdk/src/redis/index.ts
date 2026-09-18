@@ -276,6 +276,13 @@ const redisFieldError = (field: RedisMetadataField): string | undefined => {
   return undefined;
 };
 
+const KEY_SEPARATOR = ":";
+
+const redisIndexNameError = (name: string): string | undefined =>
+  name.includes(KEY_SEPARATOR)
+    ? `A Redis index name cannot contain "${KEY_SEPARATOR}", because the adapter joins the key prefix, the index name, and the namespace with it. Received "${name}".`
+    : undefined;
+
 const fieldDefinition = (field: RedisMetadataField): RedisFieldDefinition =>
   field.type === "numeric"
     ? { AS: field.field, INDEXMISSING: true, type: "NUMERIC" }
@@ -513,19 +520,24 @@ const deletePage = async (
     LIMIT: { from: 0, size: DELETE_PAGE },
     RETURN: [],
   });
-  const keys = page.documents.map((document) => document.id);
+  const keys: string[] = [];
+  for (const document of page.documents) {
+    if (document.id.startsWith(context.prefix)) {
+      keys.push(document.id);
+    }
+  }
   if (keys.length > 0) {
     await context.client.unlink(keys);
   }
-  return keys.length;
+  return page.documents.length;
 };
 
 const deleteMatches = async (
   context: IndexContext,
   prefilter: string
 ): Promise<void> => {
-  const removed = await deletePage(context, prefilter);
-  if (removed === DELETE_PAGE) {
+  const hits = await deletePage(context, prefilter);
+  if (hits === DELETE_PAGE) {
     await deleteMatches(context, prefilter);
   }
 };
@@ -627,6 +639,7 @@ const createIndex = (
   options: IndexOptions
 ): VectorIndex => {
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
+  const nameMessage = redisIndexNameError(name);
   const context: IndexContext = {
     client,
     fields,
@@ -636,6 +649,9 @@ const createIndex = (
   };
   return {
     delete: (selector: DeleteSelector) => {
+      if (nameMessage !== undefined) {
+        return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
+      }
       if ("ids" in selector) {
         return run(name, async () => {
           await client.unlink(
@@ -649,8 +665,11 @@ const createIndex = (
       );
     },
 
-    fetch: (ids, fetchOptions: FetchOptions = {}) =>
-      run(name, async () => {
+    fetch: (ids, fetchOptions: FetchOptions = {}) => {
+      if (nameMessage !== undefined) {
+        return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
+      }
+      return run(name, async () => {
         if (ids.length === 0) {
           return [];
         }
@@ -659,13 +678,17 @@ const createIndex = (
           ids,
           fetchOptions.includeVector ?? false
         );
-      }),
+      });
+    },
 
     name,
 
     namespace: options.namespace,
 
     query: (query: QueryOptions) => {
+      if (nameMessage !== undefined) {
+        return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
+      }
       const prefilter = scopeRedisFilter(namespace, fields, query.filter);
       if (!prefilter.ok) {
         return Promise.resolve(err(toVecstoreError(prefilter.error)));
@@ -674,6 +697,9 @@ const createIndex = (
     },
 
     upsert: (records) => {
+      if (nameMessage !== undefined) {
+        return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
+      }
       const message = metadataError(records, fields);
       if (message !== undefined) {
         return Promise.resolve(err(invalidArgument(PROVIDER, message)));
@@ -700,6 +726,10 @@ export const createRedisStore = <Client extends RedisClientLike>(
       const invalid = indexSpecError(PROVIDER, spec);
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
+      }
+      const nameMessage = redisIndexNameError(spec.name);
+      if (nameMessage !== undefined) {
+        return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
       }
       for (const field of fields) {
         const message = redisFieldError(field);

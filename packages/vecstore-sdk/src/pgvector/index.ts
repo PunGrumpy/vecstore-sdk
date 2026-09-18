@@ -117,15 +117,18 @@ const scoreExpression = (metric: Metric, vectorParam: string): string => {
 
 interface TableContext {
   readonly client: PgQueryable;
+  readonly metric: () => Promise<Metric>;
   readonly name: string;
   readonly schema: string | undefined;
   readonly table: string;
 }
 
+type MetricTarget = Pick<TableContext, "client" | "name" | "schema">;
+
 const schemaPredicate = (schema: string | undefined, param: string): string =>
   schema === undefined ? "current_schema()" : param;
 
-const resolveMetric = async (context: TableContext): Promise<Metric> => {
+const resolveMetric = async (context: MetricTarget): Promise<Metric> => {
   const params: PgParam[] =
     context.schema === undefined
       ? [context.name]
@@ -171,11 +174,6 @@ const createIndex = (
 ): VectorIndex => {
   const { client, name, table } = context;
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
-  let metric: Metric | undefined;
-  const getMetric = async (): Promise<Metric> => {
-    metric ??= await resolveMetric(context);
-    return metric;
-  };
 
   return {
     delete: (selector: DeleteSelector) =>
@@ -226,7 +224,7 @@ const createIndex = (
 
     query: (query: QueryOptions) =>
       run(name, async () => {
-        const resolved = await getMetric();
+        const resolved = await context.metric();
         const params: PgParam[] = [namespace, vectorLiteral(query.vector)];
         const filter: PgvectorSql | undefined =
           query.filter === undefined
@@ -283,12 +281,33 @@ export const createPgvectorStore = <Client extends PgQueryable>(
     schema === undefined
       ? quoteIdent(name)
       : `${quoteIdent(schema)}.${quoteIdent(name)}`;
-  const context = (name: string): TableContext => ({
-    client,
-    name,
-    schema,
-    table: tableRef(name),
-  });
+  const metrics = new Map<string, Promise<Metric>>();
+  const lookup = async (target: MetricTarget, key: string): Promise<Metric> => {
+    try {
+      return await resolveMetric(target);
+    } catch (error) {
+      metrics.delete(key);
+      throw error;
+    }
+  };
+  const metricFor = (target: MetricTarget): Promise<Metric> => {
+    const key = `${schema ?? ""}.${target.name}`;
+    const cached = metrics.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const pending = lookup(target, key);
+    metrics.set(key, pending);
+    return pending;
+  };
+  const context = (name: string): TableContext => {
+    const target: MetricTarget = { client, name, schema };
+    return {
+      ...target,
+      metric: () => metricFor(target),
+      table: tableRef(name),
+    };
+  };
 
   return {
     createIndex: (spec: IndexSpec) => {

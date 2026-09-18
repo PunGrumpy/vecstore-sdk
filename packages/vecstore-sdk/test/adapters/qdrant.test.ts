@@ -4,6 +4,7 @@ import { QdrantClient } from "@qdrant/js-client-rest";
 
 import type { VecstoreError } from "../../src/errors";
 import { eq } from "../../src/filter/ast";
+import type { NonEmpty } from "../../src/filter/ast";
 import type {
   QdrantClientLike,
   QdrantFilter,
@@ -31,6 +32,7 @@ interface Recorded {
     | { filter: QdrantFilter; wait?: boolean }
   )[];
   readonly queries: { filter?: QdrantFilter; limit: number; query: number[] }[];
+  readonly retrieves: number[];
   readonly upserts: QdrantPoint[][];
 }
 
@@ -42,6 +44,7 @@ const fakeClient = () => {
     deletes: [],
     payloadIndexes: [],
     queries: [],
+    retrieves: [],
     upserts: [],
   };
   const client: QdrantClientLike = {
@@ -75,8 +78,12 @@ const fakeClient = () => {
       }));
       return Promise.resolve({ points });
     },
-    retrieve: (_name, args) =>
-      Promise.resolve(stored.filter((point) => args.ids.includes(point.id))),
+    retrieve: (_name, args) => {
+      recorded.retrieves.push(args.ids.length);
+      return Promise.resolve(
+        stored.filter((point) => args.ids.includes(point.id))
+      );
+    },
     upsert: (_name, args) => {
       recorded.upserts.push(args.points);
       stored.push(...args.points);
@@ -224,6 +231,29 @@ describe(createQdrantStore, () => {
       ok: true,
       value: [{ id: "doc-1", metadata: { genre: "drama" }, vector: [1, 2, 3] }],
     });
+  });
+
+  test("upsert, fetch, and delete split into batches", async () => {
+    const { client, recorded } = fakeClient();
+    const index = createQdrantStore({ client }).index("docs");
+    const records = Array.from({ length: 501 }, (_, i) => ({
+      id: `doc-${i}`,
+      vector: [i, 0, 0],
+    }));
+    await index.upsert(records);
+    expect(recorded.upserts).toHaveLength(2);
+    expect(recorded.upserts[0]).toHaveLength(500);
+    expect(recorded.upserts[1]).toHaveLength(1);
+
+    const ids: NonEmpty<string> = [
+      "doc-0",
+      ...Array.from({ length: 1000 }, (_, i) => `doc-${i + 1}`),
+    ];
+    await index.fetch(ids);
+    expect(recorded.retrieves).toStrictEqual([1000, 1]);
+
+    await index.delete({ ids });
+    expect(recorded.deletes).toHaveLength(2);
   });
 
   test("query scopes the filter to the namespace", async () => {

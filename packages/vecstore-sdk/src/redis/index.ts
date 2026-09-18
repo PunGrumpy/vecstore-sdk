@@ -22,7 +22,7 @@ import type {
   RedisMetadataField,
 } from "../filter/redis";
 import { attempt } from "../internal/attempt";
-import { sortByIds } from "../internal/collections";
+import { chunk, sortByIds } from "../internal/collections";
 import {
   isNumber,
   isNumberArray,
@@ -182,6 +182,7 @@ const VECTOR_KEY = "vector";
 const BLOB_PARAM = "BLOB";
 const DIALECT = 2;
 const DELETE_PAGE = 500;
+const WRITE_BATCH = 500;
 
 const METRICS: Record<Metric, RedisDistanceMetric> = {
   cosine: "COSINE",
@@ -603,12 +604,17 @@ const fetchRecords = async (
   return sortByIds(ids, records);
 };
 
-const upsertRecords = async (
+const writeBatch = async (
   context: IndexContext,
-  records: readonly VectorRecord[]
+  batches: readonly (readonly VectorRecord[])[],
+  position: number
 ): Promise<void> => {
+  const batch = batches[position];
+  if (batch === undefined) {
+    return;
+  }
   await Promise.all(
-    records.map((record) =>
+    batch.map((record) =>
       context.client.json.set(
         `${context.prefix}${record.id}`,
         ROOT_PATH,
@@ -616,7 +622,13 @@ const upsertRecords = async (
       )
     )
   );
+  await writeBatch(context, batches, position + 1);
 };
+
+const upsertRecords = (
+  context: IndexContext,
+  records: readonly VectorRecord[]
+): Promise<void> => writeBatch(context, chunk(records, WRITE_BATCH), 0);
 
 const metadataError = (
   records: readonly VectorRecord[],
@@ -654,8 +666,9 @@ const createIndex = (
       }
       if ("ids" in selector) {
         return run(name, async () => {
-          await client.unlink(
-            selector.ids.map((id) => `${context.prefix}${id}`)
+          const keys = selector.ids.map((id) => `${context.prefix}${id}`);
+          await Promise.all(
+            chunk(keys, WRITE_BATCH).map((batch) => client.unlink(batch))
           );
         });
       }

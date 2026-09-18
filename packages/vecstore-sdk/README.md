@@ -319,7 +319,7 @@ The suite skips providers without a variable. Supabase needs the SQL functions i
 
 ## Not in v0
 
-Embedding generation, hybrid and sparse search, reranking, chunking, and an Effect integration. See [docs/design.md](../../docs/design.md) for the reasoning.
+Embedding generation, hybrid and sparse search, reranking, chunking, and an Effect integration. See the [design guide](https://github.com/PunGrumpy/vecstore-sdk/blob/main/apps/web/content/docs/guides/design.mdx) for the reasoning.
 
 ## License
 

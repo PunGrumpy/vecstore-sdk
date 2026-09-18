@@ -144,6 +144,28 @@ describe(createQdrantStore, () => {
     expect(recorded.deletedCollections).toStrictEqual(["docs"]);
   });
 
+  test("deleteIndex succeeds when the server deleted the collection", async () => {
+    const { client, recorded } = fakeClient();
+    await expect(
+      createQdrantStore({ client }).deleteIndex("docs")
+    ).resolves.toMatchObject({ ok: true });
+    expect(recorded.deletedCollections).toStrictEqual(["docs"]);
+  });
+
+  test("deleteIndex reports a collection the server does not hold", async () => {
+    const { client } = fakeClient();
+    const empty: QdrantClientLike = {
+      ...client,
+      deleteCollection: () => Promise.resolve(false),
+    };
+    await expect(
+      createQdrantStore({ client: empty }).deleteIndex("missing")
+    ).resolves.toMatchObject({
+      error: { kind: "not_found", name: "missing" },
+      ok: false,
+    });
+  });
+
   test("listIndexes returns collection names", async () => {
     const store = createQdrantStore({ client: fakeClient().client });
     await expect(store.listIndexes()).resolves.toStrictEqual({

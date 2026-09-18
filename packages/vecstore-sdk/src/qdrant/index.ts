@@ -235,6 +235,13 @@ const isApiFailure = (cause: unknown): cause is ApiFailure =>
 const failureMessage = (cause: unknown): string =>
   isApiFailure(cause) ? cause.data.status.error : errorMessage(cause);
 
+const MISSING_COLLECTION_ERROR = "QdrantMissingCollectionError";
+
+const missingCollection = (name: string): Error =>
+  Object.assign(new Error(`Collection "${name}" does not exist`), {
+    name: MISSING_COLLECTION_ERROR,
+  });
+
 const isConnectionFailure = (cause: unknown): boolean => {
   if (!(cause instanceof Error)) {
     return false;
@@ -249,6 +256,9 @@ export const normalizeQdrantError = (
   cause: unknown,
   index: string
 ): VecstoreError => {
+  if (cause instanceof Error && cause.name === MISSING_COLLECTION_ERROR) {
+    return notFound(PROVIDER, index, cause);
+  }
   if (isHttpFailure(cause)) {
     switch (cause.status) {
       case HTTP_NOT_FOUND: {
@@ -422,7 +432,10 @@ export const createQdrantStore = <Client extends QdrantClientLike>(
 
     deleteIndex: (name) =>
       run(name, async () => {
-        await client.deleteCollection(name);
+        const deleted = await client.deleteCollection(name);
+        if (!deleted) {
+          throw missingCollection(name);
+        }
       }),
 
     index: (name, indexOptions = {}) => createIndex(client, name, indexOptions),

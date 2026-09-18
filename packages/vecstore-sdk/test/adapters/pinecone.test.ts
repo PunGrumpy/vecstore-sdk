@@ -226,6 +226,28 @@ describe(createPineconeStore, () => {
     expect(withVectors.ok && withVectors.value[0]?.vector).toStrictEqual([1]);
   });
 
+  test("query leaves out metadata and the vector unless asked", async () => {
+    const index = createPineconeStore({ client: fakeClient().client }).index(
+      "docs"
+    );
+    await index.upsert([{ id: "a", metadata: { n: 1 }, vector: [1] }]);
+    const bare = await index.query({
+      includeMetadata: false,
+      topK: 1,
+      vector: [1],
+    });
+    expect(bare.ok && bare.value[0]?.id).toBe("a");
+    expect(bare.ok && bare.value[0]?.metadata).toBeUndefined();
+    expect(bare.ok && bare.value[0]?.vector).toBeUndefined();
+    const full = await index.query({
+      includeVector: true,
+      topK: 1,
+      vector: [1],
+    });
+    expect(full.ok && full.value[0]?.metadata).toStrictEqual({ n: 1 });
+    expect(full.ok && full.value[0]?.vector).toStrictEqual([1]);
+  });
+
   test("delete by filter on an index that rejects it is unsupported", async () => {
     const { client } = fakeClient();
     const message =

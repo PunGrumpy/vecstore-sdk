@@ -208,11 +208,15 @@ const recordsOf = (
     toVectorRecord(record, includeVector)
   );
 
-const toScoredRecord = (match: PineconeScoredRecordLike): ScoredRecord => ({
+const toScoredRecord = (
+  match: PineconeScoredRecordLike,
+  includeMetadata: boolean,
+  includeVector: boolean
+): ScoredRecord => ({
   id: match.id,
-  metadata: match.metadata,
+  metadata: includeMetadata ? match.metadata : undefined,
   score: match.score ?? 0,
-  vector: match.values,
+  vector: includeVector ? match.values : undefined,
 });
 
 const createIndex = (
@@ -261,18 +265,22 @@ const createIndex = (
 
     query: (query: QueryOptions) =>
       run(context, async () => {
+        const includeMetadata = query.includeMetadata ?? true;
+        const includeVector = query.includeVector ?? false;
         const response = await target.query({
           ...scope,
           filter:
             query.filter === undefined
               ? undefined
               : compilePineconeFilter(query.filter),
-          includeMetadata: query.includeMetadata ?? true,
-          includeValues: query.includeVector ?? false,
+          includeMetadata,
+          includeValues: includeVector,
           topK: query.topK,
           vector: [...query.vector],
         });
-        return response.matches.map(toScoredRecord);
+        return response.matches.map((match) =>
+          toScoredRecord(match, includeMetadata, includeVector)
+        );
       }),
 
     upsert: (records) =>

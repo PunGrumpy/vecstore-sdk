@@ -26,6 +26,9 @@ const DEFAULT_INFO: UpstashInfo = {
   similarityFunction: "COSINE",
 };
 
+const UPSERT_BATCH = 100;
+const ID_BATCH = 1000;
+
 interface Recorded {
   readonly deletes: {
     args: { ids: string[] } | { filter: string };
@@ -259,6 +262,42 @@ describe(createUpstashStore, () => {
     ]);
   });
 
+  test("delete by filter scopes the filter to the namespace", async () => {
+    const { client, recorded } = fakeClient();
+    const index = createUpstashStore({ client }).index("docs", {
+      namespace: "tenant-a",
+    });
+    await index.delete({ filter: eq("genre", "drama") });
+    expect(recorded.deletes).toStrictEqual([
+      {
+        args: { filter: "(_namespace = 'tenant-a' AND genre = 'drama')" },
+        namespace: "docs",
+      },
+    ]);
+  });
+
+  test("upsert and fetch split into provider-sized batches", async () => {
+    const { client, recorded } = fakeClient();
+    const index = createUpstashStore({ client }).index("docs");
+    await index.upsert(
+      Array.from({ length: UPSERT_BATCH + 1 }, (_, i) => ({
+        id: `r${i}`,
+        vector: [i],
+      }))
+    );
+    await index.fetch(Array.from({ length: ID_BATCH + 1 }, (_, i) => `r${i}`));
+    expect(
+      recorded.upserts.map((upsert) => [
+        upsert.namespace,
+        upsert.records.length,
+      ])
+    ).toStrictEqual([
+      ["docs", UPSERT_BATCH],
+      ["docs", 1],
+    ]);
+    expect(recorded.fetches).toHaveLength(2);
+  });
+
   test("createIndex rejects a dimension the Upstash index cannot serve", async () => {
     const { client } = fakeClient();
     const result = await createUpstashStore({ client }).createIndex({
@@ -403,6 +442,15 @@ describe("upstash native namespaces", () => {
     await index.delete({ all: true });
     expect(recorded.resets).toStrictEqual(["docs~tenant-a"]);
     expect(recorded.deletes).toStrictEqual([]);
+  });
+
+  test("delete by filter sends the bare filter to the native namespace", async () => {
+    const { client, recorded } = fakeClient();
+    const index = nativeStore(client).index("docs", { namespace: "tenant-a" });
+    await index.delete({ filter: eq("genre", "drama") });
+    expect(recorded.deletes).toStrictEqual([
+      { args: { filter: "genre = 'drama'" }, namespace: "docs~tenant-a" },
+    ]);
   });
 
   test("an index owns every namespace it opened", async () => {

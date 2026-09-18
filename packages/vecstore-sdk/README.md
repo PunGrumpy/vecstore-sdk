@@ -145,6 +145,8 @@ Two compilers return a `Result`, and the verb turns a failure into an error befo
 | `connection` | The provider was unreachable or timed out. |
 | `provider` | Anything else. `cause` holds the original error. |
 
+`message` and `cause` carry the provider's own text, which can include hostnames, SQL fragments, or request ids. Log them; do not return them to end users unchanged.
+
 ## Adapters
 
 ### Qdrant
@@ -276,7 +278,7 @@ const store = createRedisStore({
 
 The adapter needs the Redis Query Engine and JSON, which ship with Redis 8, Redis Stack 7.4 or later, and Redis Cloud. A server without them returns `unsupported` with `feature: "queryEngine"`. The client is anything with the `ft`, `json`, and `unlink` calls that `node-redis` 5 or later gives you, so a cluster client works too.
 
-An index is a real Redis index over JSON documents. `createIndex` runs `FT.CREATE ... ON JSON PREFIX 1 vecstore:{index}:`, and a record is stored at `vecstore:{index}:{namespace}:{id}` as `{ namespace, vector, metadata }`. Pass `keyPrefix` to move the keyspace, and `algorithm` to pick `"HNSW"` over the exact `"FLAT"` default. `listIndexes` returns every index in the database, because `FT._LIST` has no way to tell one owner from another.
+An index is a real Redis index over JSON documents. `createIndex` runs `FT.CREATE ... ON JSON PREFIX 1 vecstore:{index}:`, and a record is stored at `vecstore:{index}:{namespace}:{id}` as `{ namespace, vector, metadata }`. The namespace segment is URL-encoded, so a namespace with `:` or `/` in it still yields one key segment. Pass `keyPrefix` to move the keyspace, and `algorithm` to pick `"HNSW"` over the exact `"FLAT"` default. `listIndexes` returns every index in the database, because `FT._LIST` has no way to tell one owner from another.
 
 Redis searches a metadata field only when the index schema declares it, so `metadataFields` names the fields you filter on: `tag` for strings, booleans, and string lists, `numeric` for numbers. A name must match `^[A-Za-z_][A-Za-z0-9_]*$` and cannot be `namespace`, `vector`, or `vector_distance`, which the adapter keeps for itself. A filter on any other field returns `invalid_argument` rather than the empty result Redis would give you. Redis also drops a whole document from the index when one value contradicts the schema, so `upsert` rejects such a record before it writes.
 
@@ -303,6 +305,7 @@ Live tests run the same conformance suite against real backends. Set `VECSTORE_L
 
 ```bash
 QDRANT_URL=http://localhost:6333 \
+QDRANT_API_KEY=your_qdrant_api_key \
 PGVECTOR_URL=postgres://postgres:postgres@localhost:5432/postgres \
 PINECONE_API_KEY=pcsk_1234567890 \
 SUPABASE_URL=https://your_project_ref_here.supabase.co \
@@ -315,11 +318,11 @@ REDIS_URL=redis://localhost:6379 \
 bun run test:live
 ```
 
-The suite skips providers without a variable. Supabase needs the SQL functions installed and the service role key, because the suite creates and drops tables. Point the Upstash variables at a scratch index with dimension 3 and the cosine similarity function, since the adapter cannot create one. The Vectorize run skips the `delete({ all: true })` case and asserts the `unsupported` error instead. Point `REDIS_URL` at a server that carries the query engine and JSON; the Redis run adds cases for the default namespace, `exists`, list fields, and delete by filter.
+The suite skips providers without a variable. `QDRANT_API_KEY` is optional for a local Qdrant and required for Qdrant Cloud. Supabase needs the SQL functions installed and the service role key, because the suite creates and drops tables. Point the Upstash variables at a scratch index with dimension 3 and the cosine similarity function, since the adapter cannot create one. The Vectorize run skips the `delete({ all: true })` case and asserts the `unsupported` error instead. Point `REDIS_URL` at a server that carries the query engine and JSON; the Redis run adds cases for the default namespace, `exists`, list fields, and delete by filter.
 
 ## Not in v0
 
-Embedding generation, hybrid and sparse search, reranking, chunking, and an Effect integration. See [docs/design.md](../../docs/design.md) for the reasoning.
+Embedding generation, hybrid and sparse search, reranking, chunking, and an Effect integration. See the [design guide](https://github.com/PunGrumpy/vecstore-sdk/blob/main/apps/web/content/docs/guides/design.mdx) for the reasoning.
 
 ## License
 

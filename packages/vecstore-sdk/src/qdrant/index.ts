@@ -12,7 +12,7 @@ import type { Filter } from "../filter/ast";
 import { compileQdrantFilter } from "../filter/qdrant";
 import type { QdrantCondition, QdrantFilter } from "../filter/qdrant";
 import { attempt } from "../internal/attempt";
-import { sortByIds } from "../internal/collections";
+import { chunk, sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -128,6 +128,8 @@ const RESERVED_KEYS: ReadonlySet<string> = new Set([
 ]);
 const ID_NAMESPACE = "vecstore-sdk/qdrant/point-id";
 const PROVIDER = "qdrant";
+const UPSERT_BATCH = 500;
+const ID_BATCH = 1000;
 const HTTP_BAD_REQUEST = 400;
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
@@ -304,15 +306,17 @@ const createIndex = (
       }
       return run(name, async () => {
         if ("ids" in selector) {
-          await client.delete(name, {
-            filter: {
-              must: [
-                namespaceCondition(namespace),
-                { has_id: selector.ids.map((id) => toPointId(namespace, id)) },
-              ],
-            },
-            wait: true,
-          });
+          const pointIds = selector.ids.map((id) => toPointId(namespace, id));
+          await Promise.all(
+            chunk(pointIds, ID_BATCH).map((batch) =>
+              client.delete(name, {
+                filter: {
+                  must: [namespaceCondition(namespace), { has_id: batch }],
+                },
+                wait: true,
+              })
+            )
+          );
           return;
         }
         const filter = "filter" in selector ? selector.filter : undefined;
@@ -334,13 +338,18 @@ const createIndex = (
         if (ids.length === 0) {
           return [];
         }
-        const points = await client.retrieve(name, {
-          ids: ids.map((id) => toPointId(namespace, id)),
-          with_payload: true,
-          with_vector: fetchOptions.includeVector ?? false,
-        });
+        const pointIds = ids.map((id) => toPointId(namespace, id));
+        const responses = await Promise.all(
+          chunk(pointIds, ID_BATCH).map((batch) =>
+            client.retrieve(name, {
+              ids: batch,
+              with_payload: true,
+              with_vector: fetchOptions.includeVector ?? false,
+            })
+          )
+        );
         const records: VectorRecord[] = [];
-        for (const point of points) {
+        for (const point of responses.flat()) {
           if (inNamespace(namespace, point)) {
             records.push({
               id: fromPoint(point),
@@ -397,7 +406,11 @@ const createIndex = (
             vector: [...record.vector],
           };
         });
-        await client.upsert(name, { points, wait: true });
+        await Promise.all(
+          chunk(points, UPSERT_BATCH).map((batch) =>
+            client.upsert(name, { points: batch, wait: true })
+          )
+        );
       });
     },
   };

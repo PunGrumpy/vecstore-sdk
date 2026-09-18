@@ -390,6 +390,23 @@ describe(createVectorizeStore, () => {
       toVectorizeId("tenant-a", "doc-1"),
       toVectorizeId("tenant-a", "doc-2"),
     ]);
+    expect(bodiesFor(calls, "/get_by_ids")).toStrictEqual([]);
+  });
+
+  test("a default namespace delete leaves another namespace's vector alone", async () => {
+    const { calls, client, stored } = fakeCloudflare();
+    const foreign = toVectorizeId("tenant-b", "doc-1");
+    stored.set(foreign, {
+      id: foreign,
+      metadata: { _id: "doc-1" },
+      namespace: "tenant-b",
+      values: [1],
+    });
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .delete({ ids: [foreign] });
+    expect(bodiesFor(calls, "/delete_by_ids")).toStrictEqual([]);
+    expect(stored.size).toBe(1);
   });
 
   test("delete by filter and delete all are unsupported", async () => {

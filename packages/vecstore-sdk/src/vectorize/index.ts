@@ -252,6 +252,29 @@ const toLine = (namespace: string, record: VectorRecord): string => {
 const toNdjson = (lines: readonly string[]): File =>
   new File([lines.join("\n")], NDJSON_NAME, { type: NDJSON_TYPE });
 
+const deletableIds = async (
+  indexes: VectorizeIndexes,
+  accountId: string,
+  name: string,
+  namespace: string,
+  ids: readonly string[]
+): Promise<string[]> => {
+  if (namespace !== DEFAULT_NAMESPACE) {
+    return [...ids];
+  }
+  const response = await indexes.getByIDs(name, {
+    account_id: accountId,
+    ids: [...ids],
+  });
+  const owned: string[] = [];
+  for (const found of isUnknownArray(response) ? response : []) {
+    if (isStoredVector(found) && belongsToNamespace(namespace, found)) {
+      owned.push(found.id);
+    }
+  }
+  return owned;
+};
+
 const createIndex = (
   indexes: VectorizeIndexes,
   accountId: string,
@@ -265,9 +288,18 @@ const createIndex = (
         return run(name, async () => {
           const stored = selector.ids.map((id) => toVectorizeId(namespace, id));
           await Promise.all(
-            chunk(stored, ID_BATCH).map((ids) =>
-              indexes.deleteByIDs(name, { account_id: accountId, ids })
-            )
+            chunk(stored, ID_BATCH).map(async (batch) => {
+              const ids = await deletableIds(
+                indexes,
+                accountId,
+                name,
+                namespace,
+                batch
+              );
+              if (ids.length > 0) {
+                await indexes.deleteByIDs(name, { account_id: accountId, ids });
+              }
+            })
           );
         });
       }

@@ -161,6 +161,11 @@ begin
       using errcode = '22023';
   end if;
 
+  if octet_length(index_name) > 49 then
+    raise exception 'vecstore: an index name can be at most 49 bytes, got %', octet_length(index_name)
+      using errcode = '22023';
+  end if;
+
   execute format(
     'create table %s (
        id text not null,

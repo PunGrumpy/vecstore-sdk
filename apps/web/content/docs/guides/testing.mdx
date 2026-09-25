@@ -13,6 +13,8 @@ bun run test
 
 Most adapters accept any client that satisfies a structural `*ClientLike` interface, which lists only the methods the adapter calls. The real SDK client satisfies it, and the unit tests pass fakes. The Vectorize adapter names the `cloudflare` client type, so its tests build a real `Cloudflare` client with a fake `fetch` and answer the v2 HTTP API in memory. The Redis fake reads the namespace out of the query it is given and answers with the documents it holds, so the tests can assert the query string the adapter writes.
 
+The pgvector and Supabase adapters also run against PGlite, a Postgres build for WebAssembly, inside the unit suite. `test/postgres` installs `sql/supabase.sql` into it, runs the conformance cases against both adapters, and checks that `vecstore_filter_sql` returns the same rows as `compilePgvectorFilter` for every filter in a corpus. No server or Docker is needed.
+
 ## Run the live tests
 
 Set `VECSTORE_LIVE=1` and the connection variables for the providers you have:

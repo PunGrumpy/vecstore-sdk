@@ -59,6 +59,7 @@ Choose `"native"` when you can name your namespaces up front, and `"metadata"` w
 - Records carry the namespace in the `_namespace` metadata key, and the adapter adds that key to every query and filtered delete.
 - The adapter stores ids as `{namespace}/{length}/{id}`, so two namespaces can hold the same id. The original id goes in the `_id` metadata key and comes back on `query` and `fetch`.
 - Records in the default namespace keep their id and carry neither key.
+- An id in the default namespace cannot have the shape `{namespace}/{length}/{id}` with a matching length, because it would collide with a stored namespaced record; `upsert` returns `invalid_argument` for one.
 - The adapter strips `_id` and `_namespace` from returned metadata. Do not write metadata under those names.
 
 One Upstash namespace holds every vecstore namespace under that index, so the number of tenants you can have is unbounded.

@@ -3,7 +3,7 @@ title: Filters
 description: Reference for the filter builders and the native syntax each adapter compiles them to.
 ---
 
-You build a filter once with the exported helpers. Each adapter compiles the same filter to its provider's native syntax. The compilers are total: every filter compiles on every provider.
+You build a filter once with the exported helpers. Each adapter compiles the same filter to its provider's native syntax. Five compilers accept every filter. The Vectorize and Redis compilers return a `Result`, because Vectorize has no `or` and no `exists`, and Redis matches only fields its index schema declares.
 
 ```ts
 import { and, eq, gt, isIn, not, or } from "vecstore-sdk";
@@ -85,4 +85,4 @@ Supabase has no compiler to import. The filter travels to Postgres as JSON and `
 
 `compileRedisFilter` takes a second argument, the metadata fields the index schema declares, because a Redis query names a field the schema has to hold.
 
-Where a provider lacks an operator, the compiler rewrites the filter instead of failing. Three providers are exceptions. Upstash's filter is a string, so the compiler rejects a field name or a string value it cannot write safely and the verb returns an `invalid_argument` error. Vectorize has no OR and no presence test, so `compileVectorizeFilter` returns a `Result` and the verb returns an `unsupported` error before it sends a request. Redis matches nothing on a field its schema does not declare, so `compileRedisFilter` returns a `Result` and the verb returns an `invalid_argument` error instead of an empty page. See [Provider differences](/docs/providers/differences) for the two cases where the semantics diverge.
+Where a provider lacks an operator, the compiler rewrites the filter instead of failing. Three providers are exceptions. Upstash's filter is a string, so the compiler rejects a field name or a string value it cannot write safely and the verb returns an `invalid_argument` error. Vectorize has no OR and no presence test, so `compileVectorizeFilter` returns a `Result` and the verb returns an `unsupported` error before it sends a request, or `invalid_argument` when two clauses set the same operator on one field, or mix a membership and a comparison operator on one field. Redis matches nothing on a field its schema does not declare, so `compileRedisFilter` returns a `Result` and the verb returns an `invalid_argument` error instead of an empty page. See [Provider differences](/docs/providers/differences) for the two cases where the semantics diverge.

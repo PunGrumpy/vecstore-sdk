@@ -126,6 +126,9 @@ jobs:
       - name: Build packages
         run: bun x turbo run build --filter=vecstore-sdk
 
+      - name: Check the package
+        run: cd packages/vecstore-sdk && bun scripts/check-exports.ts && bun x publint && bun x attw --pack . --profile esm-only --exclude-entrypoints ./sql/supabase.sql
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

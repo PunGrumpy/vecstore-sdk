@@ -5,6 +5,12 @@ const UUID_PATTERN =
 
 export const isUuid = (value: string): boolean => UUID_PATTERN.test(value);
 
+const VERSION_INDEX = 14;
+const SURROGATE_VERSION = "8";
+
+export const isSurrogateUuid = (value: string): boolean =>
+  isUuid(value) && value.charAt(VERSION_INDEX) === SURROGATE_VERSION;
+
 const UUID_BYTES = 16;
 const VERSION_BYTE = 6;
 const VARIANT_BYTE = 8;

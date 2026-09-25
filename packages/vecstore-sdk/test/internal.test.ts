@@ -14,7 +14,11 @@ import {
 } from "../src/internal/metadata";
 import { namespaceError } from "../src/internal/namespace";
 import { queryOptionsError } from "../src/internal/query-options";
-import { deterministicUuid, isUuid } from "../src/internal/uuid";
+import {
+  deterministicUuid,
+  isSurrogateUuid,
+  isUuid,
+} from "../src/internal/uuid";
 
 describe(deterministicUuid, () => {
   test("is stable for the same input and distinct across namespaces", () => {
@@ -54,6 +58,14 @@ describe(isUuid, () => {
     expect(isUuid("0f8fad5b-d9cb-469f-a165-70867728950e")).toBeTruthy();
     expect(isUuid("0F8FAD5B-D9CB-469F-A165-70867728950E")).toBeFalsy();
     expect(isUuid("doc-1")).toBeFalsy();
+  });
+});
+
+describe(isSurrogateUuid, () => {
+  test("recognises a version 8 UUID and rejects other shapes", () => {
+    expect(isSurrogateUuid(deterministicUuid("ns", "x"))).toBeTruthy();
+    expect(isSurrogateUuid("0f8fad5b-d9cb-469f-a165-70867728950e")).toBeFalsy();
+    expect(isSurrogateUuid("doc-1")).toBeFalsy();
   });
 });
 

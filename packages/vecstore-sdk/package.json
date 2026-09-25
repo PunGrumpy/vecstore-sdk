@@ -98,6 +98,8 @@
     "check:package": "bun run build && bun scripts/check-exports.ts && bun x publint && bun x attw --pack . --profile esm-only --exclude-entrypoints ./sql/supabase.sql"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@electric-sql/pglite-pgvector": "0.0.9",
     "@pinecone-database/pinecone": "^9.0.0",
     "@qdrant/js-client-rest": "^1.19.0",
     "@supabase/supabase-js": "^2.58.0",

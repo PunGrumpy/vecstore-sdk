@@ -70,7 +70,9 @@ describe(createPgvectorStore, () => {
     expect(calls).toHaveLength(1);
     const statement = calls[0]?.text ?? "";
     expect(
-      statement.startsWith("DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector;")
+      statement.startsWith(
+        "DO $vecstore$ BEGIN CREATE EXTENSION IF NOT EXISTS vector;"
+      )
     ).toBeTruthy();
     expect(statement).toContain(
       `CREATE TABLE "docs" (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(3) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id))`
@@ -109,6 +111,16 @@ describe(createPgvectorStore, () => {
     });
     expect(atLimit.ok).toBeTruthy();
     expect(calls).toHaveLength(1);
+  });
+
+  test("createIndex rejects a name that holds the dollar tag", async () => {
+    const { client, calls } = fakeClient();
+    const result = await createPgvectorStore({ client }).createIndex({
+      dimension: 2,
+      name: "x$vecstore$y",
+    });
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(calls).toHaveLength(0);
   });
 
   test("identifiers are quoted", async () => {

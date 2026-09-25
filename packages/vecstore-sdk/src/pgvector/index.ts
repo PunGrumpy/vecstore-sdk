@@ -6,6 +6,7 @@ import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { isObjectLike } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
+  DOLLAR_TAG,
   indexNameError,
   isNamedRow,
   isPostgresRow,
@@ -336,7 +337,7 @@ export const createPgvectorStore = <Client extends PgQueryable>(
         const metadataIndex = quoteIdent(`${spec.name}_metadata_idx`);
         const opclass = OPCLASSES[spec.metric ?? "cosine"];
         await client.query(
-          `DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE ${table} (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(${spec.dimension}) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id)); CREATE INDEX ${embeddingIndex} ON ${table} USING hnsw (embedding ${opclass}); CREATE INDEX ${metadataIndex} ON ${table} USING gin (metadata); END $$`,
+          `DO ${DOLLAR_TAG} BEGIN CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE ${table} (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(${spec.dimension}) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id)); CREATE INDEX ${embeddingIndex} ON ${table} USING hnsw (embedding ${opclass}); CREATE INDEX ${metadataIndex} ON ${table} USING gin (metadata); END ${DOLLAR_TAG}`,
           []
         );
         forgetMetric(spec.name);

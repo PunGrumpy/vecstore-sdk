@@ -24,7 +24,7 @@ Every provider gets namespaces. Pinecone and Vectorize have them natively. On Qd
 
 | Method | Description |
 | --- | --- |
-| `upsert(records)` | Inserts or replaces records by id. |
+| `upsert(records)` | Inserts or replaces records by id. Large batches are sent as several provider requests, four at a time. |
 | `query({ vector, topK, filter?, includeMetadata?, includeVector? })` | Returns the nearest records with a `score`. |
 | `fetch(ids, { includeVector? })` | Returns the records that exist, in request order. |
 | `delete({ ids })`, `delete({ filter })`, `delete({ all: true })` | Removes records in the namespace. |

@@ -179,7 +179,7 @@ CREATE TABLE "docs" (
 );
 ```
 
-Queries read the metric from the HNSW or IVFFlat index definition and default to cosine when no index exists. `listIndexes` returns tables in the schema that have an `embedding vector` column.
+Queries read the metric from the HNSW or IVFFlat index definition and default to cosine when no index exists. The store caches the metric per table after the first query and forgets it when `createIndex` or `deleteIndex` on the same store touches that table. `listIndexes` returns tables in the schema that have an `embedding vector` column.
 
 ### Pinecone
 
@@ -206,7 +206,7 @@ Supabase Vector is pgvector inside Postgres, and this adapter reaches it through
 psql "$SUPABASE_DB_URL" -f node_modules/vecstore-sdk/sql/supabase.sql
 ```
 
-The functions are `security invoker`, so row level security policies apply to `query`, `fetch`, `upsert`, and `delete`. `createIndex` and `deleteIndex` run DDL and need the service role key. The table layout matches the pgvector adapter, so both adapters can read the same table.
+The functions are `security invoker`, so row level security policies apply to `query`, `fetch`, `upsert`, and `delete`. `createIndex` and `deleteIndex` run DDL and need the service role key. The table layout matches the pgvector adapter, so both adapters can read the same table. An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metadata_idx` names stay under the 63-byte Postgres identifier limit. `createIndex` returns `invalid_argument` for a longer name.
 
 ### Upstash Vector
 

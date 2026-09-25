@@ -230,6 +230,30 @@ const requireUrlSafe = (label: string, value: string): void => {
 const toStoredId = (namespace: string, id: string): string =>
   namespace === DEFAULT_NAMESPACE ? id : `${namespace}/${id.length}/${id}`;
 
+const STORED_ID_PATTERN = /^[^/]+\/(?<length>\d+)\/(?<id>[\s\S]*)$/u;
+
+const looksLikeStoredId = (id: string): boolean => {
+  const groups = STORED_ID_PATTERN.exec(id)?.groups;
+  if (groups?.id === undefined || groups.length === undefined) {
+    return false;
+  }
+  return groups.id.length === Number(groups.length);
+};
+
+const collidingIdError = (
+  records: readonly VectorRecord[]
+): VecstoreError | undefined => {
+  for (const record of records) {
+    if (looksLikeStoredId(record.id)) {
+      return invalidArgument(
+        PROVIDER,
+        `In the default namespace the Upstash adapter stores an id as you wrote it, and "${record.id}" has the shape "{namespace}/{length}/{id}" it uses for records in other namespaces, so writing it could replace another namespace's record. Rename the id or write it in a namespace.`
+      );
+    }
+  }
+  return undefined;
+};
+
 const toStoredRecord = (
   namespace: string,
   record: VectorRecord
@@ -429,6 +453,21 @@ const createIndex = (
   const invalid = layout.emulatesNamespace
     ? namespaceError(PROVIDER, namespace)
     : undefined;
+  const upsertRejection = (
+    records: readonly VectorRecord[]
+  ): VecstoreError | undefined => {
+    if (invalid !== undefined) {
+      return invalid;
+    }
+    const reserved = reservedKeyError(PROVIDER, records, layout.reservedKeys);
+    if (reserved !== undefined) {
+      return reserved;
+    }
+    if (layout.emulatesNamespace && namespace === DEFAULT_NAMESPACE) {
+      return collidingIdError(records);
+    }
+    return undefined;
+  };
   return {
     delete: (selector: DeleteSelector): VecResult<void> => {
       if (invalid !== undefined) {
@@ -539,8 +578,7 @@ const createIndex = (
     },
 
     upsert: (records): VecResult<void> => {
-      const rejected =
-        invalid ?? reservedKeyError(PROVIDER, records, layout.reservedKeys);
+      const rejected = upsertRejection(records);
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));
       }

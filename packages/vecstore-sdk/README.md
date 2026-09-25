@@ -301,6 +301,8 @@ Unit tests run with `bun test` against in-memory fakes:
 bun run test
 ```
 
+The pgvector and Supabase adapters also run against PGlite, a Postgres build for WebAssembly, inside this suite. It also runs a differential check between `compilePgvectorFilter` and the `vecstore_filter_sql` SQL function. No server or Docker is needed.
+
 Live tests run the same conformance suite against real backends. Set `VECSTORE_LIVE=1` and the connection variables for the providers you have:
 
 ```bash

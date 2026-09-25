@@ -4,6 +4,7 @@ import { Pinecone } from "@pinecone-database/pinecone";
 
 import type { VecstoreError } from "../../src/errors";
 import { eq } from "../../src/filter/ast";
+import type { NonEmpty } from "../../src/filter/ast";
 import type {
   PineconeClientLike,
   PineconeFilter,
@@ -219,6 +220,19 @@ describe(createPineconeStore, () => {
       .index("docs")
       .delete({ ids: ["a", "b"] });
     expect(recorded.deleteManys).toStrictEqual([{ ids: ["a", "b"] }]);
+  });
+
+  test("delete by id splits into batches of 1000", async () => {
+    const { client, recorded } = fakeClient();
+    const ids: NonEmpty<string> = [
+      "id-0",
+      ...Array.from({ length: 1000 }, (_, i) => `id-${i + 1}`),
+    ];
+    await createPineconeStore({ client }).index("docs").delete({ ids });
+    expect(recorded.deleteManys).toHaveLength(2);
+    expect(recorded.deleteManys.map((call) => call.ids?.length)).toStrictEqual([
+      1000, 1,
+    ]);
   });
 
   test("fetch preserves request order and drops the vector unless asked", async () => {

@@ -206,6 +206,28 @@ describe(createQdrantStore, () => {
     expect(passthrough?.payload).toStrictEqual({});
   });
 
+  test("upsert never runs more than four batches at once", async () => {
+    const { client } = fakeClient();
+    const inFlight = { current: 0, max: 0 };
+    const tracked: QdrantClientLike = {
+      ...client,
+      upsert: async (name, args) => {
+        inFlight.current += 1;
+        inFlight.max = Math.max(inFlight.max, inFlight.current);
+        await Promise.resolve();
+        inFlight.current -= 1;
+        return client.upsert(name, args);
+      },
+    };
+    const index = createQdrantStore({ client: tracked }).index("docs");
+    const records = Array.from({ length: 4001 }, (_, i) => ({
+      id: `doc-${i}`,
+      vector: [i, 0, 0],
+    }));
+    await index.upsert(records);
+    expect(inFlight.max).toBe(4);
+  });
+
   test("upsert keeps the last record when a batch repeats an id", async () => {
     const { client, recorded } = fakeClient();
     await createQdrantStore({ client })

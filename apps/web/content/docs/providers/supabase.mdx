@@ -41,9 +41,17 @@ notify pgrst, 'reload schema';
 
 ## Which key to use
 
-Every function is declared `security invoker`, so it runs with the privileges of the key you passed to `createClient`. Row level security policies on your vector tables apply to `query`, `fetch`, `upsert`, and `delete` the same way they apply to a direct PostgREST request.
+Every function is declared `security invoker`, so it runs with the privileges of the key you passed to `createClient`. `createIndex` enables row level security on the table it creates and adds no policy, so under the `anon` or `authenticated` role `query`, `fetch`, `upsert`, and `delete` see and change nothing until you write one. The service role bypasses row level security.
 
-`createIndex` and `deleteIndex` run DDL. The `anon` and `authenticated` roles cannot create or drop tables, so those two calls return `{ kind: "unauthorized" }` under a publishable key. Call them with the service role key from a trusted server, or create the tables in a migration and never call them at all.
+```sql
+create policy "tenants read their namespace" on "docs"
+  for select to authenticated
+  using (namespace = (auth.jwt() ->> 'tenant'));
+```
+
+Tables created before this version have row level security off. Turn it on with `alter table "docs" enable row level security;`.
+
+`createIndex` and `deleteIndex` run DDL. The `anon` and `authenticated` roles cannot create or drop tables, so those two calls return `{ kind: "unauthorized" }` under a publishable key. Call them with the service role key from a trusted server, or create the tables in a migration and never call them at all. The install script revokes `vecstore_create_index` and `vecstore_drop_index` from `anon` and `authenticated`.
 
 ## Table layout
 

@@ -5,6 +5,7 @@ import { QdrantClient } from "@qdrant/js-client-rest";
 import type { VecstoreError } from "../../src/errors";
 import { eq } from "../../src/filter/ast";
 import type { NonEmpty } from "../../src/filter/ast";
+import { deterministicUuid } from "../../src/internal/uuid";
 import type {
   QdrantClientLike,
   QdrantFilter,
@@ -204,6 +205,21 @@ describe(createQdrantStore, () => {
     expect(hashed?.payload).toStrictEqual({ _id: "doc-1", genre: "drama" });
     expect(passthrough?.id).toBe(UUID);
     expect(passthrough?.payload).toStrictEqual({});
+  });
+
+  test("a default namespace upsert cannot overwrite a namespaced point", async () => {
+    const foreign = deterministicUuid(
+      "vecstore-sdk/qdrant/point-id",
+      "tenant-a/5/doc-1"
+    );
+    expect(foreign).toBe("73f328fb-a7ca-81f7-a86a-06f5a7282959");
+    const { client, recorded } = fakeClient();
+    await createQdrantStore({ client })
+      .index("docs")
+      .upsert([{ id: foreign, vector: [1] }]);
+    const [point] = recorded.upserts[0] ?? [];
+    expect(point?.id).not.toBe(foreign);
+    expect(point?.payload).toStrictEqual({ _id: foreign });
   });
 
   test("upsert never runs more than four batches at once", async () => {

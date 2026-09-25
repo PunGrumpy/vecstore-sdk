@@ -14,7 +14,11 @@ import {
 } from "../src/internal/metadata";
 import { namespaceError } from "../src/internal/namespace";
 import { queryOptionsError } from "../src/internal/query-options";
-import { deterministicUuid, isUuid } from "../src/internal/uuid";
+import {
+  deterministicUuid,
+  isSurrogateUuid,
+  isUuid,
+} from "../src/internal/uuid";
 
 describe(deterministicUuid, () => {
   test("is stable for the same input and distinct across namespaces", () => {
@@ -29,6 +33,24 @@ describe(deterministicUuid, () => {
     expect(isUuid(id)).toBeTruthy();
     expect(id.charAt(14)).toBe("8");
   });
+
+  test("matches the values persisted by earlier versions", () => {
+    expect(
+      deterministicUuid("vecstore-sdk/qdrant/point-id", "tenant-a/5/doc-1")
+    ).toBe("73f328fb-a7ca-81f7-a86a-06f5a7282959");
+    expect(deterministicUuid("vecstore-sdk/qdrant/point-id", "/5/doc-1")).toBe(
+      "11882748-0614-8fd6-9efe-c7506d346ab2"
+    );
+    expect(
+      deterministicUuid("vecstore-sdk/vectorize/vector-id", "tenant-a/5/doc-1")
+    ).toBe("5a2ccb9b-cbc4-8bfb-9e20-a64886ed02c1");
+    expect(
+      deterministicUuid(
+        "vecstore-sdk/vectorize/vector-id",
+        `/70/${"a".repeat(70)}`
+      )
+    ).toBe("7f62dd9c-602b-8ec5-aad4-fcacc6f0e1ef");
+  });
 });
 
 describe(isUuid, () => {
@@ -36,6 +58,14 @@ describe(isUuid, () => {
     expect(isUuid("0f8fad5b-d9cb-469f-a165-70867728950e")).toBeTruthy();
     expect(isUuid("0F8FAD5B-D9CB-469F-A165-70867728950E")).toBeFalsy();
     expect(isUuid("doc-1")).toBeFalsy();
+  });
+});
+
+describe(isSurrogateUuid, () => {
+  test("recognises a version 8 UUID and rejects other shapes", () => {
+    expect(isSurrogateUuid(deterministicUuid("ns", "x"))).toBeTruthy();
+    expect(isSurrogateUuid("0f8fad5b-d9cb-469f-a165-70867728950e")).toBeFalsy();
+    expect(isSurrogateUuid("doc-1")).toBeFalsy();
   });
 });
 

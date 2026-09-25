@@ -286,6 +286,55 @@ describe(createUpstashStore, () => {
     expect(recorded.fetches[0]?.ids).toStrictEqual(["tenant-a/5/doc-1"]);
   });
 
+  test("a default namespace upsert rejects an id shaped like a namespaced stored id", async () => {
+    const { client, recorded } = fakeClient();
+    const index = createUpstashStore({ client }).index("docs");
+    const result = await index.upsert([
+      { id: "tenant-a/5/doc-1", vector: [1, 2, 3] },
+    ]);
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded.upserts).toStrictEqual([]);
+    const rejected = await index.upsert([{ id: "docs/3/abc", vector: [1] }]);
+    expect(!rejected.ok && rejected.error.kind).toBe("invalid_argument");
+    const lengthMismatch = await index.upsert([
+      { id: "docs/4/abc", vector: [1] },
+    ]);
+    expect(lengthMismatch.ok).toBeTruthy();
+    const noLengthSegment = await index.upsert([
+      { id: "docs/abc", vector: [1] },
+    ]);
+    expect(noLengthSegment.ok).toBeTruthy();
+    const emptyNamespace = await index.upsert([
+      { id: "/5/doc-1", vector: [1] },
+    ]);
+    expect(emptyNamespace.ok).toBeTruthy();
+  });
+
+  test("a default namespace upsert in native mode accepts any id", async () => {
+    const { client } = fakeClient();
+    const result = await createUpstashStore({
+      client,
+      namespaceMode: "native",
+    })
+      .index("docs")
+      .upsert([{ id: "tenant-a/5/doc-1", vector: [1, 2, 3] }]);
+    expect(result.ok).toBeTruthy();
+  });
+
+  test("a default namespace delete removes its own record", async () => {
+    const { client, recorded } = fakeClient();
+    const index = createUpstashStore({ client }).index("docs");
+    await index.upsert([{ id: "doc-1", vector: [1, 2, 3] }]);
+    await index.delete({ ids: ["doc-1"] });
+    expect(recorded.deletes).toStrictEqual([
+      { args: { ids: ["doc-1"] }, namespace: "docs" },
+    ]);
+    await expect(index.fetch(["doc-1"])).resolves.toStrictEqual({
+      ok: true,
+      value: [],
+    });
+  });
+
   test("fetch returns the vector only when asked", async () => {
     const { client } = fakeClient();
     const index = createUpstashStore({ client }).index("docs");

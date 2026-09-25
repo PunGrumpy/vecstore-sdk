@@ -310,6 +310,18 @@ describe(createVectorizeStore, () => {
     });
   });
 
+  test("a default namespace upsert cannot overwrite a namespaced vector", async () => {
+    const foreign = toVectorizeId("tenant-a", "doc-1");
+    const { calls, client } = fakeCloudflare();
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .upsert([{ id: foreign, vector: [1] }]);
+    const [ndjson] = bodiesFor(calls, "/upsert");
+    const line = parse<StoredVector>(ndjson ?? "{}");
+    expect(line.id).not.toBe(foreign);
+    expect(line.metadata).toStrictEqual({ _id: foreign });
+  });
+
   test("upsert keeps the last record when a batch repeats an id", async () => {
     const { calls, client } = fakeCloudflare();
     await createVectorizeStore({ accountId: ACCOUNT_ID, client })
@@ -352,7 +364,7 @@ describe(createVectorizeStore, () => {
     ]);
   });
 
-  test("fetch currently keeps a stored vector that reports no namespace and drops one from another namespace", async () => {
+  test("fetch drops a stored vector that reports another namespace or none", async () => {
     const { client, stored } = fakeCloudflare();
     const bare = toVectorizeId("tenant-a", "doc-x");
     const foreign = toVectorizeId("tenant-a", "doc-y");
@@ -369,7 +381,7 @@ describe(createVectorizeStore, () => {
         .fetch(["doc-x", "doc-y"])
     ).resolves.toStrictEqual({
       ok: true,
-      value: [{ id: "doc-x", metadata: {}, vector: [] }],
+      value: [],
     });
   });
 
@@ -478,6 +490,19 @@ describe(createVectorizeStore, () => {
       .delete({ ids: [foreign] });
     expect(bodiesFor(calls, "/delete_by_ids")).toStrictEqual([]);
     expect(stored.size).toBe(1);
+  });
+
+  test("a default namespace delete removes its own vector", async () => {
+    const { calls, client, stored } = fakeCloudflare();
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .upsert([{ id: "doc-1", vector: [1] }]);
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .delete({ ids: ["doc-1"] });
+    expect(stored.size).toBe(0);
+    const [sent] = bodiesFor(calls, "/delete_by_ids");
+    expect(parse<IdsBody>(sent ?? "{}").ids).toStrictEqual(["doc-1"]);
   });
 
   test("delete by filter and delete all are unsupported", async () => {

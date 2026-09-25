@@ -57,7 +57,12 @@ begin
 
   if kind in ('and', 'or') then
     for child in select value from jsonb_array_elements(match_filter -> 'filters') loop
-      parts := parts || vecstore_filter_sql(child, column_name);
+      clause := vecstore_filter_sql(child, column_name);
+      if clause is null then
+        raise exception 'vecstore: "%" holds a filter that compiles to nothing', kind
+          using errcode = '22023';
+      end if;
+      parts := parts || clause;
     end loop;
     if cardinality(parts) = 0 then
       raise exception 'vecstore: "%" needs at least one filter', kind using errcode = '22023';
@@ -66,7 +71,12 @@ begin
   end if;
 
   if kind = 'not' then
-    return 'NOT (' || vecstore_filter_sql(match_filter -> 'filter', column_name) || ')';
+    clause := vecstore_filter_sql(match_filter -> 'filter', column_name);
+    if clause is null then
+      raise exception 'vecstore: "not" holds a filter that compiles to nothing'
+        using errcode = '22023';
+    end if;
+    return 'NOT (' || clause || ')';
   end if;
 
   if field is null then
@@ -84,6 +94,10 @@ begin
   end if;
 
   if kind in ('gt', 'gte', 'lt', 'lte') then
+    if jsonb_typeof(match_filter -> 'value') is distinct from 'number' then
+      raise exception 'vecstore: "%" on "%" needs a numeric "value"', kind, field
+        using errcode = '22023';
+    end if;
     operator := case kind
       when 'gt' then '>'
       when 'gte' then '>='

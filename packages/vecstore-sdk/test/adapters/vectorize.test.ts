@@ -492,6 +492,19 @@ describe(createVectorizeStore, () => {
     expect(stored.size).toBe(1);
   });
 
+  test("a default namespace delete removes its own vector", async () => {
+    const { calls, client, stored } = fakeCloudflare();
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .upsert([{ id: "doc-1", vector: [1] }]);
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .delete({ ids: ["doc-1"] });
+    expect(stored.size).toBe(0);
+    const [sent] = bodiesFor(calls, "/delete_by_ids");
+    expect(parse<IdsBody>(sent ?? "{}").ids).toStrictEqual(["doc-1"]);
+  });
+
   test("delete by filter and delete all are unsupported", async () => {
     const { client } = fakeCloudflare();
     const docs = createVectorizeStore({ accountId: ACCOUNT_ID, client }).index(

@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createClient } from "@supabase/supabase-js";
 
 import { createSupabaseStore } from "../../src/supabase";
-import { liveCases, setupLive } from "./conformance";
+import { containsCases, liveCases, setupLive } from "./conformance";
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -15,7 +15,7 @@ describe.skipIf(!enabled)("supabase live", () => {
     createSupabaseStore({ client: createClient(url ?? "", key ?? "") })
   );
 
-  test.each(liveCases)("%s", async (_name, run) => {
+  test.each([...containsCases, ...liveCases])("%s", async (_name, run) => {
     await expect(run(live())).resolves.toBeUndefined();
   });
 });

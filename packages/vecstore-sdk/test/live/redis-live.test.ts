@@ -6,7 +6,7 @@ import { eq, exists, not } from "../../src/filter/ast";
 import type { RedisMetadataField } from "../../src/redis";
 import { createRedisStore } from "../../src/redis";
 import type { ScoredRecord, VectorRecord } from "../../src/types";
-import { liveCases, setupLive } from "./conformance";
+import { containsCases, liveCases, setupLive } from "./conformance";
 
 const url = process.env.REDIS_URL ?? "";
 const enabled = process.env.VECSTORE_LIVE === "1" && url !== "";
@@ -50,7 +50,7 @@ const idsOf = (matches: readonly ScoredRecord[]): string[] =>
 describe.skipIf(!enabled)("redis live", () => {
   const live = setupLive(() => createRedisStore({ client, metadataFields }));
 
-  test.each(liveCases)("%s", async (_name, run) => {
+  test.each([...containsCases, ...liveCases])("%s", async (_name, run) => {
     await expect(run(live())).resolves.toBeUndefined();
   });
 });

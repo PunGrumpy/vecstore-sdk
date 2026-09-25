@@ -6,7 +6,10 @@ import { errorMessage } from "../../src/errors";
 import { isBoolean, isNumber, isString } from "../../src/internal/guards";
 import { hasCode } from "../../src/internal/postgres";
 import type { SupabaseCall, SupabaseClientLike } from "../../src/supabase";
-import { createSupabaseStore } from "../../src/supabase";
+import {
+  createSupabaseStore,
+  normalizeSupabaseError,
+} from "../../src/supabase";
 import { containsCases, liveCases, setupLive } from "../live/conformance";
 import { createPostgres, installSupabaseSql } from "./pglite";
 
@@ -77,5 +80,29 @@ describe("supabase on PGlite", () => {
 
   test.each([...containsCases, ...liveCases])("%s", async (_name, run) => {
     await expect(run(live())).resolves.toBeUndefined();
+  });
+});
+
+describe("vecstore_create_index index lifecycle on PGlite", () => {
+  const db = createPostgres();
+  beforeAll(() => installSupabaseSql(db));
+  afterAll(() => db.close());
+
+  test("rejects a name over 49 bytes with a 22023 error", async () => {
+    const name = "a".repeat(50);
+    const response = await rpcClient(db).rpc("vecstore_create_index", {
+      dimension: 3,
+      index_name: name,
+      index_schema: null,
+      metric: "cosine",
+    });
+    expect(response.error?.code).toBe("22023");
+    const mapped = normalizeSupabaseError(
+      Object.assign(new Error(response.error?.message ?? ""), {
+        code: response.error?.code,
+      }),
+      { fn: "vecstore_create_index", index: name }
+    );
+    expect(mapped.kind).toBe("invalid_argument");
   });
 });

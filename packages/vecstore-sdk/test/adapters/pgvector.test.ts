@@ -192,8 +192,16 @@ describe(createPgvectorStore, () => {
       ],
     });
     expect(calls[1]).toStrictEqual({
-      params: ["", "[1,2]", '{"genre":"drama"}', "year", "2000", 3],
-      text: `SELECT id, metadata, embedding::text AS embedding, -(embedding <#> $2::vector) AS score FROM "docs" WHERE namespace = $1 AND (metadata @> $3::jsonb AND (jsonb_typeof((metadata->$4::text)) = 'number' AND (metadata->$4::text) > $5::jsonb)) ORDER BY embedding <#> $2::vector LIMIT $6`,
+      params: [
+        "",
+        "[1,2]",
+        '{"genre":"drama"}',
+        '{"genre":["drama"]}',
+        "year",
+        "2000",
+        3,
+      ],
+      text: `SELECT id, metadata, embedding::text AS embedding, -(embedding <#> $2::vector) AS score FROM "docs" WHERE namespace = $1 AND ((metadata @> $3::jsonb OR metadata @> $4::jsonb) AND (jsonb_typeof((metadata->$5::text)) = 'number' AND (metadata->$5::text) > $6::jsonb)) ORDER BY embedding <#> $2::vector LIMIT $7`,
     });
     await store.index("docs").query({ topK: 1, vector: [0, 0] });
     expect(calls).toHaveLength(3);
@@ -265,8 +273,8 @@ describe(createPgvectorStore, () => {
         ["", ["a"]],
       ],
       [
-        `DELETE FROM "docs" WHERE namespace = $1 AND metadata @> $2::jsonb`,
-        ["", '{"genre":"drama"}'],
+        `DELETE FROM "docs" WHERE namespace = $1 AND (metadata @> $2::jsonb OR metadata @> $3::jsonb)`,
+        ["", '{"genre":"drama"}', '{"genre":["drama"]}'],
       ],
       [`DELETE FROM "docs" WHERE namespace = $1`, [""]],
     ]);

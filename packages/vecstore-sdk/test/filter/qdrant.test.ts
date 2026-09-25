@@ -79,9 +79,9 @@ describe(compileQdrantFilter, () => {
     });
   });
 
-  test("nin uses match.except or must_not", () => {
+  test("nin is must_not of match.any or of the per-value conditions", () => {
     expect(compileQdrantFilter(notIn("year", [1, 2]))).toStrictEqual({
-      must: [{ key: "year", match: { except: [1, 2] } }],
+      must_not: [{ key: "year", match: { any: [1, 2] } }],
     });
     expect(compileQdrantFilter(notIn("flag", [true, false]))).toStrictEqual({
       must_not: [

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { and, eq, gt, isIn, not } from "../../src/filter/ast";
+import { and, eq, gt, isIn, not, notIn } from "../../src/filter/ast";
 import type { VectorIndex, VectorRecord, VectorStore } from "../../src/types";
 
 export type LiveStore = Pick<
@@ -100,6 +100,52 @@ export const setupLive = (
     return live;
   };
 };
+
+export const containsCases: LiveCase[] = [
+  [
+    "eq on a list field matches one element",
+    async ({ index }) => {
+      const matches = unwrap(
+        await index.query({
+          filter: eq("tags", "x"),
+          topK: 10,
+          vector: vectors.d,
+        })
+      );
+      expect(idsOf(matches)).toStrictEqual(["doc-d"]);
+    },
+  ],
+  [
+    "isIn on a list field matches any element",
+    async ({ index }) => {
+      const matches = unwrap(
+        await index.query({
+          filter: isIn("tags", ["x", "q"]),
+          topK: 10,
+          vector: vectors.d,
+        })
+      );
+      expect(idsOf(matches)).toStrictEqual(["doc-d"]);
+    },
+  ],
+  [
+    "notIn on a list field skips a record holding one of the values",
+    async ({ index }) => {
+      const matches = unwrap(
+        await index.query({
+          filter: notIn("tags", ["x"]),
+          topK: 10,
+          vector: vectors.a,
+        })
+      );
+      expect(idsOf(matches).toSorted()).toStrictEqual([
+        "doc-a",
+        "doc-b",
+        "doc-c",
+      ]);
+    },
+  ],
+];
 
 export const liveCases: LiveCase[] = [
   [

@@ -7,7 +7,7 @@ import { isBoolean, isNumber, isString } from "../../src/internal/guards";
 import { hasCode } from "../../src/internal/postgres";
 import type { SupabaseCall, SupabaseClientLike } from "../../src/supabase";
 import { createSupabaseStore } from "../../src/supabase";
-import { liveCases, setupLive } from "../live/conformance";
+import { containsCases, liveCases, setupLive } from "../live/conformance";
 import { createPostgres, installSupabaseSql } from "./pglite";
 
 type ValueOf<T> = T extends object ? T[keyof T] : never;
@@ -75,7 +75,7 @@ describe("supabase on PGlite", () => {
   const live = setupLive(() => createSupabaseStore({ client: rpcClient(db) }));
   afterAll(() => db.close());
 
-  test.each(liveCases)("%s", async (_name, run) => {
+  test.each([...containsCases, ...liveCases])("%s", async (_name, run) => {
     await expect(run(live())).resolves.toBeUndefined();
   });
 });

@@ -169,14 +169,18 @@ export const demoExamples: readonly DemoExample[] = [
     id: "match",
     label: "Match",
     output: {
-      pgvector: `(metadata @> $1::jsonb
-  AND (jsonb_typeof((metadata->$2::text))
-        = 'number'
-    AND (metadata->$2::text) > $3::jsonb))
+      pgvector: `((metadata @> $1::jsonb
+  OR metadata @> $2::jsonb)
+  AND (jsonb_typeof(
+    (metadata->$3::text))
+    = 'number'
+    AND (metadata->$3::text)
+    > $4::jsonb))
 
 $1 = '{"genre":"drama"}'
-$2 = 'year'
-$3 = '2000'`,
+$2 = '{"genre":["drama"]}'
+$3 = 'year'
+$4 = '2000'`,
       pinecone: `{
   "$and": [
     { "genre": { "$eq": "drama" } },
@@ -267,13 +271,19 @@ $3 = 'price'   $4 = '100'`,
     id: "sets",
     label: "Sets",
     output: {
-      pgvector: `((metadata->$1::text) <@ $2::jsonb
-  AND NOT COALESCE(
-    (metadata->$3::text) <@ $4::jsonb,
-    false))
+      pgvector: `((metadata @> $1::jsonb
+  OR metadata @> $2::jsonb
+  OR metadata @> $3::jsonb
+  OR metadata @> $4::jsonb)
+  AND NOT (metadata @> $5::jsonb
+    OR metadata @> $6::jsonb))
 
-$1 = 'lang'    $2 = '["en","th"]'
-$3 = 'status'  $4 = '["draft"]'`,
+$1 = '{"lang":"en"}'
+$2 = '{"lang":["en"]}'
+$3 = '{"lang":"th"}'
+$4 = '{"lang":["th"]}'
+$5 = '{"status":"draft"}'
+$6 = '{"status":["draft"]}'`,
       pinecone: `{
   "$and": [
     { "lang": { "$in": ["en", "th"] } },
@@ -315,11 +325,16 @@ $3 = 'status'  $4 = '["draft"]'`,
     id: "logic",
     label: "Logic",
     output: {
-      pgvector: `(metadata @> $1::jsonb
-  OR NOT (metadata @> $2::jsonb))
+      pgvector: `((metadata @> $1::jsonb
+  OR metadata @> $2::jsonb)
+  OR NOT (
+    (metadata @> $3::jsonb
+    OR metadata @> $4::jsonb)))
 
 $1 = '{"tier":"pro"}'
-$2 = '{"region":"eu"}'`,
+$2 = '{"tier":["pro"]}'
+$3 = '{"region":"eu"}'
+$4 = '{"region":["eu"]}'`,
       pinecone: `{
   "$or": [
     { "tier": { "$eq": "pro" } },

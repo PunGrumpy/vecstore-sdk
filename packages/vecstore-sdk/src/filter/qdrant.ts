@@ -8,10 +8,6 @@ export interface QdrantMatchAny {
   readonly any: string[] | number[];
 }
 
-export interface QdrantMatchExcept {
-  readonly except: string[] | number[];
-}
-
 export interface QdrantRange {
   readonly gt?: number;
   readonly gte?: number;
@@ -21,7 +17,7 @@ export interface QdrantRange {
 
 export interface QdrantMatchCondition {
   readonly key: string;
-  readonly match: QdrantMatchValue | QdrantMatchAny | QdrantMatchExcept;
+  readonly match: QdrantMatchValue | QdrantMatchAny;
 }
 
 export interface QdrantRangeCondition {
@@ -77,7 +73,11 @@ const membership = (
 ): QdrantCondition => {
   const list = [...values];
   if (isStringList(list) || isIntegerList(list)) {
-    return { key: field, match: exclude ? { except: list } : { any: list } };
+    const condition: QdrantMatchCondition = {
+      key: field,
+      match: { any: list },
+    };
+    return exclude ? { must_not: [condition] } : condition;
   }
   const conditions = list.map((value) => equalsCondition(field, value));
   return exclude ? { must_not: conditions } : { should: conditions };

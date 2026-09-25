@@ -19,6 +19,20 @@ as $$
   end;
 $$;
 
+create or replace function vecstore_contains_any(column_name text, field text, candidates jsonb)
+returns text
+language sql
+immutable
+security invoker
+set search_path = public, extensions
+as $$
+  select '(' || string_agg(
+    column_name || ' @> ' || quote_literal(jsonb_build_object(field, v)) || '::jsonb OR '
+      || column_name || ' @> ' || quote_literal(jsonb_build_object(field, jsonb_build_array(v))) || '::jsonb',
+    ' OR ') || ')'
+  from jsonb_array_elements(candidates) as v;
+$$;
+
 create or replace function vecstore_filter_sql(match_filter jsonb, column_name text)
 returns text
 language plpgsql
@@ -33,6 +47,7 @@ declare
   parts text[] := '{}';
   child jsonb;
   operator text;
+  clause text;
 begin
   if kind is null then
     raise exception 'vecstore: filter has no "kind"' using errcode = '22023';
@@ -58,14 +73,12 @@ begin
 
   path := '(' || column_name || ' -> ' || quote_literal(field) || '::text)';
 
-  if kind = 'eq' then
-    return column_name || ' @> '
-      || quote_literal(jsonb_build_object(field, match_filter -> 'value')) || '::jsonb';
-  end if;
-
-  if kind = 'ne' then
-    return 'NOT (' || column_name || ' @> '
-      || quote_literal(jsonb_build_object(field, match_filter -> 'value')) || '::jsonb)';
+  if kind in ('eq', 'ne') then
+    if not (match_filter ? 'value') then
+      raise exception 'vecstore: "%" on "%" has no "value"', kind, field using errcode = '22023';
+    end if;
+    clause := vecstore_contains_any(column_name, field, jsonb_build_array(match_filter -> 'value'));
+    return case when kind = 'ne' then 'NOT ' || clause else clause end;
   end if;
 
   if kind in ('gt', 'gte', 'lt', 'lte') then
@@ -79,13 +92,13 @@ begin
       || operator || ' ' || quote_literal(match_filter -> 'value') || '::jsonb)';
   end if;
 
-  if kind = 'in' then
-    return path || ' <@ ' || quote_literal(match_filter -> 'values') || '::jsonb';
-  end if;
-
-  if kind = 'nin' then
-    return 'NOT COALESCE(' || path || ' <@ '
-      || quote_literal(match_filter -> 'values') || '::jsonb, false)';
+  if kind in ('in', 'nin') then
+    if jsonb_typeof(match_filter -> 'values') is distinct from 'array'
+       or jsonb_array_length(match_filter -> 'values') = 0 then
+      raise exception 'vecstore: "%" on "%" needs a non-empty "values" list', kind, field using errcode = '22023';
+    end if;
+    clause := vecstore_contains_any(column_name, field, match_filter -> 'values');
+    return case when kind = 'nin' then 'NOT ' || clause else clause end;
   end if;
 
   if kind = 'exists' then

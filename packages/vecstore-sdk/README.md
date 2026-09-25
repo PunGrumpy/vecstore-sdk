@@ -116,11 +116,11 @@ Build filters with the exported helpers. Each compiler is also exported from its
 
 | Builder | Qdrant | pgvector and Supabase | Pinecone | Upstash | Vectorize | Redis |
 | --- | --- | --- | --- | --- | --- | --- |
-| `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}'` | `{ field: { $eq } }` | `field = value` | `{ field: { $eq } }` | `@field:{"value"}` on a tag, `@field:[v v]` on a number |
-| `ne(field, value)` | `must_not` of the above | `NOT (metadata @> ...)` | `$ne` | `field != value` | `$ne` | `-(...)` of the above |
+| `eq(field, value)` | `match.value`, or a closed `range` for floats | `metadata @> '{"field": value}' OR metadata @> '{"field": [value]}'` | `{ field: { $eq } }` | `field = value` | `{ field: { $eq } }` | `@field:{"value"}` on a tag, `@field:[v v]` on a number |
+| `ne(field, value)` | `must_not` of the above | `NOT (...)` of the above | `$ne` | `field != value` | `$ne` | `-(...)` of the above |
 | `gt`, `gte`, `lt`, `lte` | `range` | jsonb comparison guarded by `jsonb_typeof` | `$gt`, `$gte`, `$lt`, `$lte` | `>`, `>=`, `<`, `<=` | `$gt`, `$gte`, `$lt`, `$lte` | `@field:[(v +inf]` and the other three bounds |
-| `isIn(field, values)` | `match.any`, or `should` for mixed types | `metadata->field <@ values` | `$in`, or `$or` of `$eq` for booleans | `field IN (...)` | `$in` | `@field:{"a" \| "b"}` on a tag, a union of ranges on a number |
-| `notIn(field, values)` | `match.except`, or `must_not` | `NOT COALESCE(... <@ ..., false)` | `$nin`, or `$and` of `$ne` for booleans | `field NOT IN (...)` | `$nin` | `-(...)` of the above |
+| `isIn(field, values)` | `match.any`, or `should` for mixed types | an `OR` of the `eq` form per value | `$in`, or `$or` of `$eq` for booleans | `field IN (...)` | `$in` | `@field:{"a" \| "b"}` on a tag, a union of ranges on a number |
+| `notIn(field, values)` | `must_not` of `match.any`, or of the per-value conditions | `NOT (...)` of the above | `$nin`, or `$and` of `$ne` for booleans | `field NOT IN (...)` | `$nin` | `-(...)` of the above |
 | `exists(field)` | `must_not is_empty` | `IS NOT NULL AND jsonb_typeof <> 'null'` | `$exists: true` | `HAS FIELD field` | `unsupported` | `-ismissing(@field)` |
 | `and`, `or` | `must`, `should` | `AND`, `OR` | `$and`, `$or` | `AND`, `OR` | `and` merges fields into one object, `or` is `unsupported` | a space, `\|` |
 | `not(filter)` | `must_not` | `NOT (...)` | Pushed to the leaves with De Morgan's laws | Pushed to the leaves with De Morgan's laws | Pushed to the leaves with De Morgan's laws | `-(...)` around the clause |

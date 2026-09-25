@@ -217,6 +217,54 @@ describe(createPgvectorStore, () => {
     expect(calls).toStrictEqual([]);
   });
 
+  test("createIndex after deleteIndex re-reads the metric", async () => {
+    const ipOpsRow = {
+      indexdef:
+        "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_ip_ops)",
+    };
+    const l2OpsRow = {
+      indexdef:
+        "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_l2_ops)",
+    };
+    const { client, calls } = fakeClient([
+      [ipOpsRow],
+      [],
+      [],
+      [],
+      [l2OpsRow],
+      [],
+    ]);
+    const store = createPgvectorStore({ client });
+    await store.index("docs").query({ topK: 1, vector: [1, 2] });
+    await store.deleteIndex("docs");
+    await store.createIndex({
+      dimension: 2,
+      metric: "euclidean",
+      name: "docs",
+    });
+    await store.index("docs").query({ topK: 1, vector: [1, 2] });
+    expect(catalogCalls(calls)).toBe(2);
+    expect(calls.at(-1)?.text).toContain("ORDER BY embedding <-> $2::vector");
+  });
+
+  test("a query before createIndex does not pin the cosine fallback", async () => {
+    const l2OpsRow = {
+      indexdef:
+        "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_l2_ops)",
+    };
+    const { client, calls } = fakeClient([[], [], [], [l2OpsRow], []]);
+    const store = createPgvectorStore({ client });
+    await store.index("docs").query({ topK: 1, vector: [1, 2] });
+    await store.createIndex({
+      dimension: 2,
+      metric: "euclidean",
+      name: "docs",
+    });
+    await store.index("docs").query({ topK: 1, vector: [1, 2] });
+    expect(catalogCalls(calls)).toBe(2);
+    expect(calls.at(-1)?.text).toContain("ORDER BY embedding <-> $2::vector");
+  });
+
   test("the metric is resolved once even when the first two queries run together", async () => {
     const { client, calls } = fakeClient([
       [

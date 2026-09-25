@@ -29,6 +29,24 @@ describe(deterministicUuid, () => {
     expect(isUuid(id)).toBeTruthy();
     expect(id.charAt(14)).toBe("8");
   });
+
+  test("matches the values persisted by earlier versions", () => {
+    expect(
+      deterministicUuid("vecstore-sdk/qdrant/point-id", "tenant-a/5/doc-1")
+    ).toBe("73f328fb-a7ca-81f7-a86a-06f5a7282959");
+    expect(deterministicUuid("vecstore-sdk/qdrant/point-id", "/5/doc-1")).toBe(
+      "11882748-0614-8fd6-9efe-c7506d346ab2"
+    );
+    expect(
+      deterministicUuid("vecstore-sdk/vectorize/vector-id", "tenant-a/5/doc-1")
+    ).toBe("5a2ccb9b-cbc4-8bfb-9e20-a64886ed02c1");
+    expect(
+      deterministicUuid(
+        "vecstore-sdk/vectorize/vector-id",
+        `/70/${"a".repeat(70)}`
+      )
+    ).toBe("7f62dd9c-602b-8ec5-aad4-fcacc6f0e1ef");
+  });
 });
 
 describe(isUuid, () => {

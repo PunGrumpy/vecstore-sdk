@@ -1,8 +1,7 @@
 import { TagIcon } from "lucide-react";
+import { version } from "vecstore-sdk/package.json";
 
 import { githubUrl } from "@/lib/layout.shared";
-
-import { version } from "../../../../packages/vecstore-sdk/package.json";
 
 const major = version.split(".")[0] ?? "0";
 

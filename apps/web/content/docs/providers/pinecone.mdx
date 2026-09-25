@@ -21,6 +21,8 @@ Install the client alongside the SDK:
 bun add vecstore-sdk @pinecone-database/pinecone
 ```
 
+The adapter needs `@pinecone-database/pinecone` 7 or later, which introduced the object-parameter data plane calls it uses.
+
 ## Index creation
 
 `createIndex` needs a deployment spec. `indexSpec` defaults to serverless on AWS in `us-east-1`. Pass `indexSpec` to change it. `createIndex` waits until the index is ready before it returns.

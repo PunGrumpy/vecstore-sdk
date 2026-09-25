@@ -191,7 +191,7 @@ const store = createPineconeStore({
 });
 ```
 
-Indexes and namespaces map one to one. `indexSpec` defaults to serverless on AWS in `us-east-1`. `createIndex` waits until the index is ready. Serverless indexes reject `delete({ filter })`. The adapter returns an `unsupported` error with `feature: "deleteByFilter"` in that case.
+Indexes and namespaces map one to one. `indexSpec` defaults to serverless on AWS in `us-east-1`. `createIndex` waits until the index is ready. Serverless indexes reject `delete({ filter })`. The adapter returns an `unsupported` error with `feature: "deleteByFilter"` in that case. The adapter needs `@pinecone-database/pinecone` 7 or later, which introduced the object-parameter data plane calls it uses.
 
 ### Supabase
 

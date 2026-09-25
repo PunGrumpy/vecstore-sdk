@@ -94,7 +94,8 @@
     "test": "bun test test/filter test/adapters test/internal.test.ts",
     "test:coverage": "bun test --coverage test/filter test/adapters test/internal.test.ts",
     "typecheck": "tsc --noEmit",
-    "test:live": "VECSTORE_LIVE=1 bun test test/live"
+    "test:live": "VECSTORE_LIVE=1 bun test test/live",
+    "check:package": "bun run build && bun scripts/check-exports.ts && bun x publint && bun x attw --pack . --profile esm-only --exclude-entrypoints ./sql/supabase.sql"
   },
   "devDependencies": {
     "@pinecone-database/pinecone": "^9.0.0",

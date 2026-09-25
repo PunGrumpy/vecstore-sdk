@@ -12,7 +12,7 @@ import { and, eq, exists, not, or } from "../filter/ast";
 import type { Filter } from "../filter/ast";
 import { compileUpstashFilter, isUpstashFilterError } from "../filter/upstash";
 import { attempt } from "../internal/attempt";
-import { chunk, sortByIds } from "../internal/collections";
+import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { isString } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -22,6 +22,7 @@ import {
 } from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
+import { queryOptionsError } from "../internal/query-options";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -314,14 +315,15 @@ const metadataDeletableIds = async (
   if (namespace !== DEFAULT_NAMESPACE) {
     return [...storedIds];
   }
-  const responses = await Promise.all(
-    chunk(storedIds, ID_BATCH).map((batch) =>
+  const responses = await mapBatches({
+    action: (batch) =>
       client.fetch(batch, {
         includeMetadata: true,
         namespace: metadataNamespace(index),
-      })
-    )
-  );
+      }),
+    items: storedIds,
+    size: ID_BATCH,
+  });
   const owned: string[] = [];
   for (const record of responses.flat()) {
     if (record !== null && readStoredNamespace(record) === DEFAULT_NAMESPACE) {
@@ -447,11 +449,11 @@ const createIndex = (
             return;
           }
           const target = scope();
-          await Promise.all(
-            chunk(ids, ID_BATCH).map((batch) =>
-              client.delete({ ids: batch }, target)
-            )
-          );
+          await mapBatches({
+            action: (batch) => client.delete({ ids: batch }, target),
+            items: ids,
+            size: ID_BATCH,
+          });
           return;
         }
         if ("filter" in selector) {
@@ -475,19 +477,17 @@ const createIndex = (
       return run(name, async () => {
         const includeVectors = fetchOptions.includeVector ?? false;
         const target = scope();
-        const batches = chunk(
-          ids.map((id) => layout.storedId(namespace, id)),
-          ID_BATCH
-        );
-        const responses = await Promise.all(
-          batches.map((batch) =>
+        const storedIds = ids.map((id) => layout.storedId(namespace, id));
+        const responses = await mapBatches({
+          action: (batch) =>
             client.fetch(batch, {
               ...target,
               includeMetadata: true,
               includeVectors,
-            })
-          )
-        );
+            }),
+          items: storedIds,
+          size: ID_BATCH,
+        });
         const records: VectorRecord[] = [];
         for (const record of responses.flat()) {
           if (record !== null) {
@@ -509,6 +509,10 @@ const createIndex = (
     query: (query: QueryOptions): VecResult<ScoredRecord[]> => {
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
+      }
+      const invalidQuery = queryOptionsError(PROVIDER, query);
+      if (invalidQuery !== undefined) {
+        return Promise.resolve(err(invalidQuery));
       }
       return run(name, async () => {
         const includeMetadata = query.includeMetadata ?? true;
@@ -542,14 +546,14 @@ const createIndex = (
       }
       return run(name, async () => {
         const target = scope();
-        const stored = records.map((record) =>
+        const stored = lastById(records).map((record) =>
           layout.storedRecord(namespace, record)
         );
-        await Promise.all(
-          chunk(stored, UPSERT_BATCH).map((batch) =>
-            client.upsert(batch, target)
-          )
-        );
+        await mapBatches({
+          action: (batch) => client.upsert(batch, target),
+          items: stored,
+          size: UPSERT_BATCH,
+        });
       });
     },
   };

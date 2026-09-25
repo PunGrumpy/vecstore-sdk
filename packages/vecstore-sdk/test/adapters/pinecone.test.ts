@@ -4,6 +4,7 @@ import { Pinecone } from "@pinecone-database/pinecone";
 
 import type { VecstoreError } from "../../src/errors";
 import { eq } from "../../src/filter/ast";
+import type { NonEmpty } from "../../src/filter/ast";
 import type {
   PineconeClientLike,
   PineconeFilter,
@@ -199,12 +200,39 @@ describe(createPineconeStore, () => {
     ]);
   });
 
+  test("upsert keeps the last record when a batch repeats an id", async () => {
+    const { client, recorded } = fakeClient();
+    await createPineconeStore({ client })
+      .index("docs")
+      .upsert([
+        { id: "a", vector: [1] },
+        { id: "a", vector: [2] },
+      ]);
+    expect(recorded.upserts).toHaveLength(1);
+    expect(recorded.upserts[0]?.records).toHaveLength(1);
+    expect(recorded.upserts[0]?.records[0]?.id).toBe("a");
+    expect(recorded.upserts[0]?.records[0]?.values).toStrictEqual([2]);
+  });
+
   test("the default namespace sends no namespace key", async () => {
     const { client, recorded } = fakeClient();
     await createPineconeStore({ client })
       .index("docs")
       .delete({ ids: ["a", "b"] });
     expect(recorded.deleteManys).toStrictEqual([{ ids: ["a", "b"] }]);
+  });
+
+  test("delete by id splits into batches of 1000", async () => {
+    const { client, recorded } = fakeClient();
+    const ids: NonEmpty<string> = [
+      "id-0",
+      ...Array.from({ length: 1000 }, (_, i) => `id-${i + 1}`),
+    ];
+    await createPineconeStore({ client }).index("docs").delete({ ids });
+    expect(recorded.deleteManys).toHaveLength(2);
+    expect(recorded.deleteManys.map((call) => call.ids?.length)).toStrictEqual([
+      1000, 1,
+    ]);
   });
 
   test("fetch preserves request order and drops the vector unless asked", async () => {
@@ -246,6 +274,16 @@ describe(createPineconeStore, () => {
     });
     expect(full.ok && full.value[0]?.metadata).toStrictEqual({ n: 1 });
     expect(full.ok && full.value[0]?.vector).toStrictEqual([1]);
+  });
+
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createPineconeStore({ client })
+      .index("docs")
+      .query({ topK: 0, vector: [1] });
+    expect(result.ok).toBeFalsy();
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded.queries).toStrictEqual([]);
   });
 
   test("delete by filter on an index that rejects it is unsupported", async () => {

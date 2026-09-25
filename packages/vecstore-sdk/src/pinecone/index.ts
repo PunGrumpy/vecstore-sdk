@@ -12,8 +12,9 @@ import type { VecstoreError } from "../errors";
 import { compilePineconeFilter } from "../filter/pinecone";
 import type { PineconeFilter } from "../filter/pinecone";
 import { attempt } from "../internal/attempt";
-import { chunk, sortByIds } from "../internal/collections";
+import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { indexSpecError } from "../internal/index-spec";
+import { queryOptionsError } from "../internal/query-options";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -119,6 +120,7 @@ export interface PineconeStoreOptions<Client> {
 const PROVIDER = "pinecone";
 const UPSERT_BATCH = 100;
 const FETCH_BATCH = 1000;
+const ID_BATCH = 1000;
 const DEFAULT_SPEC: PineconeIndexSpec = {
   serverless: { cloud: "aws", region: "us-east-1" },
 };
@@ -230,9 +232,13 @@ const createIndex = (
   return {
     delete: (selector: DeleteSelector) => {
       if ("ids" in selector) {
-        return run(context, () =>
-          target.deleteMany({ ...scope, ids: [...selector.ids] })
-        );
+        return run(context, async () => {
+          await mapBatches({
+            action: (batch) => target.deleteMany({ ...scope, ids: batch }),
+            items: [...selector.ids],
+            size: ID_BATCH,
+          });
+        });
       }
       if ("filter" in selector) {
         return run({ ...context, feature: "deleteByFilter" }, () =>
@@ -248,11 +254,11 @@ const createIndex = (
     fetch: (ids, fetchOptions: FetchOptions = {}) =>
       run(context, async () => {
         const includeVector = fetchOptions.includeVector ?? false;
-        const responses = await Promise.all(
-          chunk(ids, FETCH_BATCH).map((batch) =>
-            target.fetch({ ...scope, ids: batch })
-          )
-        );
+        const responses = await mapBatches({
+          action: (batch) => target.fetch({ ...scope, ids: batch }),
+          items: ids,
+          size: FETCH_BATCH,
+        });
         const records = responses.flatMap((response) =>
           recordsOf(response, includeVector)
         );
@@ -263,8 +269,12 @@ const createIndex = (
 
     namespace: options.namespace,
 
-    query: (query: QueryOptions) =>
-      run(context, async () => {
+    query: (query: QueryOptions) => {
+      const invalid = queryOptionsError(PROVIDER, query);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(context, async () => {
         const includeMetadata = query.includeMetadata ?? true;
         const includeVector = query.includeVector ?? false;
         const response = await target.query({
@@ -281,15 +291,17 @@ const createIndex = (
         return response.matches.map((match) =>
           toScoredRecord(match, includeMetadata, includeVector)
         );
-      }),
+      });
+    },
 
     upsert: (records) =>
       run(context, async () => {
-        await Promise.all(
-          chunk(records, UPSERT_BATCH).map((batch) =>
-            target.upsert({ ...scope, records: batch.map(toPineconeRecord) })
-          )
-        );
+        await mapBatches({
+          action: (batch) =>
+            target.upsert({ ...scope, records: batch.map(toPineconeRecord) }),
+          items: lastById(records),
+          size: UPSERT_BATCH,
+        });
       }),
   };
 };

@@ -2,7 +2,7 @@ import type { VecstoreError } from "../errors";
 import { compilePgvectorFilter } from "../filter/pgvector";
 import type { PgvectorSql } from "../filter/pgvector";
 import { attempt } from "../internal/attempt";
-import { chunk, lastById, sortByIds } from "../internal/collections";
+import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { isObjectLike } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -13,6 +13,7 @@ import {
   toVectorRecord,
   vectorLiteral,
 } from "../internal/postgres";
+import { queryOptionsError } from "../internal/query-options";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -222,8 +223,12 @@ const createIndex = (
 
     namespace: options.namespace,
 
-    query: (query: QueryOptions) =>
-      run(name, async () => {
+    query: (query: QueryOptions) => {
+      const invalid = queryOptionsError(PROVIDER, query);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         const resolved = await context.metric();
         const params: PgParam[] = [namespace, vectorLiteral(query.vector)];
         const filter: PgvectorSql | undefined =
@@ -259,16 +264,19 @@ const createIndex = (
               ]
             : []
         );
-      }),
+      });
+    },
 
     upsert: (records) =>
       run(name, async () => {
-        await Promise.all(
-          chunk(lastById(records), UPSERT_BATCH).map((batch) => {
+        await mapBatches({
+          action: (batch) => {
             const statement = upsertStatement(table, namespace, batch);
             return client.query(statement.text, statement.params);
-          })
-        );
+          },
+          items: lastById(records),
+          size: UPSERT_BATCH,
+        });
       }),
   };
 };

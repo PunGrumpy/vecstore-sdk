@@ -206,6 +206,41 @@ describe(createQdrantStore, () => {
     expect(passthrough?.payload).toStrictEqual({});
   });
 
+  test("upsert never runs more than four batches at once", async () => {
+    const { client } = fakeClient();
+    const inFlight = { current: 0, max: 0 };
+    const tracked: QdrantClientLike = {
+      ...client,
+      upsert: async (name, args) => {
+        inFlight.current += 1;
+        inFlight.max = Math.max(inFlight.max, inFlight.current);
+        await Promise.resolve();
+        inFlight.current -= 1;
+        return client.upsert(name, args);
+      },
+    };
+    const index = createQdrantStore({ client: tracked }).index("docs");
+    const records = Array.from({ length: 4001 }, (_, i) => ({
+      id: `doc-${i}`,
+      vector: [i, 0, 0],
+    }));
+    await index.upsert(records);
+    expect(inFlight.max).toBe(4);
+  });
+
+  test("upsert keeps the last record when a batch repeats an id", async () => {
+    const { client, recorded } = fakeClient();
+    await createQdrantStore({ client })
+      .index("docs")
+      .upsert([
+        { id: "a", vector: [1] },
+        { id: "a", vector: [2] },
+      ]);
+    expect(recorded.upserts).toHaveLength(1);
+    expect(recorded.upserts[0]).toHaveLength(1);
+    expect(recorded.upserts[0]?.[0]?.vector).toStrictEqual([2]);
+  });
+
   test("query and fetch return the caller's ids and strip reserved keys", async () => {
     const index = createQdrantStore({ client: fakeClient().client }).index(
       "docs",
@@ -273,6 +308,16 @@ describe(createQdrantStore, () => {
         query: [1],
       },
     ]);
+  });
+
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createQdrantStore({ client })
+      .index("docs")
+      .query({ topK: 0, vector: [1] });
+    expect(result.ok).toBeFalsy();
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded.queries).toStrictEqual([]);
   });
 
   test("the default namespace matches points without a namespace", () => {

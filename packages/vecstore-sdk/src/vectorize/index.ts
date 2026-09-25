@@ -18,7 +18,7 @@ import type {
   VectorizeFilterProblem,
 } from "../filter/vectorize";
 import { attempt } from "../internal/attempt";
-import { chunk, sortByIds } from "../internal/collections";
+import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -28,6 +28,7 @@ import {
 } from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
+import { queryOptionsError } from "../internal/query-options";
 import { deterministicUuid } from "../internal/uuid";
 import { err } from "../result";
 import type { Result } from "../result";
@@ -297,8 +298,8 @@ const createIndex = (
       if ("ids" in selector) {
         return run(name, async () => {
           const stored = selector.ids.map((id) => toVectorizeId(namespace, id));
-          await Promise.all(
-            chunk(stored, ID_BATCH).map(async (batch) => {
+          await mapBatches({
+            action: async (batch) => {
               const ids = await deletableIds(
                 indexes,
                 accountId,
@@ -309,8 +310,10 @@ const createIndex = (
               if (ids.length > 0) {
                 await indexes.deleteByIDs(name, { account_id: accountId, ids });
               }
-            })
-          );
+            },
+            items: stored,
+            size: ID_BATCH,
+          });
         });
       }
       if ("filter" in selector) {
@@ -336,11 +339,12 @@ const createIndex = (
         }
         const includeVector = fetchOptions.includeVector ?? false;
         const stored = ids.map((id) => toVectorizeId(namespace, id));
-        const responses = await Promise.all(
-          chunk(stored, ID_BATCH).map((batch) =>
-            indexes.getByIDs(name, { account_id: accountId, ids: batch })
-          )
-        );
+        const responses = await mapBatches({
+          action: (batch) =>
+            indexes.getByIDs(name, { account_id: accountId, ids: batch }),
+          items: stored,
+          size: ID_BATCH,
+        });
         const records: VectorRecord[] = [];
         for (const response of responses) {
           for (const found of isUnknownArray(response) ? response : []) {
@@ -364,6 +368,10 @@ const createIndex = (
     query: (query: QueryOptions): VecResult<ScoredRecord[]> => {
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
+      }
+      const invalidQuery = queryOptionsError(PROVIDER, query);
+      if (invalidQuery !== undefined) {
+        return Promise.resolve(err(invalidQuery));
       }
       const compiled =
         query.filter === undefined ? undefined : compileFilter(query.filter);
@@ -408,16 +416,19 @@ const createIndex = (
         if (records.length === 0) {
           return;
         }
-        const lines = records.map((record) => toLine(namespace, record));
-        await Promise.all(
-          chunk(lines, UPSERT_BATCH).map((batch) =>
+        const lines = lastById(records).map((record) =>
+          toLine(namespace, record)
+        );
+        await mapBatches({
+          action: (batch) =>
             indexes.upsert(name, {
               account_id: accountId,
               body: toNdjson(batch),
               "unparsable-behavior": UNPARSABLE_BEHAVIOR,
-            })
-          )
-        );
+            }),
+          items: lines,
+          size: UPSERT_BATCH,
+        });
       });
     },
   };

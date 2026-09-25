@@ -101,7 +101,7 @@ Every verb returns a `Result`, either `{ ok: true, value }` or `{ ok: false, err
 
 | Method | Description |
 | --- | --- |
-| `upsert(records)` | Inserts or replaces records by id. Large batches are sent as several provider requests in parallel; if one fails, earlier requests may already be written, so retry the whole call: upserts are idempotent. |
+| `upsert(records)` | Inserts or replaces records by id. Large batches are sent as several provider requests, four at a time. If one fails, earlier requests may already be written, so retry the whole call. Upserts are idempotent. |
 | `query({ vector, topK, filter?, includeMetadata?, includeVector? })` | Returns the nearest records with `score`. |
 | `fetch(ids, { includeVector? })` | Returns the records that exist, in request order. |
 | `delete({ ids })`, `delete({ filter })`, `delete({ all: true })` | Removes records in the namespace. |

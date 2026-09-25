@@ -178,6 +178,16 @@ describe(createUpstashStore, () => {
     ]);
   });
 
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createUpstashStore({ client })
+      .index("docs")
+      .query({ topK: 0, vector: [1] });
+    expect(result.ok).toBeFalsy();
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded.queries).toStrictEqual([]);
+  });
+
   test("query scopes the filter to the namespace and hides reserved keys", async () => {
     const { client, recorded } = fakeClient();
     const store = createUpstashStore({ client });
@@ -223,6 +233,19 @@ describe(createUpstashStore, () => {
         namespace: "docs",
       },
     ]);
+  });
+
+  test("upsert keeps the last record when a batch repeats an id", async () => {
+    const { client, recorded } = fakeClient();
+    await createUpstashStore({ client })
+      .index("docs")
+      .upsert([
+        { id: "a", vector: [1] },
+        { id: "a", vector: [2] },
+      ]);
+    expect(recorded.upserts).toHaveLength(1);
+    expect(recorded.upserts[0]?.records).toHaveLength(1);
+    expect(recorded.upserts[0]?.records[0]?.vector).toStrictEqual([2]);
   });
 
   test("fetch and delete by id address the namespaced stored id", async () => {

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { chunk, lastById, sortByIds } from "../src/internal/collections";
+import {
+  chunk,
+  lastById,
+  mapBatches,
+  sortByIds,
+} from "../src/internal/collections";
 import { indexSpecError } from "../src/internal/index-spec";
 import {
   isMetadataEntry,
@@ -8,6 +13,7 @@ import {
   reservedKeyError,
 } from "../src/internal/metadata";
 import { namespaceError } from "../src/internal/namespace";
+import { queryOptionsError } from "../src/internal/query-options";
 import { deterministicUuid, isUuid } from "../src/internal/uuid";
 
 describe(deterministicUuid, () => {
@@ -118,5 +124,90 @@ describe("collections", () => {
       { id: "a" },
       { id: "b" },
     ]);
+  });
+});
+
+describe(queryOptionsError, () => {
+  test("only a positive integer topK is accepted", () => {
+    expect(
+      queryOptionsError("qdrant", { topK: 1, vector: [1] })
+    ).toBeUndefined();
+    expect(
+      queryOptionsError("qdrant", { topK: 100, vector: [1] })
+    ).toBeUndefined();
+    expect(queryOptionsError("qdrant", { topK: 0, vector: [1] })?.kind).toBe(
+      "invalid_argument"
+    );
+    expect(queryOptionsError("qdrant", { topK: -1, vector: [1] })?.kind).toBe(
+      "invalid_argument"
+    );
+    expect(queryOptionsError("qdrant", { topK: 1.5, vector: [1] })?.kind).toBe(
+      "invalid_argument"
+    );
+    expect(
+      queryOptionsError("qdrant", { topK: Number.NaN, vector: [1] })?.kind
+    ).toBe("invalid_argument");
+    expect(
+      queryOptionsError("qdrant", {
+        topK: Number.POSITIVE_INFINITY,
+        vector: [1],
+      })?.kind
+    ).toBe("invalid_argument");
+  });
+});
+
+describe(mapBatches, () => {
+  test("keeps results in batch order", async () => {
+    const results = await mapBatches({
+      action: (batch) =>
+        Promise.resolve(batch.reduce((sum, value) => sum + value, 0)),
+      items: [1, 2, 3, 4, 5],
+      size: 2,
+    });
+    expect(results).toStrictEqual([3, 7, 5]);
+  });
+
+  test("never runs more than the concurrency limit at once", async () => {
+    const inFlight = { current: 0, max: 0 };
+    const items = Array.from({ length: 9 }, (_, index) => index);
+    await mapBatches({
+      action: async (batch) => {
+        inFlight.current += 1;
+        inFlight.max = Math.max(inFlight.max, inFlight.current);
+        await Promise.resolve();
+        inFlight.current -= 1;
+        return batch;
+      },
+      concurrency: 4,
+      items,
+      size: 1,
+    });
+    expect(inFlight.max).toBe(4);
+  });
+
+  test("resolves to an empty array without calling the action", async () => {
+    const counter = { calls: 0 };
+    const empty: number[] = [];
+    const results = await mapBatches({
+      action: (batch) => {
+        counter.calls += 1;
+        return Promise.resolve(batch);
+      },
+      items: empty,
+      size: 2,
+    });
+    expect(results).toStrictEqual([]);
+    expect(counter.calls).toBe(0);
+  });
+
+  test("propagates a rejection", async () => {
+    const failure = new Error("batch failed");
+    await expect(
+      mapBatches({
+        action: () => Promise.reject(failure),
+        items: [1, 2, 3],
+        size: 1,
+      })
+    ).rejects.toThrow(failure);
   });
 });

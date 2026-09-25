@@ -2,7 +2,7 @@ import { connection, unauthorized, unsupported } from "../errors";
 import type { VecstoreError } from "../errors";
 import type { Filter } from "../filter/ast";
 import { attempt } from "../internal/attempt";
-import { chunk, lastById, sortByIds } from "../internal/collections";
+import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { indexSpecError } from "../internal/index-spec";
 import {
   hasCode,
@@ -13,6 +13,7 @@ import {
   toVectorRecord,
   vectorLiteral,
 } from "../internal/postgres";
+import { queryOptionsError } from "../internal/query-options";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -254,8 +255,12 @@ const createIndexHandle = (
 
     namespace: options.namespace,
 
-    query: (query: QueryOptions) =>
-      run(context("vecstore_query"), async () => {
+    query: (query: QueryOptions) => {
+      const invalid = queryOptionsError(PROVIDER, query);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(context("vecstore_query"), async () => {
         const includeVector = query.includeVector ?? false;
         const includeMetadata = query.includeMetadata ?? true;
         const rows = await invoke(client, {
@@ -269,18 +274,20 @@ const createIndexHandle = (
           fn: "vecstore_query",
         });
         return readScored(rows, includeMetadata, includeVector);
-      }),
+      });
+    },
 
     upsert: (records) =>
       run(context("vecstore_upsert"), async () => {
-        await Promise.all(
-          chunk(lastById(records), UPSERT_BATCH).map((batch) =>
+        await mapBatches({
+          action: (batch) =>
             invoke(client, {
               args: { ...scope, records: batch.map(toUpsertRow) },
               fn: "vecstore_upsert",
-            })
-          )
-        );
+            }),
+          items: lastById(records),
+          size: UPSERT_BATCH,
+        });
       }),
   };
 };

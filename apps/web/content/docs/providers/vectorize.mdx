@@ -121,7 +121,7 @@ A filter is limited to 2,048 bytes of JSON. Indexed string metadata is compared 
 
 `upsert` and `delete({ ids })` return once Vectorize has enqueued the mutation, not once the records are searchable. A query run immediately after a write can miss it. Poll with `fetch` when a test or a workflow needs the write to land.
 
-The adapter sends up to 1,000 records per upsert request as NDJSON and runs the batches together.
+The adapter sends up to 1,000 records per upsert request as NDJSON and runs up to four batches at a time.
 
 ## What the adapter stores
 

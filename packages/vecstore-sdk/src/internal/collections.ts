@@ -30,3 +30,41 @@ export const sortByIds = <T extends { readonly id: string }>(
   }
   return ordered;
 };
+
+export const BATCH_CONCURRENCY = 4;
+
+export interface MapBatchesOptions<T, R> {
+  readonly items: readonly T[];
+  readonly size: number;
+  readonly action: (batch: T[]) => Promise<R>;
+  readonly concurrency?: number;
+}
+
+export const mapBatches = async <T, R>({
+  items,
+  size,
+  action,
+  concurrency = BATCH_CONCURRENCY,
+}: MapBatchesOptions<T, R>): Promise<R[]> => {
+  const batches = chunk(items, size);
+  const results: R[] = Array.from({ length: batches.length });
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    const position = next;
+    if (position >= batches.length) {
+      return;
+    }
+    next += 1;
+    const batch = batches[position];
+    if (batch !== undefined) {
+      results[position] = await action(batch);
+    }
+    await worker();
+  };
+  const workers = Array.from(
+    { length: Math.min(concurrency, batches.length) },
+    () => worker()
+  );
+  await Promise.all(workers);
+  return results;
+};

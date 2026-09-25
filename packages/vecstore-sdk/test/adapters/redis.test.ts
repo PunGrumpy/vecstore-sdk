@@ -37,6 +37,7 @@ interface FakeClient {
   readonly searches: SearchCall[];
   readonly documents: Map<string, RedisJsonValue>;
   readonly unlinked: string[][];
+  readonly mGetCalls: string[][];
 }
 
 const NAMESPACE_PATTERN = /@namespace:\{"(?<namespace>[^"]*)"\}/u;
@@ -72,6 +73,7 @@ const createFakeClient = (): FakeClient => {
   const searches: SearchCall[] = [];
   const documents = new Map<string, RedisJsonValue>();
   const unlinked: string[][] = [];
+  const mGetCalls: string[][] = [];
   const indexes = new Set<string>();
   const client: RedisClientLike = {
     ft: {
@@ -110,8 +112,10 @@ const createFakeClient = (): FakeClient => {
       },
     },
     json: {
-      mGet: (keys) =>
-        Promise.resolve(keys.map((key) => documents.get(key) ?? null)),
+      mGet: (keys) => {
+        mGetCalls.push(keys);
+        return Promise.resolve(keys.map((key) => documents.get(key) ?? null));
+      },
       set: (key, _path, json) => {
         documents.set(key, json);
         return Promise.resolve("OK");
@@ -126,7 +130,7 @@ const createFakeClient = (): FakeClient => {
       return Promise.resolve(removed);
     },
   };
-  return { client, creates, documents, searches, unlinked };
+  return { client, creates, documents, mGetCalls, searches, unlinked };
 };
 
 const records: VectorRecord[] = [
@@ -274,6 +278,13 @@ describe(createRedisStore, () => {
     ]);
   });
 
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { fake, index } = await setup();
+    const result = await index.query({ topK: 0, vector: [1, 0, 0] });
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(fake.searches).toStrictEqual([]);
+  });
+
   test("query passes the vector as a float32 blob", async () => {
     const { fake, index } = await setup();
     await index.query({ topK: 1, vector: [1, 0.5, 0] });
@@ -336,6 +347,18 @@ describe(createRedisStore, () => {
     expect(found[0]?.vector).toStrictEqual([1, 0, 0]);
   });
 
+  test("fetch splits JSON.MGET into batches of 500", async () => {
+    const { fake, index } = await setup();
+    const ids: NonEmpty<string> = [
+      "r0",
+      ...Array.from({ length: 500 }, (_, i) => `r${i + 1}`),
+    ];
+    await index.fetch(ids);
+    expect(fake.mGetCalls).toHaveLength(2);
+    expect(fake.mGetCalls[0]).toHaveLength(500);
+    expect(fake.mGetCalls[1]).toHaveLength(1);
+  });
+
   test("delete by id unlinks the namespaced keys", async () => {
     const { fake, index } = await setup();
     await index.delete({ ids: ["doc-a"] });
@@ -391,6 +414,24 @@ describe(createRedisStore, () => {
     for (const keys of fake.unlinked) {
       expect(keys).not.toContain(foreign);
     }
+  });
+
+  test("delete all stops paging when a full page unlinks nothing", async () => {
+    const { fake, index } = await setup();
+    await index.delete({ ids: ["doc-a", "doc-b"] });
+    for (let i = 0; i < DELETE_PAGE; i += 1) {
+      const foreign = `vecstore:docs:v2:tenant-a:x${i}`;
+      fake.documents.set(foreign, {
+        metadata: {},
+        namespace: NAMESPACE,
+        vector: [0, 0, 1],
+      });
+    }
+    const startingSize = fake.documents.size;
+    const result = await index.delete({ all: true });
+    expect(result.ok).toBeTruthy();
+    expect(fake.searches).toHaveLength(1);
+    expect(fake.documents.size).toBe(startingSize);
   });
 
   test("an index name with a colon is rejected before any request", async () => {

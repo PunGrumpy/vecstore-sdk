@@ -310,6 +310,21 @@ describe(createVectorizeStore, () => {
     });
   });
 
+  test("upsert keeps the last record when a batch repeats an id", async () => {
+    const { calls, client } = fakeCloudflare();
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .upsert([
+        { id: "a", vector: [1] },
+        { id: "a", vector: [2] },
+      ]);
+    const bodies = bodiesFor(calls, "/upsert");
+    expect(bodies).toHaveLength(1);
+    const lines = (bodies[0] ?? "").trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(parse<StoredVector>(lines[0] ?? "{}").values).toStrictEqual([2]);
+  });
+
   test("upsert makes Vectorize fail on a line it cannot read", async () => {
     const { calls, client } = fakeCloudflare();
     await createVectorizeStore({ accountId: ACCOUNT_ID, client })
@@ -385,6 +400,16 @@ describe(createVectorizeStore, () => {
       ok: true,
       value: [{ id: "doc-1", metadata: { genre: "drama" }, score: 0.9 }],
     });
+  });
+
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { calls, client } = fakeCloudflare();
+    const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .query({ topK: 0, vector: [1] });
+    expect(result.ok).toBeFalsy();
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(bodiesFor(calls, "/query")).toStrictEqual([]);
   });
 
   test("a filter Vectorize cannot express is reported before the request", async () => {

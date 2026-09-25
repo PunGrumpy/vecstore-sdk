@@ -24,6 +24,10 @@ To publish a preview build without a version bump, run the `Release` workflow fr
 bun add vecstore-sdk@snapshot
 ```
 
+A snapshot needs at least one pending changeset. `changeset version --snapshot` is a no-op without one, and the job publishes nothing.
+
+The `Preview Release` workflow runs alongside this one. It publishes every pull request and every push to `main` to `pkg.pr.new`, independent of changesets or a version bump.
+
 ## One-time setup
 
 The workflow needs three things that live outside the repository.
@@ -31,5 +35,6 @@ The workflow needs three things that live outside the repository.
 1. In the repository **Settings**, under **Actions**, enable **Allow GitHub Actions to create and approve pull requests**. Without it, the version pull request step fails with a permissions error.
 2. Publish the first version of `vecstore-sdk` to npm by hand, because npm attaches a trusted publisher only to a package that exists.
 3. On npmjs.com, open the package settings and add a trusted publisher for the repository `PunGrumpy/vecstore-sdk` with the workflow file `release.yml`. From then on, the workflow publishes with an OpenID Connect token and needs no npm token secret.
+4. Add a repository secret `VERCEL_DEPLOY_HOOK` holding the Vercel deploy hook URL for the docs project. The release job calls it after a publish, and `curl --fail` turns a missing secret into a failed job after the npm publish has already happened.
 
 The workflow sets up Node.js 24 next to Bun because trusted publishing needs npm 11.5.1 or later, and `changeset publish` calls npm. The release job also checks that the repository owner is `PunGrumpy`, so a fork that runs the workflow does not try to publish.

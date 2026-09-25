@@ -364,7 +364,7 @@ describe(createVectorizeStore, () => {
     ]);
   });
 
-  test("fetch currently keeps a stored vector that reports no namespace and drops one from another namespace", async () => {
+  test("fetch drops a stored vector that reports another namespace or none", async () => {
     const { client, stored } = fakeCloudflare();
     const bare = toVectorizeId("tenant-a", "doc-x");
     const foreign = toVectorizeId("tenant-a", "doc-y");
@@ -381,7 +381,7 @@ describe(createVectorizeStore, () => {
         .fetch(["doc-x", "doc-y"])
     ).resolves.toStrictEqual({
       ok: true,
-      value: [{ id: "doc-x", metadata: {}, vector: [] }],
+      value: [],
     });
   });
 

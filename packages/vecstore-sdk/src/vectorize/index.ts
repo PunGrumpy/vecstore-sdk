@@ -236,7 +236,7 @@ const belongsToNamespace = (
   const reported = isString(record.namespace)
     ? record.namespace
     : DEFAULT_NAMESPACE;
-  return reported === DEFAULT_NAMESPACE || reported === namespace;
+  return reported === namespace;
 };
 
 const nativeNamespace = (namespace: string): string | undefined =>

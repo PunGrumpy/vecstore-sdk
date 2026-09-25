@@ -12,7 +12,7 @@ import type { Filter } from "../filter/ast";
 import { compileQdrantFilter } from "../filter/qdrant";
 import type { QdrantCondition, QdrantFilter } from "../filter/qdrant";
 import { attempt } from "../internal/attempt";
-import { chunk, sortByIds } from "../internal/collections";
+import { mapBatches, sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -307,16 +307,17 @@ const createIndex = (
       return run(name, async () => {
         if ("ids" in selector) {
           const pointIds = selector.ids.map((id) => toPointId(namespace, id));
-          await Promise.all(
-            chunk(pointIds, ID_BATCH).map((batch) =>
+          await mapBatches({
+            action: (batch) =>
               client.delete(name, {
                 filter: {
                   must: [namespaceCondition(namespace), { has_id: batch }],
                 },
                 wait: true,
-              })
-            )
-          );
+              }),
+            items: pointIds,
+            size: ID_BATCH,
+          });
           return;
         }
         const filter = "filter" in selector ? selector.filter : undefined;
@@ -339,15 +340,16 @@ const createIndex = (
           return [];
         }
         const pointIds = ids.map((id) => toPointId(namespace, id));
-        const responses = await Promise.all(
-          chunk(pointIds, ID_BATCH).map((batch) =>
+        const responses = await mapBatches({
+          action: (batch) =>
             client.retrieve(name, {
               ids: batch,
               with_payload: true,
               with_vector: fetchOptions.includeVector ?? false,
-            })
-          )
-        );
+            }),
+          items: pointIds,
+          size: ID_BATCH,
+        });
         const records: VectorRecord[] = [];
         for (const point of responses.flat()) {
           if (inNamespace(namespace, point)) {
@@ -406,11 +408,11 @@ const createIndex = (
             vector: [...record.vector],
           };
         });
-        await Promise.all(
-          chunk(points, UPSERT_BATCH).map((batch) =>
-            client.upsert(name, { points: batch, wait: true })
-          )
-        );
+        await mapBatches({
+          action: (batch) => client.upsert(name, { points: batch, wait: true }),
+          items: points,
+          size: UPSERT_BATCH,
+        });
       });
     },
   };

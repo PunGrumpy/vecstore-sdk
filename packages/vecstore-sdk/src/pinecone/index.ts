@@ -12,7 +12,7 @@ import type { VecstoreError } from "../errors";
 import { compilePineconeFilter } from "../filter/pinecone";
 import type { PineconeFilter } from "../filter/pinecone";
 import { attempt } from "../internal/attempt";
-import { chunk, sortByIds } from "../internal/collections";
+import { mapBatches, sortByIds } from "../internal/collections";
 import { indexSpecError } from "../internal/index-spec";
 import { err } from "../result";
 import type {
@@ -119,6 +119,7 @@ export interface PineconeStoreOptions<Client> {
 const PROVIDER = "pinecone";
 const UPSERT_BATCH = 100;
 const FETCH_BATCH = 1000;
+const ID_BATCH = 1000;
 const DEFAULT_SPEC: PineconeIndexSpec = {
   serverless: { cloud: "aws", region: "us-east-1" },
 };
@@ -230,9 +231,13 @@ const createIndex = (
   return {
     delete: (selector: DeleteSelector) => {
       if ("ids" in selector) {
-        return run(context, () =>
-          target.deleteMany({ ...scope, ids: [...selector.ids] })
-        );
+        return run(context, async () => {
+          await mapBatches({
+            action: (batch) => target.deleteMany({ ...scope, ids: batch }),
+            items: [...selector.ids],
+            size: ID_BATCH,
+          });
+        });
       }
       if ("filter" in selector) {
         return run({ ...context, feature: "deleteByFilter" }, () =>
@@ -248,11 +253,11 @@ const createIndex = (
     fetch: (ids, fetchOptions: FetchOptions = {}) =>
       run(context, async () => {
         const includeVector = fetchOptions.includeVector ?? false;
-        const responses = await Promise.all(
-          chunk(ids, FETCH_BATCH).map((batch) =>
-            target.fetch({ ...scope, ids: batch })
-          )
-        );
+        const responses = await mapBatches({
+          action: (batch) => target.fetch({ ...scope, ids: batch }),
+          items: ids,
+          size: FETCH_BATCH,
+        });
         const records = responses.flatMap((response) =>
           recordsOf(response, includeVector)
         );
@@ -285,11 +290,12 @@ const createIndex = (
 
     upsert: (records) =>
       run(context, async () => {
-        await Promise.all(
-          chunk(records, UPSERT_BATCH).map((batch) =>
-            target.upsert({ ...scope, records: batch.map(toPineconeRecord) })
-          )
-        );
+        await mapBatches({
+          action: (batch) =>
+            target.upsert({ ...scope, records: batch.map(toPineconeRecord) }),
+          items: records,
+          size: UPSERT_BATCH,
+        });
       }),
   };
 };

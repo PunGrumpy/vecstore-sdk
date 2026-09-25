@@ -22,7 +22,7 @@ import type {
   RedisMetadataField,
 } from "../filter/redis";
 import { attempt } from "../internal/attempt";
-import { chunk, sortByIds } from "../internal/collections";
+import { chunk, mapBatches, sortByIds } from "../internal/collections";
 import {
   isNumber,
   isNumberArray,
@@ -512,10 +512,15 @@ interface IndexContext {
   readonly prefix: string;
 }
 
+interface DeletePageResult {
+  readonly seen: number;
+  readonly unlinked: number;
+}
+
 const deletePage = async (
   context: IndexContext,
   prefilter: string
-): Promise<number> => {
+): Promise<DeletePageResult> => {
   const page = await context.client.ft.search(context.name, prefilter, {
     DIALECT,
     LIMIT: { from: 0, size: DELETE_PAGE },
@@ -530,15 +535,15 @@ const deletePage = async (
   if (keys.length > 0) {
     await context.client.unlink(keys);
   }
-  return page.documents.length;
+  return { seen: page.documents.length, unlinked: keys.length };
 };
 
 const deleteMatches = async (
   context: IndexContext,
   prefilter: string
 ): Promise<void> => {
-  const hits = await deletePage(context, prefilter);
-  if (hits === DELETE_PAGE) {
+  const page = await deletePage(context, prefilter);
+  if (page.unlinked > 0 && page.seen === DELETE_PAGE) {
     await deleteMatches(context, prefilter);
   }
 };
@@ -593,7 +598,12 @@ const fetchRecords = async (
   includeVector: boolean
 ): Promise<VectorRecord[]> => {
   const keys = ids.map((id) => `${context.prefix}${id}`);
-  const stored = await context.client.json.mGet(keys, ROOT_PATH);
+  const batches = await mapBatches({
+    action: (batch) => context.client.json.mGet(batch, ROOT_PATH),
+    items: keys,
+    size: WRITE_BATCH,
+  });
+  const stored = batches.flat();
   const records: VectorRecord[] = [];
   for (const [position, id] of ids.entries()) {
     const value = stored[position];
@@ -667,9 +677,11 @@ const createIndex = (
       if ("ids" in selector) {
         return run(name, async () => {
           const keys = selector.ids.map((id) => `${context.prefix}${id}`);
-          await Promise.all(
-            chunk(keys, WRITE_BATCH).map((batch) => client.unlink(batch))
-          );
+          await mapBatches({
+            action: (batch) => client.unlink(batch),
+            items: keys,
+            size: WRITE_BATCH,
+          });
         });
       }
       return deleteByFilter(

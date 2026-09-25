@@ -2,7 +2,7 @@ import { connection, unauthorized, unsupported } from "../errors";
 import type { VecstoreError } from "../errors";
 import type { Filter } from "../filter/ast";
 import { attempt } from "../internal/attempt";
-import { chunk, lastById, sortByIds } from "../internal/collections";
+import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { indexSpecError } from "../internal/index-spec";
 import {
   hasCode,
@@ -273,14 +273,15 @@ const createIndexHandle = (
 
     upsert: (records) =>
       run(context("vecstore_upsert"), async () => {
-        await Promise.all(
-          chunk(lastById(records), UPSERT_BATCH).map((batch) =>
+        await mapBatches({
+          action: (batch) =>
             invoke(client, {
               args: { ...scope, records: batch.map(toUpsertRow) },
               fn: "vecstore_upsert",
-            })
-          )
-        );
+            }),
+          items: lastById(records),
+          size: UPSERT_BATCH,
+        });
       }),
   };
 };

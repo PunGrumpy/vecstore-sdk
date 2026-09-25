@@ -6,6 +6,7 @@ import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { isObjectLike } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
+  indexNameError,
   isNamedRow,
   isPostgresRow,
   normalizePostgresError,
@@ -323,7 +324,8 @@ export const createPgvectorStore = <Client extends PgQueryable>(
 
   return {
     createIndex: (spec: IndexSpec) => {
-      const invalid = indexSpecError(PROVIDER, spec);
+      const invalid =
+        indexSpecError(PROVIDER, spec) ?? indexNameError(PROVIDER, spec.name);
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }

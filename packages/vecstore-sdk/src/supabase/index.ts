@@ -6,6 +6,7 @@ import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { indexSpecError } from "../internal/index-spec";
 import {
   hasCode,
+  indexNameError,
   isNamedRow,
   isPostgresRow,
   normalizePostgresError,
@@ -304,7 +305,8 @@ export const createSupabaseStore = <Client extends SupabaseClientLike>(
 
   return {
     createIndex: (spec: IndexSpec) => {
-      const invalid = indexSpecError(PROVIDER, spec);
+      const invalid =
+        indexSpecError(PROVIDER, spec) ?? indexNameError(PROVIDER, spec.name);
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }

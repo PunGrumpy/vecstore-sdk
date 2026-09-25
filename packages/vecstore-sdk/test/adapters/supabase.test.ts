@@ -94,6 +94,16 @@ describe(createSupabaseStore, () => {
     expect(calls).toHaveLength(0);
   });
 
+  test("createIndex rejects a name longer than 49 bytes before calling the database", async () => {
+    const { client, calls } = fakeClient();
+    const result = await createSupabaseStore({ client }).createIndex({
+      dimension: 3,
+      name: "a".repeat(50),
+    });
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(calls).toHaveLength(0);
+  });
+
   test("the schema option travels with every call", async () => {
     const { client, calls } = fakeClient({
       responses: [[], [{ name: "docs" }]],

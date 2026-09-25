@@ -93,6 +93,24 @@ describe(createPgvectorStore, () => {
     expect(calls).toHaveLength(0);
   });
 
+  test("createIndex rejects a name longer than 49 bytes before touching the database", async () => {
+    const { client, calls } = fakeClient();
+    const store = createPgvectorStore({ client });
+    const tooLong = await store.createIndex({
+      dimension: 2,
+      name: "a".repeat(50),
+    });
+    expect(!tooLong.ok && tooLong.error.kind).toBe("invalid_argument");
+    expect(calls).toHaveLength(0);
+
+    const atLimit = await store.createIndex({
+      dimension: 2,
+      name: "a".repeat(49),
+    });
+    expect(atLimit.ok).toBeTruthy();
+    expect(calls).toHaveLength(1);
+  });
+
   test("identifiers are quoted", async () => {
     const { client, calls } = fakeClient();
     await createPgvectorStore({ client, schema: "vec" }).deleteIndex(

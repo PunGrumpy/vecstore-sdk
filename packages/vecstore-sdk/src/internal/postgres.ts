@@ -121,3 +121,30 @@ export const toScoredRecord = (
   score: row.score ?? 0,
   vector: includeVector ? rowVector(row) : undefined,
 });
+
+const IDENTIFIER_LIMIT_BYTES = 63;
+const INDEX_SUFFIX = "_embedding_idx";
+export const MAX_INDEX_NAME_BYTES =
+  IDENTIFIER_LIMIT_BYTES - INDEX_SUFFIX.length;
+export const DOLLAR_TAG = "$vecstore$";
+const nameEncoder = new TextEncoder();
+
+export const indexNameError = (
+  provider: Provider,
+  name: string
+): VecstoreError | undefined => {
+  const nameBytes = nameEncoder.encode(name).length;
+  if (nameBytes > MAX_INDEX_NAME_BYTES) {
+    return invalidArgument(
+      provider,
+      `An index name can be at most ${MAX_INDEX_NAME_BYTES} bytes on ${provider}, because Postgres truncates identifiers at ${IDENTIFIER_LIMIT_BYTES} bytes and the adapter appends "${INDEX_SUFFIX}" to it. Received ${nameBytes} bytes.`
+    );
+  }
+  if (name.includes(DOLLAR_TAG)) {
+    return invalidArgument(
+      provider,
+      `An index name cannot contain "${DOLLAR_TAG}" on ${provider}, because createIndex uses it to quote the statement that creates the table. Received "${name}".`
+    );
+  }
+  return undefined;
+};

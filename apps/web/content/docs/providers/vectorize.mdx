@@ -33,7 +33,7 @@ Vectorize splits its control plane from its data plane. Creating, listing, and d
 
 The adapter takes the HTTP client, because that is the only shape where the whole store contract works. A binding has no call that creates, lists, or drops an index, no way to enumerate namespaces, and no way to list vectors, so `createIndex`, `deleteIndex`, and `listIndexes` would all be unsupported and `index(name)` would name nothing.
 
-The HTTP API works anywhere `fetch` does, including inside a Worker. Reaching your own account from a Worker costs a subrequest and an API token, so keep the binding for hot read paths and use this adapter where the store contract matters.
+The HTTP API works anywhere `fetch` does, including inside a Worker. The adapter also imports `node:crypto` to hash ids, so a Worker needs the `nodejs_compat` compatibility flag. Reaching your own account from a Worker costs a subrequest and an API token, so keep the binding for hot read paths and use this adapter where the store contract matters.
 
 ## Metadata indexes
 
@@ -60,7 +60,9 @@ A Vectorize id is unique across the whole index rather than within a namespace, 
 | In any other namespace | A deterministic UUID, original in `_id` |
 | Id longer than 64 bytes | A deterministic UUID, original in `_id` |
 
-The same id in the same namespace always hashes to the same UUID, so `upsert` still replaces. `query` and `fetch` read `_id` back and strip it from the metadata they return. Do not write metadata under that name.
+A namespace cannot contain `/`, because the adapter joins the namespace and the id when it hashes them. The verbs return `invalid_argument` for one that does.
+
+The same id in the same namespace always hashes to the same UUID, so `upsert` still replaces. `query` and `fetch` read `_id` back and strip it from the metadata they return. `upsert` returns `invalid_argument` for a record whose metadata sets `_id`.
 
 ## What Vectorize cannot do
 
@@ -73,15 +75,21 @@ Four things return `{ kind: "unsupported" }` with a `feature` you can match on:
 | `orFilter` | `or(...)`, and `not` over `and(...)` | A Vectorize filter joins every clause with AND. |
 | `existsFilter` | `exists(...)` | Vectorize has no operator for a missing property. |
 
-To clear records without a delete-by-filter, query for the ids you want gone and delete those:
+To clear records without a delete-by-filter, query for the ids you want gone and delete those in a loop:
 
 ```ts
-const matches = await docs.query({ vector, topK: 50, filter });
-
-if (matches.ok && matches.value.length > 0) {
-  await docs.delete({ ids: matches.value.map((match) => match.id) });
-}
+const clear = async () => {
+  for (;;) {
+    const matches = await docs.query({ vector, topK: 50, filter });
+    if (!matches.ok || matches.value.length === 0) {
+      return matches;
+    }
+    await docs.delete({ ids: matches.value.map((match) => match.id) });
+  }
+};
 ```
+
+Vectorize caps a query that returns metadata at 50 matches and applies writes asynchronously, so loop until a query returns nothing, and expect a short delay before deleted records stop appearing.
 
 To drop everything, delete the index and create it again.
 
@@ -100,7 +108,7 @@ compileVectorizeFilter(
 // { genre: { $eq: "drama" }, year: { $gt: 2000, $lt: 2010 } }
 ```
 
-It is the one compiler that returns a `Result`, because Vectorize is the one provider whose filter language is smaller than the filter AST. `not` is pushed to the leaves with De Morgan's laws, the same way the Pinecone and Upstash compilers do it, so `not(eq(...))` becomes `$ne` and `not(or(a, b))` becomes two AND clauses. What is left over fails:
+It is one of two compilers that return a `Result` (the Redis compiler is the other), because Vectorize is the one provider whose filter language is smaller than the filter AST. `not` is pushed to the leaves with De Morgan's laws, the same way the Pinecone and Upstash compilers do it, so `not(eq(...))` becomes `$ne` and `not(or(a, b))` becomes two AND clauses. What is left over fails:
 
 - `or(...)`, and any `not` that De Morgan turns into an OR, return `unsupported` with `feature: "orFilter"`.
 - `exists(...)` returns `unsupported` with `feature: "existsFilter"`.

@@ -78,6 +78,8 @@ A record is one JSON document:
 | Vector | A JSON array of numbers, stored at full precision and indexed as `FLOAT32` |
 | Metric | `COSINE`, `L2`, or `IP`, fixed when the index is created |
 
+An index name cannot contain `:`, because the adapter joins the key prefix, the index name, and the namespace with it. `createIndex` and every verb return `invalid_argument` for one that does. `upsert` writes 500 documents per batch, one batch after another.
+
 Pass `keyPrefix` to move the keyspace off `vecstore:`, and `algorithm: "HNSW"` to trade exact search for scale. The default, `FLAT`, searches every vector and is what Redis recommends below a million of them.
 
 Because ids live in the key rather than in a reserved metadata field, nothing is hidden from the metadata you read back.

@@ -68,9 +68,9 @@ Moving to Supabase needs a setup step the others do not: install `sql/supabase.s
 
 ## Copy the data
 
-The SDK does not move records for you. Read from the old index with `fetch` or your own export, then `upsert` into the new one. The adapter batches upserts, so pass as many records per call as fit in memory.
+The SDK does not move records for you. The SDK has no verb that lists records, so export ids with the provider's own scroll or list call through `store.raw` (Qdrant `scroll`, Pinecone `listPaginated`, Upstash `range`, a keyset `SELECT` on pgvector or Supabase, a paged `FT.SEARCH` on Redis, `listVectors` on Vectorize), then `fetch` them in pages of 1,000 and `upsert` into the new index. The adapter batches upserts, so pass as many records per call as fit in memory.
 
-Record ids, vectors, and metadata round-trip unchanged. Every provider accepts only `string`, `number`, `boolean`, and `string[]` metadata values, so a record that upserts on one provider upserts on all of them.
+Record ids, vectors, and metadata round-trip unchanged. Every provider accepts only `string`, `number`, `boolean`, and `string[]` metadata values. Each adapter adds a few rules of its own. Qdrant, Vectorize, and Upstash in metadata mode reject metadata under `_id` or `_namespace` and a namespace that holds `/`. Redis rejects a value whose type contradicts the declared field type, and an index name that holds `:`.
 
 ## Check what each provider stores
 
@@ -108,4 +108,4 @@ Before you cut over, run the live conformance suite against the new backend:
 VECSTORE_LIVE=1 QDRANT_URL=http://localhost:6333 bun run test:live
 ```
 
-The suite creates a temporary index, exercises every verb and filter operator, and deletes the index.
+The suite creates a temporary index, runs the store verbs, the record verbs, and the `eq`, `gt`, `isIn`, `notIn`, and `not` builders, and deletes the index. The pgvector and Supabase adapters also run on PGlite in the unit suite.

@@ -29,7 +29,7 @@ The adapter needs `@pinecone-database/pinecone` 7 or later, which introduced the
 
 ## Delete by filter
 
-Serverless indexes reject `delete({ filter })`. The adapter returns an `unsupported` error with `feature: "deleteByFilter"`. To delete matching records, delete by ids instead, or query first and delete the returned ids.
+Serverless indexes reject `delete({ filter })`. The adapter returns an `unsupported` error with `feature: "deleteByFilter"`. To delete matching records, delete by ids instead, or query first and delete the returned ids, repeating until a query returns nothing, since one query returns at most `topK` matches.
 
 ## What the adapter stores
 

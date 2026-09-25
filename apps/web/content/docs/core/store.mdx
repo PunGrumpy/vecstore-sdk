@@ -42,7 +42,7 @@ type MetadataValue = string | number | boolean | string[];
 type Metadata = Readonly<Record<string, MetadataValue>>;
 ```
 
-Metadata values are `string`, `number`, `boolean`, or `string[]`. That is the intersection of what the seven providers accept, so a record that upserts on one provider upserts on all of them.
+Metadata values are `string`, `number`, `boolean`, or `string[]`. That is the intersection of what the seven providers accept. Each adapter adds a few rules of its own. Qdrant, Vectorize, and Upstash in metadata mode reject metadata under `_id` or `_namespace` and a namespace that holds `/`. Redis rejects a value whose type contradicts the declared field type, and an index name that holds `:`.
 
 ## Scores
 

@@ -387,7 +387,7 @@ export const highlights = [
     title: "Errors as values, never thrown.",
   },
   {
-    body: "Pinecone, Upstash, and Vectorize have them. Qdrant, pgvector, Supabase, and Redis get them emulated with the same API.",
+    body: "Pinecone and Vectorize have them. Qdrant, pgvector, Supabase, Upstash, and Redis get them emulated with the same API.",
     title: "Namespaces on every provider.",
   },
 ] as const;

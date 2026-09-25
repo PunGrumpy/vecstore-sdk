@@ -61,6 +61,8 @@ create table "docs" (
 
 This is the layout the pgvector adapter uses. A table either adapter created works with the other one.
 
+An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metadata_idx` index names stay under the 63-byte Postgres identifier limit. `createIndex` returns `invalid_argument` for a longer name.
+
 ## Metric detection
 
 `vecstore_query` reads the metric from the HNSW or IVFFlat index definition in `pg_indexes` and defaults to cosine when no index exists. The lookup happens inside the same function call as the search, so a query costs one request.

@@ -6,6 +6,8 @@ import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { isObjectLike } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
+  DOLLAR_TAG,
+  indexNameError,
   isNamedRow,
   isPostgresRow,
   normalizePostgresError,
@@ -290,6 +292,10 @@ export const createPgvectorStore = <Client extends PgQueryable>(
       ? quoteIdent(name)
       : `${quoteIdent(schema)}.${quoteIdent(name)}`;
   const metrics = new Map<string, Promise<Metric>>();
+  const metricKey = (name: string): string => `${schema ?? ""}.${name}`;
+  const forgetMetric = (name: string): void => {
+    metrics.delete(metricKey(name));
+  };
   const lookup = async (target: MetricTarget, key: string): Promise<Metric> => {
     try {
       return await resolveMetric(target);
@@ -299,7 +305,7 @@ export const createPgvectorStore = <Client extends PgQueryable>(
     }
   };
   const metricFor = (target: MetricTarget): Promise<Metric> => {
-    const key = `${schema ?? ""}.${target.name}`;
+    const key = metricKey(target.name);
     const cached = metrics.get(key);
     if (cached !== undefined) {
       return cached;
@@ -319,25 +325,30 @@ export const createPgvectorStore = <Client extends PgQueryable>(
 
   return {
     createIndex: (spec: IndexSpec) => {
-      const invalid = indexSpecError(PROVIDER, spec);
+      const invalid =
+        indexSpecError(PROVIDER, spec) ?? indexNameError(PROVIDER, spec.name);
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
       return run(spec.name, async () => {
+        forgetMetric(spec.name);
         const table = tableRef(spec.name);
         const embeddingIndex = quoteIdent(`${spec.name}_embedding_idx`);
         const metadataIndex = quoteIdent(`${spec.name}_metadata_idx`);
         const opclass = OPCLASSES[spec.metric ?? "cosine"];
         await client.query(
-          `DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE ${table} (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(${spec.dimension}) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id)); CREATE INDEX ${embeddingIndex} ON ${table} USING hnsw (embedding ${opclass}); CREATE INDEX ${metadataIndex} ON ${table} USING gin (metadata); END $$`,
+          `DO ${DOLLAR_TAG} BEGIN CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE ${table} (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(${spec.dimension}) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id)); CREATE INDEX ${embeddingIndex} ON ${table} USING hnsw (embedding ${opclass}); CREATE INDEX ${metadataIndex} ON ${table} USING gin (metadata); END ${DOLLAR_TAG}`,
           []
         );
+        forgetMetric(spec.name);
       });
     },
 
     deleteIndex: (name) =>
       run(name, async () => {
+        forgetMetric(name);
         await client.query(`DROP TABLE ${tableRef(name)}`, []);
+        forgetMetric(name);
       }),
 
     index: (name, indexOptions = {}) =>

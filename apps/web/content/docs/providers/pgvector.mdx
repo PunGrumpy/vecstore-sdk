@@ -39,9 +39,13 @@ CREATE TABLE "docs" (
 
 `CREATE EXTENSION` needs a role that can create extensions. If your application role cannot, create the extension yourself before you call `createIndex`.
 
+An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metadata_idx` index names stay under the 63-byte Postgres identifier limit. `createIndex` returns `invalid_argument` for a longer name.
+
 ## Metric detection
 
 Queries read the metric from the HNSW or IVFFlat index definition in `pg_indexes`. When no index exists, they default to cosine. This also works for tables the SDK did not create.
+
+The store caches the metric per table after the first query and forgets it when `createIndex` or `deleteIndex` on the same store touches that table. If another process recreates a table with a different metric, create a new store.
 
 `listIndexes` returns the tables in the schema that have an `embedding vector` column.
 

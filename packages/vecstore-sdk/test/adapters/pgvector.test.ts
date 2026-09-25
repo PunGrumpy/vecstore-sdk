@@ -70,7 +70,9 @@ describe(createPgvectorStore, () => {
     expect(calls).toHaveLength(1);
     const statement = calls[0]?.text ?? "";
     expect(
-      statement.startsWith("DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector;")
+      statement.startsWith(
+        "DO $vecstore$ BEGIN CREATE EXTENSION IF NOT EXISTS vector;"
+      )
     ).toBeTruthy();
     expect(statement).toContain(
       `CREATE TABLE "docs" (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(3) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id))`
@@ -88,6 +90,34 @@ describe(createPgvectorStore, () => {
     const result = await createPgvectorStore({ client }).createIndex({
       dimension: 1.5,
       name: "docs",
+    });
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(calls).toHaveLength(0);
+  });
+
+  test("createIndex rejects a name longer than 49 bytes before touching the database", async () => {
+    const { client, calls } = fakeClient();
+    const store = createPgvectorStore({ client });
+    const tooLong = await store.createIndex({
+      dimension: 2,
+      name: "a".repeat(50),
+    });
+    expect(!tooLong.ok && tooLong.error.kind).toBe("invalid_argument");
+    expect(calls).toHaveLength(0);
+
+    const atLimit = await store.createIndex({
+      dimension: 2,
+      name: "a".repeat(49),
+    });
+    expect(atLimit.ok).toBeTruthy();
+    expect(calls).toHaveLength(1);
+  });
+
+  test("createIndex rejects a name that holds the dollar tag", async () => {
+    const { client, calls } = fakeClient();
+    const result = await createPgvectorStore({ client }).createIndex({
+      dimension: 2,
+      name: "x$vecstore$y",
     });
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(calls).toHaveLength(0);
@@ -215,6 +245,54 @@ describe(createPgvectorStore, () => {
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(calls).toStrictEqual([]);
+  });
+
+  test("createIndex after deleteIndex re-reads the metric", async () => {
+    const ipOpsRow = {
+      indexdef:
+        "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_ip_ops)",
+    };
+    const l2OpsRow = {
+      indexdef:
+        "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_l2_ops)",
+    };
+    const { client, calls } = fakeClient([
+      [ipOpsRow],
+      [],
+      [],
+      [],
+      [l2OpsRow],
+      [],
+    ]);
+    const store = createPgvectorStore({ client });
+    await store.index("docs").query({ topK: 1, vector: [1, 2] });
+    await store.deleteIndex("docs");
+    await store.createIndex({
+      dimension: 2,
+      metric: "euclidean",
+      name: "docs",
+    });
+    await store.index("docs").query({ topK: 1, vector: [1, 2] });
+    expect(catalogCalls(calls)).toBe(2);
+    expect(calls.at(-1)?.text).toContain("ORDER BY embedding <-> $2::vector");
+  });
+
+  test("a query before createIndex does not pin the cosine fallback", async () => {
+    const l2OpsRow = {
+      indexdef:
+        "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_l2_ops)",
+    };
+    const { client, calls } = fakeClient([[], [], [], [l2OpsRow], []]);
+    const store = createPgvectorStore({ client });
+    await store.index("docs").query({ topK: 1, vector: [1, 2] });
+    await store.createIndex({
+      dimension: 2,
+      metric: "euclidean",
+      name: "docs",
+    });
+    await store.index("docs").query({ topK: 1, vector: [1, 2] });
+    expect(catalogCalls(calls)).toBe(2);
+    expect(calls.at(-1)?.text).toContain("ORDER BY embedding <-> $2::vector");
   });
 
   test("the metric is resolved once even when the first two queries run together", async () => {

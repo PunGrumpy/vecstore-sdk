@@ -225,6 +225,19 @@ describe(createUpstashStore, () => {
     ]);
   });
 
+  test("upsert keeps the last record when a batch repeats an id", async () => {
+    const { client, recorded } = fakeClient();
+    await createUpstashStore({ client })
+      .index("docs")
+      .upsert([
+        { id: "a", vector: [1] },
+        { id: "a", vector: [2] },
+      ]);
+    expect(recorded.upserts).toHaveLength(1);
+    expect(recorded.upserts[0]?.records).toHaveLength(1);
+    expect(recorded.upserts[0]?.records[0]?.vector).toStrictEqual([2]);
+  });
+
   test("fetch and delete by id address the namespaced stored id", async () => {
     const { client, recorded } = fakeClient();
     const index = createUpstashStore({ client }).index("docs", {

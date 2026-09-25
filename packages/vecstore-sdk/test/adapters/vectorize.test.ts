@@ -310,6 +310,21 @@ describe(createVectorizeStore, () => {
     });
   });
 
+  test("upsert keeps the last record when a batch repeats an id", async () => {
+    const { calls, client } = fakeCloudflare();
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .upsert([
+        { id: "a", vector: [1] },
+        { id: "a", vector: [2] },
+      ]);
+    const bodies = bodiesFor(calls, "/upsert");
+    expect(bodies).toHaveLength(1);
+    const lines = (bodies[0] ?? "").trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(parse<StoredVector>(lines[0] ?? "{}").values).toStrictEqual([2]);
+  });
+
   test("upsert makes Vectorize fail on a line it cannot read", async () => {
     const { calls, client } = fakeCloudflare();
     await createVectorizeStore({ accountId: ACCOUNT_ID, client })

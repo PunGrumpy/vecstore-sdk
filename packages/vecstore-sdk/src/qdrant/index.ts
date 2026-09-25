@@ -12,7 +12,7 @@ import type { Filter } from "../filter/ast";
 import { compileQdrantFilter } from "../filter/qdrant";
 import type { QdrantCondition, QdrantFilter } from "../filter/qdrant";
 import { attempt } from "../internal/attempt";
-import { mapBatches, sortByIds } from "../internal/collections";
+import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -400,7 +400,7 @@ const createIndex = (
         if (records.length === 0) {
           return;
         }
-        const points = records.map((record): QdrantPoint => {
+        const points = lastById(records).map((record): QdrantPoint => {
           const id = toPointId(namespace, record.id);
           return {
             id,

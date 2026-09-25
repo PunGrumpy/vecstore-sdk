@@ -199,6 +199,20 @@ describe(createPineconeStore, () => {
     ]);
   });
 
+  test("upsert keeps the last record when a batch repeats an id", async () => {
+    const { client, recorded } = fakeClient();
+    await createPineconeStore({ client })
+      .index("docs")
+      .upsert([
+        { id: "a", vector: [1] },
+        { id: "a", vector: [2] },
+      ]);
+    expect(recorded.upserts).toHaveLength(1);
+    expect(recorded.upserts[0]?.records).toHaveLength(1);
+    expect(recorded.upserts[0]?.records[0]?.id).toBe("a");
+    expect(recorded.upserts[0]?.records[0]?.values).toStrictEqual([2]);
+  });
+
   test("the default namespace sends no namespace key", async () => {
     const { client, recorded } = fakeClient();
     await createPineconeStore({ client })

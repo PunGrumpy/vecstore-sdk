@@ -18,7 +18,7 @@ import type {
   VectorizeFilterProblem,
 } from "../filter/vectorize";
 import { attempt } from "../internal/attempt";
-import { mapBatches, sortByIds } from "../internal/collections";
+import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -411,7 +411,9 @@ const createIndex = (
         if (records.length === 0) {
           return;
         }
-        const lines = records.map((record) => toLine(namespace, record));
+        const lines = lastById(records).map((record) =>
+          toLine(namespace, record)
+        );
         await mapBatches({
           action: (batch) =>
             indexes.upsert(name, {

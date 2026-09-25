@@ -12,7 +12,7 @@ import { and, eq, exists, not, or } from "../filter/ast";
 import type { Filter } from "../filter/ast";
 import { compileUpstashFilter, isUpstashFilterError } from "../filter/upstash";
 import { attempt } from "../internal/attempt";
-import { mapBatches, sortByIds } from "../internal/collections";
+import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { isString } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -541,7 +541,7 @@ const createIndex = (
       }
       return run(name, async () => {
         const target = scope();
-        const stored = records.map((record) =>
+        const stored = lastById(records).map((record) =>
           layout.storedRecord(namespace, record)
         );
         await mapBatches({

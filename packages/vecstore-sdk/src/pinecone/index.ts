@@ -12,7 +12,7 @@ import type { VecstoreError } from "../errors";
 import { compilePineconeFilter } from "../filter/pinecone";
 import type { PineconeFilter } from "../filter/pinecone";
 import { attempt } from "../internal/attempt";
-import { mapBatches, sortByIds } from "../internal/collections";
+import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { indexSpecError } from "../internal/index-spec";
 import { err } from "../result";
 import type {
@@ -293,7 +293,7 @@ const createIndex = (
         await mapBatches({
           action: (batch) =>
             target.upsert({ ...scope, records: batch.map(toPineconeRecord) }),
-          items: records,
+          items: lastById(records),
           size: UPSERT_BATCH,
         });
       }),

@@ -206,6 +206,19 @@ describe(createQdrantStore, () => {
     expect(passthrough?.payload).toStrictEqual({});
   });
 
+  test("upsert keeps the last record when a batch repeats an id", async () => {
+    const { client, recorded } = fakeClient();
+    await createQdrantStore({ client })
+      .index("docs")
+      .upsert([
+        { id: "a", vector: [1] },
+        { id: "a", vector: [2] },
+      ]);
+    expect(recorded.upserts).toHaveLength(1);
+    expect(recorded.upserts[0]).toHaveLength(1);
+    expect(recorded.upserts[0]?.[0]?.vector).toStrictEqual([2]);
+  });
+
   test("query and fetch return the caller's ids and strip reserved keys", async () => {
     const index = createQdrantStore({ client: fakeClient().client }).index(
       "docs",

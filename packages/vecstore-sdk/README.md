@@ -206,7 +206,7 @@ Supabase Vector is pgvector inside Postgres, and this adapter reaches it through
 psql "$SUPABASE_DB_URL" -f node_modules/vecstore-sdk/sql/supabase.sql
 ```
 
-The functions are `security invoker`, so row level security policies apply to `query`, `fetch`, `upsert`, and `delete`. `createIndex` and `deleteIndex` run DDL and need the service role key. The table layout matches the pgvector adapter, so both adapters can read the same table. An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metadata_idx` names stay under the 63-byte Postgres identifier limit. `createIndex` returns `invalid_argument` for a longer name.
+The functions are `security invoker`. `createIndex` enables row level security on the table it creates and adds no policy, so the `anon` and `authenticated` roles read and write nothing until you add one; write your own policy for the access pattern you need. `createIndex` and `deleteIndex` run DDL and need the service role key. The table layout matches the pgvector adapter, so both adapters can read the same table. An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metadata_idx` names stay under the 63-byte Postgres identifier limit. `createIndex` returns `invalid_argument` for a longer name.
 
 ### Upstash Vector
 

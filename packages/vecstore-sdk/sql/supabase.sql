@@ -1,8 +1,10 @@
 -- vecstore-sdk: server side for the Supabase adapter.
 -- Run once per project, with a role that can create functions.
 --   supabase db execute --file node_modules/vecstore-sdk/sql/supabase.sql
--- Every function runs with the privileges of the caller, so row level
--- security policies on your vector tables still apply.
+-- Every function runs with the privileges of the caller. Tables that
+-- vecstore_create_index creates have row level security enabled and no
+-- policies, so the anon and authenticated roles read and write nothing until
+-- you add one. The service role bypasses row level security.
 
 create extension if not exists vector;
 
@@ -55,7 +57,12 @@ begin
 
   if kind in ('and', 'or') then
     for child in select value from jsonb_array_elements(match_filter -> 'filters') loop
-      parts := parts || vecstore_filter_sql(child, column_name);
+      clause := vecstore_filter_sql(child, column_name);
+      if clause is null then
+        raise exception 'vecstore: "%" holds a filter that compiles to nothing', kind
+          using errcode = '22023';
+      end if;
+      parts := parts || clause;
     end loop;
     if cardinality(parts) = 0 then
       raise exception 'vecstore: "%" needs at least one filter', kind using errcode = '22023';
@@ -64,7 +71,12 @@ begin
   end if;
 
   if kind = 'not' then
-    return 'NOT (' || vecstore_filter_sql(match_filter -> 'filter', column_name) || ')';
+    clause := vecstore_filter_sql(match_filter -> 'filter', column_name);
+    if clause is null then
+      raise exception 'vecstore: "not" holds a filter that compiles to nothing'
+        using errcode = '22023';
+    end if;
+    return 'NOT (' || clause || ')';
   end if;
 
   if field is null then
@@ -82,6 +94,10 @@ begin
   end if;
 
   if kind in ('gt', 'gte', 'lt', 'lte') then
+    if jsonb_typeof(match_filter -> 'value') is distinct from 'number' then
+      raise exception 'vecstore: "%" on "%" needs a numeric "value"', kind, field
+        using errcode = '22023';
+    end if;
     operator := case kind
       when 'gt' then '>'
       when 'gte' then '>='
@@ -184,6 +200,7 @@ begin
     'create index %I on %s using gin (metadata)',
     index_name || '_metadata_idx', target
   );
+  execute format('alter table %s enable row level security', target);
 end;
 $$;
 
@@ -338,3 +355,15 @@ begin
   );
 end;
 $$;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon')
+     and exists (select 1 from pg_roles where rolname = 'authenticated')
+     and exists (select 1 from pg_roles where rolname = 'service_role') then
+    revoke execute on function vecstore_create_index(text, text, int, text) from public, anon, authenticated;
+    revoke execute on function vecstore_drop_index(text, text) from public, anon, authenticated;
+    grant execute on function vecstore_create_index(text, text, int, text) to service_role;
+    grant execute on function vecstore_drop_index(text, text) to service_role;
+  end if;
+end $$;

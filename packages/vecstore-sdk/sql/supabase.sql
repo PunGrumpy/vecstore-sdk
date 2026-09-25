@@ -355,3 +355,15 @@ begin
   );
 end;
 $$;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon')
+     and exists (select 1 from pg_roles where rolname = 'authenticated')
+     and exists (select 1 from pg_roles where rolname = 'service_role') then
+    revoke execute on function vecstore_create_index(text, text, int, text) from public, anon, authenticated;
+    revoke execute on function vecstore_drop_index(text, text) from public, anon, authenticated;
+    grant execute on function vecstore_create_index(text, text, int, text) to service_role;
+    grant execute on function vecstore_drop_index(text, text) to service_role;
+  end if;
+end $$;

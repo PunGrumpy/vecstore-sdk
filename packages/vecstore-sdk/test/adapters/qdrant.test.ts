@@ -288,6 +288,16 @@ describe(createQdrantStore, () => {
     ]);
   });
 
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createQdrantStore({ client })
+      .index("docs")
+      .query({ topK: 0, vector: [1] });
+    expect(result.ok).toBeFalsy();
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded.queries).toStrictEqual([]);
+  });
+
   test("the default namespace matches points without a namespace", () => {
     expect(scopeQdrantFilter()).toStrictEqual({ must: [defaultScope] });
   });

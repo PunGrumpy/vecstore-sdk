@@ -262,6 +262,16 @@ describe(createPineconeStore, () => {
     expect(full.ok && full.value[0]?.vector).toStrictEqual([1]);
   });
 
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createPineconeStore({ client })
+      .index("docs")
+      .query({ topK: 0, vector: [1] });
+    expect(result.ok).toBeFalsy();
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded.queries).toStrictEqual([]);
+  });
+
   test("delete by filter on an index that rejects it is unsupported", async () => {
     const { client } = fakeClient();
     const message =

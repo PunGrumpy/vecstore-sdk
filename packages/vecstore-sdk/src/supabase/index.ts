@@ -13,6 +13,7 @@ import {
   toVectorRecord,
   vectorLiteral,
 } from "../internal/postgres";
+import { queryOptionsError } from "../internal/query-options";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -254,8 +255,12 @@ const createIndexHandle = (
 
     namespace: options.namespace,
 
-    query: (query: QueryOptions) =>
-      run(context("vecstore_query"), async () => {
+    query: (query: QueryOptions) => {
+      const invalid = queryOptionsError(PROVIDER, query);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(context("vecstore_query"), async () => {
         const includeVector = query.includeVector ?? false;
         const includeMetadata = query.includeMetadata ?? true;
         const rows = await invoke(client, {
@@ -269,7 +274,8 @@ const createIndexHandle = (
           fn: "vecstore_query",
         });
         return readScored(rows, includeMetadata, includeVector);
-      }),
+      });
+    },
 
     upsert: (records) =>
       run(context("vecstore_upsert"), async () => {

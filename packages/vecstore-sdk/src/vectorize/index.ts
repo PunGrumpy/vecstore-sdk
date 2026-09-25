@@ -28,6 +28,7 @@ import {
 } from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
+import { queryOptionsError } from "../internal/query-options";
 import { deterministicUuid } from "../internal/uuid";
 import { err } from "../result";
 import type { Result } from "../result";
@@ -367,6 +368,10 @@ const createIndex = (
     query: (query: QueryOptions): VecResult<ScoredRecord[]> => {
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
+      }
+      const invalidQuery = queryOptionsError(PROVIDER, query);
+      if (invalidQuery !== undefined) {
+        return Promise.resolve(err(invalidQuery));
       }
       const compiled =
         query.filter === undefined ? undefined : compileFilter(query.filter);

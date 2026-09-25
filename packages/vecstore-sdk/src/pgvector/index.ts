@@ -13,6 +13,7 @@ import {
   toVectorRecord,
   vectorLiteral,
 } from "../internal/postgres";
+import { queryOptionsError } from "../internal/query-options";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -222,8 +223,12 @@ const createIndex = (
 
     namespace: options.namespace,
 
-    query: (query: QueryOptions) =>
-      run(name, async () => {
+    query: (query: QueryOptions) => {
+      const invalid = queryOptionsError(PROVIDER, query);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(name, async () => {
         const resolved = await context.metric();
         const params: PgParam[] = [namespace, vectorLiteral(query.vector)];
         const filter: PgvectorSql | undefined =
@@ -259,7 +264,8 @@ const createIndex = (
               ]
             : []
         );
-      }),
+      });
+    },
 
     upsert: (records) =>
       run(name, async () => {

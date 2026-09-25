@@ -274,6 +274,13 @@ describe(createRedisStore, () => {
     ]);
   });
 
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { fake, index } = await setup();
+    const result = await index.query({ topK: 0, vector: [1, 0, 0] });
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(fake.searches).toStrictEqual([]);
+  });
+
   test("query passes the vector as a float32 blob", async () => {
     const { fake, index } = await setup();
     await index.query({ topK: 1, vector: [1, 0.5, 0] });

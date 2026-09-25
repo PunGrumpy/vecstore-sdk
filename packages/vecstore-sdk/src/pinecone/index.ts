@@ -14,6 +14,7 @@ import type { PineconeFilter } from "../filter/pinecone";
 import { attempt } from "../internal/attempt";
 import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { indexSpecError } from "../internal/index-spec";
+import { queryOptionsError } from "../internal/query-options";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -268,8 +269,12 @@ const createIndex = (
 
     namespace: options.namespace,
 
-    query: (query: QueryOptions) =>
-      run(context, async () => {
+    query: (query: QueryOptions) => {
+      const invalid = queryOptionsError(PROVIDER, query);
+      if (invalid !== undefined) {
+        return Promise.resolve(err(invalid));
+      }
+      return run(context, async () => {
         const includeMetadata = query.includeMetadata ?? true;
         const includeVector = query.includeVector ?? false;
         const response = await target.query({
@@ -286,7 +291,8 @@ const createIndex = (
         return response.matches.map((match) =>
           toScoredRecord(match, includeMetadata, includeVector)
         );
-      }),
+      });
+    },
 
     upsert: (records) =>
       run(context, async () => {

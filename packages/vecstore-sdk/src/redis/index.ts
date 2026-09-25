@@ -31,6 +31,7 @@ import {
 } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
+import { queryOptionsError } from "../internal/query-options";
 import { err, ok } from "../result";
 import type { Result } from "../result";
 import type {
@@ -713,6 +714,10 @@ const createIndex = (
     query: (query: QueryOptions) => {
       if (nameMessage !== undefined) {
         return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
+      }
+      const invalidQuery = queryOptionsError(PROVIDER, query);
+      if (invalidQuery !== undefined) {
+        return Promise.resolve(err(invalidQuery));
       }
       const prefilter = scopeRedisFilter(namespace, fields, query.filter);
       if (!prefilter.ok) {

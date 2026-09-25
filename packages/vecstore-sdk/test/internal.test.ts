@@ -13,6 +13,7 @@ import {
   reservedKeyError,
 } from "../src/internal/metadata";
 import { namespaceError } from "../src/internal/namespace";
+import { queryOptionsError } from "../src/internal/query-options";
 import { deterministicUuid, isUuid } from "../src/internal/uuid";
 
 describe(deterministicUuid, () => {
@@ -123,6 +124,35 @@ describe("collections", () => {
       { id: "a" },
       { id: "b" },
     ]);
+  });
+});
+
+describe(queryOptionsError, () => {
+  test("only a positive integer topK is accepted", () => {
+    expect(
+      queryOptionsError("qdrant", { topK: 1, vector: [1] })
+    ).toBeUndefined();
+    expect(
+      queryOptionsError("qdrant", { topK: 100, vector: [1] })
+    ).toBeUndefined();
+    expect(queryOptionsError("qdrant", { topK: 0, vector: [1] })?.kind).toBe(
+      "invalid_argument"
+    );
+    expect(queryOptionsError("qdrant", { topK: -1, vector: [1] })?.kind).toBe(
+      "invalid_argument"
+    );
+    expect(queryOptionsError("qdrant", { topK: 1.5, vector: [1] })?.kind).toBe(
+      "invalid_argument"
+    );
+    expect(
+      queryOptionsError("qdrant", { topK: Number.NaN, vector: [1] })?.kind
+    ).toBe("invalid_argument");
+    expect(
+      queryOptionsError("qdrant", {
+        topK: Number.POSITIVE_INFINITY,
+        vector: [1],
+      })?.kind
+    ).toBe("invalid_argument");
   });
 });
 

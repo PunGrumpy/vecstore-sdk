@@ -218,6 +218,16 @@ describe(createSupabaseStore, () => {
     });
   });
 
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { client, calls } = fakeClient();
+    const result = await createSupabaseStore({ client })
+      .index("docs")
+      .query({ topK: 0, vector: [1] });
+    expect(result.ok).toBeFalsy();
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(calls).toStrictEqual([]);
+  });
+
   test("fetch returns records in request order", async () => {
     const { client, calls } = fakeClient({
       responses: [

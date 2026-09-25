@@ -402,6 +402,16 @@ describe(createVectorizeStore, () => {
     });
   });
 
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { calls, client } = fakeCloudflare();
+    const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .query({ topK: 0, vector: [1] });
+    expect(result.ok).toBeFalsy();
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(bodiesFor(calls, "/query")).toStrictEqual([]);
+  });
+
   test("a filter Vectorize cannot express is reported before the request", async () => {
     const { calls, client } = fakeCloudflare();
     const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })

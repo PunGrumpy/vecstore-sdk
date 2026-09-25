@@ -178,6 +178,16 @@ describe(createUpstashStore, () => {
     ]);
   });
 
+  test("query rejects a non-positive topK before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+    const result = await createUpstashStore({ client })
+      .index("docs")
+      .query({ topK: 0, vector: [1] });
+    expect(result.ok).toBeFalsy();
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded.queries).toStrictEqual([]);
+  });
+
   test("query scopes the filter to the namespace and hides reserved keys", async () => {
     const { client, recorded } = fakeClient();
     const store = createUpstashStore({ client });

@@ -22,7 +22,9 @@ bun add vecstore-sdk @qdrant/js-client-rest
 
 ## Ids
 
-Qdrant accepts only UUID (universally unique identifier) or integer point ids. The adapter hashes any other id to a deterministic UUID and stores your id in the `_id` payload key. A lowercase UUID id in the default namespace passes through unchanged, unless it is a version 8 UUID, the version the adapter's own hashed ids use; those are hashed too, so a raw id can never collide with a hashed one.
+Qdrant accepts only UUID (universally unique identifier) or integer point ids. The adapter hashes any other id to a deterministic UUID and stores your id in the `_id` payload key. A lowercase UUID id in the default namespace passes through unchanged, unless it is a version 8 UUID, the version the adapter's own hashed ids use. Those are hashed too, so a raw id can never collide with a hashed one.
+
+A namespace cannot contain `/`, because the adapter joins the namespace and the id when it hashes a point id, and `upsert` rejects a record whose metadata sets `_id` or `_namespace`. Both return `invalid_argument`. `upsert` sends 500 points per request, and `fetch` and `delete({ ids })` send 1,000 ids per request.
 
 ## Namespaces
 

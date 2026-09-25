@@ -29,7 +29,7 @@ import {
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
 import { queryOptionsError } from "../internal/query-options";
-import { deterministicUuid } from "../internal/uuid";
+import { deterministicUuid, isSurrogateUuid } from "../internal/uuid";
 import { err } from "../result";
 import type { Result } from "../result";
 import type {
@@ -200,7 +200,7 @@ const fitsNativeId = (id: string): boolean =>
   encoder.encode(id).length <= MAX_ID_BYTES;
 
 export const toVectorizeId = (namespace: string, id: string): string =>
-  namespace === DEFAULT_NAMESPACE && fitsNativeId(id)
+  namespace === DEFAULT_NAMESPACE && fitsNativeId(id) && !isSurrogateUuid(id)
     ? id
     : deterministicUuid(ID_NAMESPACE, `${namespace}/${id.length}/${id}`);
 

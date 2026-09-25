@@ -23,7 +23,7 @@ import {
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
 import { queryOptionsError } from "../internal/query-options";
-import { deterministicUuid, isUuid } from "../internal/uuid";
+import { deterministicUuid, isSurrogateUuid, isUuid } from "../internal/uuid";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -145,7 +145,7 @@ const DISTANCES: Record<Metric, QdrantDistance> = {
 };
 
 const toPointId = (namespace: string, id: string): string =>
-  namespace === "" && isUuid(id)
+  namespace === "" && isUuid(id) && !isSurrogateUuid(id)
     ? id
     : deterministicUuid(ID_NAMESPACE, `${namespace}/${id.length}/${id}`);
 

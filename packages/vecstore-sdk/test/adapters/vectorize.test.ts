@@ -310,6 +310,18 @@ describe(createVectorizeStore, () => {
     });
   });
 
+  test("a default namespace upsert cannot overwrite a namespaced vector", async () => {
+    const foreign = toVectorizeId("tenant-a", "doc-1");
+    const { calls, client } = fakeCloudflare();
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .upsert([{ id: foreign, vector: [1] }]);
+    const [ndjson] = bodiesFor(calls, "/upsert");
+    const line = parse<StoredVector>(ndjson ?? "{}");
+    expect(line.id).not.toBe(foreign);
+    expect(line.metadata).toStrictEqual({ _id: foreign });
+  });
+
   test("upsert keeps the last record when a batch repeats an id", async () => {
     const { calls, client } = fakeCloudflare();
     await createVectorizeStore({ accountId: ACCOUNT_ID, client })

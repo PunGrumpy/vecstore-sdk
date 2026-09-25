@@ -1,4 +1,4 @@
-import type { Filter } from "./ast";
+import type { Filter, Scalar } from "./ast";
 
 export interface PgvectorSql {
   readonly text: string;
@@ -19,15 +19,28 @@ const RANGE_OPERATORS = {
   lte: "<=",
 } as const;
 
+const containsAny = (
+  column: string,
+  field: string,
+  values: readonly Scalar[],
+  param: Param
+): string => {
+  const clauses = values.flatMap((value) => [
+    `${column} @> ${param(JSON.stringify({ [field]: value }))}::jsonb`,
+    `${column} @> ${param(JSON.stringify({ [field]: [value] }))}::jsonb`,
+  ]);
+  return `(${clauses.join(" OR ")})`;
+};
+
 const compileNode = (filter: Filter, column: string, param: Param): string => {
   const fieldPath = (field: string): string =>
     `(${column}->${param(field)}::text)`;
   switch (filter.kind) {
     case "eq": {
-      return `${column} @> ${param(JSON.stringify({ [filter.field]: filter.value }))}::jsonb`;
+      return containsAny(column, filter.field, [filter.value], param);
     }
     case "ne": {
-      return `NOT (${column} @> ${param(JSON.stringify({ [filter.field]: filter.value }))}::jsonb)`;
+      return `NOT ${containsAny(column, filter.field, [filter.value], param)}`;
     }
     case "gt":
     case "gte":
@@ -39,12 +52,10 @@ const compileNode = (filter: Filter, column: string, param: Param): string => {
       return `(jsonb_typeof(${path}) = 'number' AND ${path} ${operator} ${value})`;
     }
     case "in": {
-      const path = fieldPath(filter.field);
-      return `${path} <@ ${param(JSON.stringify(filter.values))}::jsonb`;
+      return containsAny(column, filter.field, filter.values, param);
     }
     case "nin": {
-      const path = fieldPath(filter.field);
-      return `NOT COALESCE(${path} <@ ${param(JSON.stringify(filter.values))}::jsonb, false)`;
+      return `NOT ${containsAny(column, filter.field, filter.values, param)}`;
     }
     case "exists": {
       const path = fieldPath(filter.field);

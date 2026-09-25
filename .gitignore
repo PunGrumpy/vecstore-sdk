@@ -1,6 +1,8 @@
 .DS_Store
 .cache
 .env
+.env.*
+!.env.example
 .envrc
 .memory-benchmark-context-*
 .next

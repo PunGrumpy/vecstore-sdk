@@ -1,8 +1,10 @@
 -- vecstore-sdk: server side for the Supabase adapter.
 -- Run once per project, with a role that can create functions.
 --   supabase db execute --file node_modules/vecstore-sdk/sql/supabase.sql
--- Every function runs with the privileges of the caller, so row level
--- security policies on your vector tables still apply.
+-- Every function runs with the privileges of the caller. Tables that
+-- vecstore_create_index creates have row level security enabled and no
+-- policies, so the anon and authenticated roles read and write nothing until
+-- you add one. The service role bypasses row level security.
 
 create extension if not exists vector;
 
@@ -184,6 +186,7 @@ begin
     'create index %I on %s using gin (metadata)',
     index_name || '_metadata_idx', target
   );
+  execute format('alter table %s enable row level security', target);
 end;
 $$;
 

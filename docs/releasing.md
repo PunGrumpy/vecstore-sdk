@@ -15,6 +15,7 @@ The `Verify Changesets` workflow fails a pull request that changes `packages/*/s
 1. Merge pull requests into `main`. On each merge that touches `.changeset/`, the `Release` workflow opens or updates a pull request named "chore(release): version packages". That pull request bumps versions, writes `CHANGELOG.md`, and deletes the consumed changesets.
 2. Review the changelog in that pull request and merge it.
 3. The `Release` workflow runs again, builds `vecstore-sdk`, publishes it to npm with provenance, and creates a GitHub release with a git tag.
+4. Write the release up for the site changelog. Add `apps/web/content/changelog/v{version}.mdx` with `title`, `description`, `date`, and `version` in the frontmatter, and a short prose summary of what changed. The docs site deploys from the publish, so open this pull request before merging the version pull request if you want the entry live with the release.
 
 ## Publish a snapshot
 

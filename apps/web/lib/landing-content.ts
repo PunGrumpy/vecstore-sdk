@@ -487,7 +487,7 @@ export const footerColumns = [
     links: [
       { href: githubUrl, label: "GitHub" },
       { href: npmUrl, label: "npm" },
-      { href: `${githubUrl}/releases`, label: "Changelog" },
+      { href: "/changelog", label: "Changelog" },
       { href: `${githubUrl}/issues`, label: "Issues" },
     ],
     title: "Resources",

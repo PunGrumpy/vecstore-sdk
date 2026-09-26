@@ -1,4 +1,10 @@
-import { defineConfig, defineDocs } from "fumadocs-mdx/config";
+import {
+  defineCollections,
+  defineConfig,
+  defineDocs,
+  frontmatterSchema,
+} from "fumadocs-mdx/config";
+import { z } from "zod";
 
 import { geistShikiTheme } from "./lib/shiki-theme";
 
@@ -9,6 +15,19 @@ export const docs = defineDocs({
       includeProcessedMarkdown: true,
     },
   },
+});
+
+export const changelog = defineCollections({
+  dir: "content/changelog",
+  postprocess: {
+    includeProcessedMarkdown: true,
+  },
+  schema: frontmatterSchema.extend({
+    date: z.coerce.date(),
+    description: z.string(),
+    version: z.string(),
+  }),
+  type: "doc",
 });
 
 export default defineConfig({

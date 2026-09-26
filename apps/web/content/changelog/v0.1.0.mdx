@@ -1,0 +1,32 @@
+---
+title: One filter language for Qdrant, pgvector, and Pinecone
+description: The first release ships the filter AST, the core vector store API, normalized errors, and adapters for Qdrant, pgvector, and Pinecone.
+date: 2026-09-09
+version: 0.1.0
+---
+
+VecStore SDK 0.1.0 is on npm. It gives you one TypeScript API for three vector databases, and one metadata filter that each adapter compiles to the provider’s native syntax.
+
+## What ships
+
+- A filter AST with builders such as `eq`, `gt`, `isIn`, `and`, `or`, and `not`, plus a compiler for each provider: Qdrant `must` and `should` clauses, pgvector SQL over `jsonb`, and Pinecone’s MongoDB-style operators.
+- Four record verbs (`upsert`, `query`, `fetch`, `delete`) and three index verbs (`createIndex`, `deleteIndex`, `listIndexes`) with the same signatures on every provider.
+- Errors as a discriminated union you match on. The SDK never throws them.
+- A `raw` property that returns the native client you passed in, for anything the unified API does not cover.
+
+Embedding stays out of scope. Generate vectors with your model provider and pass the numbers in.
+
+```ts
+import { createQdrantStore } from "vecstore-sdk/qdrant";
+import { and, eq, gt } from "vecstore-sdk";
+
+const store = createQdrantStore({ client });
+
+const result = await store.index("docs").query({
+  vector,
+  topK: 5,
+  filter: and(eq("lang", "en"), gt("stars", 100)),
+});
+```
+
+Read the [getting started guide](/docs/getting-started) to run your first filtered query.

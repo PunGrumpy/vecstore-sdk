@@ -23,12 +23,20 @@ const DocsRouteLayout = ({ children }: DocsRouteLayoutProps) => {
         nav={{
           ...nav,
           children: (
-            <Link
-              className="text-fd-primary ml-6 inline-flex items-center gap-1 p-2 text-sm max-md:hidden"
-              href="/docs"
-            >
-              Docs
-            </Link>
+            <>
+              <Link
+                className="text-fd-primary ml-6 inline-flex items-center gap-1 p-2 text-sm max-md:hidden"
+                href="/docs"
+              >
+                Docs
+              </Link>
+              <Link
+                className="text-fd-muted-foreground hover:text-fd-accent-foreground inline-flex items-center p-2 text-sm transition-colors max-md:hidden"
+                href="/changelog"
+              >
+                Changelog
+              </Link>
+            </>
           ),
           mode: "top",
         }}

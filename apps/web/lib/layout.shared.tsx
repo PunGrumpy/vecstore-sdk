@@ -13,10 +13,16 @@ export const baseOptions = (): BaseLayoutProps => ({
     children: (
       <div className="flex flex-1 items-center">
         <Link
-          className="text-fd-muted-foreground hover:text-fd-accent-foreground ms-6 inline-flex items-center p-2 text-sm transition-colors"
+          className="text-fd-muted-foreground hover:text-fd-accent-foreground ms-2 inline-flex items-center p-2 text-sm transition-colors sm:ms-6"
           href="/docs"
         >
           Docs
+        </Link>
+        <Link
+          className="text-fd-muted-foreground hover:text-fd-accent-foreground hidden items-center p-2 text-sm transition-colors min-[360px]:inline-flex"
+          href="/changelog"
+        >
+          Changelog
         </Link>
         <a
           aria-label="GitHub"

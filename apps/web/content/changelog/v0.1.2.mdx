@@ -1,0 +1,32 @@
+---
+title: Atomic index creation, batched writes, and aligned contracts
+description: createIndex is all-or-nothing on pgvector, Qdrant, and Vectorize, Qdrant and Redis writes go out in batches, and six edges where one adapter answered differently from the rest now match.
+date: 2026-09-19
+version: 0.1.2
+---
+
+VecStore SDK 0.1.2 is a patch release that makes the adapters behave more like one library.
+
+## createIndex is all-or-nothing
+
+Each of the pgvector, Qdrant, and Cloudflare Vectorize adapters runs several provider calls in sequence, and a failure partway through used to leave the earlier calls standing. The caller got an error and a half-built index that reported `already_exists` on the retry.
+
+The pgvector adapter now sends `CREATE EXTENSION`, `CREATE TABLE`, and both `CREATE INDEX` statements as one `DO` block, which the server runs in a single implicit transaction. The HNSW index caps a `vector` column at 2000 dimensions, so a 3072-dimension index used to leave a table with no vector index and every later `query` fell back to an exact scan. The Qdrant adapter deletes the collection it just created when the `_namespace` tenant index fails, and the Vectorize adapter deletes the index it just created when a metadata index fails.
+
+## Batched Qdrant and Redis writes
+
+Qdrant used to put the whole list in one request, which failed past the 32 MB the REST API accepts by default. `upsert` now goes out 500 points at a time, and `fetch` and `delete({ ids })` chunk their point ids at 1000 per request. Redis writes now run 500 records at a time, and unlink keys are chunked the same way.
+
+A large `upsert` is now several provider requests, so a failure can leave some of the records written. Retry the whole call: an upsert replaces by id.
+
+## The pgvector metric is cached per store
+
+The pgvector adapter read the distance metric from `pg_indexes` once per index handle, so `store.index("docs").query(...)` paid a catalog round trip before every search. The cache now lives on the store, keyed by schema and table, and holds the in-flight promise, so concurrent first queries share one lookup.
+
+## Six contract edges aligned
+
+- Qdrant `deleteIndex` returns `not_found` for a collection the server does not hold, like the other six adapters.
+- `createIndex` rejects a `dimension` that is not a positive integer on every adapter with the same `invalid_argument` message.
+- Pinecone `query` honors `includeMetadata` and `includeVector`, so a `ScoredRecord` from Pinecone has the same shape as one from the other adapters.
+
+The full list is in the [package changelog](https://github.com/PunGrumpy/vecstore-sdk/blob/main/packages/vecstore-sdk/CHANGELOG.md).

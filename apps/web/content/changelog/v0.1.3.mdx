@@ -1,0 +1,30 @@
+---
+title: Array-valued metadata filters, bounded batching, and Supabase hardening
+description: eq and isIn now match list fields on pgvector and Supabase, batched provider calls run four at a time, namespace writes can no longer cross into another namespace, and sql/supabase.sql enables row level security.
+date: 2026-09-26
+version: 0.1.3
+---
+
+VecStore SDK 0.1.3 fixes filter semantics on list fields, bounds how fast a large upsert fans out, and closes the last paths where a write could reach another namespace’s record. Supabase users should re-run `sql/supabase.sql`.
+
+## eq and isIn match list fields on pgvector and Supabase
+
+`eq("tags", "x")` and `isIn("tags", ["x"])` compiled to a jsonb containment that never matches a list, so a record with `tags: ["x", "y"]` was invisible to both. Both compilers, the TypeScript one and `vecstore_filter_sql`, now emit a containment per value that the GIN index serves, and `ne` and `notIn` are the exact negations. Qdrant `notIn` now compiles to `must_not` of `match.any`, the same filter `not(isIn(...))` produces.
+
+## Batched calls run four at a time
+
+A 100k-record upsert used to open every chunk in one burst, which met rate limits on Pinecone, Upstash, and Supabase and took every connection of a `pg` Pool. Batches now go out four at a time. An upsert that repeats an id keeps the last record on every adapter. Pinecone `delete({ ids })` is chunked at 1,000, Redis `fetch` splits `JSON.MGET` at 500, and every adapter’s `query` returns `invalid_argument` for a `topK` that is not a positive integer.
+
+## Namespace isolation on every write
+
+On Upstash in metadata mode, a default-namespace `upsert` whose id has the `{namespace}/{length}/{id}` shape of a stored namespaced record now returns `invalid_argument`. On Qdrant and Vectorize, a raw id that is a version 8 UUID, the version the adapter’s hashed ids use, is now hashed like every other id, so no raw id can equal another record’s stored id.
+
+## Supabase enables row level security
+
+`vecstore_create_index` now enables row level security on the table it creates, so the `anon` and `authenticated` roles read and write nothing until you add a policy. The script also revokes `vecstore_create_index` and `vecstore_drop_index` from those roles, and `vecstore_filter_sql` rejects a filter leaf with a missing or non-numeric value instead of dropping the clause, which could widen a delete. Tables created by earlier versions are unchanged: run `alter table "docs" enable row level security` on them.
+
+## Also in this release
+
+- The cached pgvector metric is forgotten when `createIndex` or `deleteIndex` touches a table.
+- Postgres index names over 49 bytes are rejected on pgvector and Supabase, because the `_embedding_idx` suffix made long names collide with their own indexes.
+- The npm tarball ships the MIT license, and `@pinecone-database/pinecone` 7 or later is required.

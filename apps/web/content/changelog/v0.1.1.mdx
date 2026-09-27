@@ -1,0 +1,26 @@
+---
+title: Supabase, Upstash Vector, Cloudflare Vectorize, and Redis adapters
+description: Four new adapters bring the SDK to seven providers. Each one keeps the same verbs and the same filter language, and documents where its provider differs.
+date: 2026-09-12
+version: 0.1.1
+---
+
+VecStore SDK 0.1.1 adds four adapters. The same filter you wrote for Qdrant now compiles for Supabase, Upstash Vector, Cloudflare Vectorize, and Redis.
+
+## Supabase
+
+`createSupabaseStore` from `vecstore-sdk/supabase` reaches Supabase Vector through `supabase-js`, so vector search runs in Edge Functions and the browser. PostgREST has no syntax for `order by embedding <=> $1`, so every verb calls a SQL function from the new `sql/supabase.sql`, which you install once per project. The functions are `security invoker`, so row level security still applies. The table layout matches the pgvector adapter, so both adapters can read the same table.
+
+## Upstash Vector
+
+`createUpstashStore` from `vecstore-sdk/upstash` wraps an `Index` from `@upstash/vector`. Upstash cannot create an index from the client, so an index name maps to an Upstash namespace inside the index your URL and token point at. `namespaceMode` picks where the `namespace` option lives: `"metadata"` emulates it with a `_namespace` key, and `"native"` gives each index and namespace pair its own Upstash namespace. Upstash has no `NOT`, so `compileUpstashFilter` pushes negation to the leaves with De Morgan’s laws.
+
+## Cloudflare Vectorize
+
+`createVectorizeStore` from `vecstore-sdk/vectorize` takes a `Cloudflare` client plus your `accountId` and drives the Vectorize v2 HTTP API, so `createIndex`, `deleteIndex`, and `listIndexes` all work. A Vectorize filter only matches on a property that carries a metadata index, so `metadataIndexes` names the properties you filter on and `createIndex` opens them. Namespaces are native. A Vectorize filter joins every field with AND, so `or` and `exists` come back as an `unsupported` error before the request is sent.
+
+## Redis
+
+`createRedisStore` from `vecstore-sdk/redis` takes a `node-redis` client and drives the Redis Query Engine over JSON documents, which ship with Redis 8, Redis Stack 7.4 or later, and Redis Cloud. Records are JSON rather than hashes, so metadata keeps its types. Redis searches a metadata field only when the index schema declares it, so `metadataFields` names the fields you filter on as `tag` or `numeric`, and a filter on an undeclared field returns `invalid_argument` instead of an empty page.
+
+Each provider page in the docs lists what its adapter does differently. Start with the [provider differences](/docs/providers/differences) overview.

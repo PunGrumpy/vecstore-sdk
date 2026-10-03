@@ -105,7 +105,10 @@ const queryAction = (body: string, stored: Store): Response => {
   const request = parse<QueryBody>(body);
   const matches = [];
   for (const vector of stored.values()) {
-    if ((vector.namespace ?? "") === (request.namespace ?? "")) {
+    if (
+      request.namespace === undefined ||
+      vector.namespace === request.namespace
+    ) {
       matches.push({
         id: vector.id,
         metadata: request.returnMetadata === "none" ? null : vector.metadata,
@@ -413,6 +416,21 @@ describe(createVectorizeStore, () => {
       ok: true,
       value: [{ id: "doc-1", metadata: { genre: "drama" }, score: 0.9 }],
     });
+  });
+
+  test("a default namespace query drops matches from other namespaces", async () => {
+    const { client } = fakeCloudflare();
+    const store = createVectorizeStore({ accountId: ACCOUNT_ID, client });
+    await store
+      .index("docs", { namespace: "tenant-a" })
+      .upsert([{ id: "doc-a", vector: [1, 2, 3] }]);
+    await store.index("docs").upsert([{ id: "doc-root", vector: [1, 2, 3] }]);
+    const result = await store
+      .index("docs")
+      .query({ topK: 5, vector: [1, 2, 3] });
+    expect(result.ok && result.value.map((match) => match.id)).toStrictEqual([
+      "doc-root",
+    ]);
   });
 
   test("query rejects a non-positive topK before calling the provider", async () => {

@@ -25,3 +25,4 @@ tsconfig.vitest-temp.json
 packages/ai/docs
 .vercel
 .devtools
+.claude/worktrees/

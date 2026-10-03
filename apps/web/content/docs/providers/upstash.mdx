@@ -52,7 +52,7 @@ const store = createUpstashStore({
 });
 ```
 
-Choose `"native"` when you can name your namespaces up front, and `"metadata"` when a namespace is a tenant id you cannot bound. Nothing migrates between the two: a record written in one mode is invisible in the other.
+Choose `"native"` when you can name your namespaces up front, and `"metadata"` when a namespace is a tenant id you cannot bound. Nothing migrates between the two, so do not use one Upstash index in both. Native mode keeps its default namespace in the Upstash namespace named after the index, which is where metadata mode keeps every namespace. A native-mode store therefore reads those records with their `_id` and `_namespace` keys showing, and its `delete({ all: true })` resets all of them.
 
 ### Metadata mode
 

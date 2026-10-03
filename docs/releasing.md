@@ -31,7 +31,7 @@ The `Preview Release` workflow runs alongside this one. It publishes every pull 
 
 ## One-time setup
 
-The workflow needs three things that live outside the repository.
+The workflow needs four things that live outside the repository.
 
 1. In the repository **Settings**, under **Actions**, enable **Allow GitHub Actions to create and approve pull requests**. Without it, the version pull request step fails with a permissions error.
 2. Publish the first version of `vecstore-sdk` to npm by hand, because npm attaches a trusted publisher only to a package that exists.

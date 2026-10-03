@@ -30,7 +30,7 @@ const store = createQdrantStore({
 await store.createIndex({ name: "docs", dimension: 1536, metric: "cosine" });
 ```
 
-`createIndex` returns `{ ok: true }` when the index exists. If the index already exists, it returns `{ ok: false, error }` with `error.kind` set to `already_exists`.
+`createIndex` returns `{ ok: true }` when it creates the index. If the index already exists, it returns `{ ok: false, error }` with `error.kind` set to `already_exists`.
 
 ## Write records
 

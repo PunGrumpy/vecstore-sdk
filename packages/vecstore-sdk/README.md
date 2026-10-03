@@ -92,7 +92,7 @@ Every verb returns a `Result`, either `{ ok: true, value }` or `{ ok: false, err
 | Method | Description |
 | --- | --- |
 | `createIndex({ name, dimension, metric? })` | Creates a collection, table, or index. `metric` is `cosine` (default), `euclidean`, or `dot`. |
-| `deleteIndex(name)` | Drops it. Returns `not_found` if it does not exist. |
+| `deleteIndex(name)` | Drops it and every record in it. Returns `not_found` if it does not exist. |
 | `listIndexes()` | Returns index names. |
 | `index(name, { namespace? })` | Returns an index handle scoped to one namespace. |
 | `raw` | The client you passed in, with its original type. |
@@ -280,7 +280,7 @@ const store = createRedisStore({
 });
 ```
 
-The adapter needs the Redis Query Engine and JSON, which ship with Redis 8, Redis Stack 7.4 or later, and Redis Cloud. A server without them returns `unsupported` with `feature: "queryEngine"`. The client is anything with the `ft`, `json`, and `unlink` calls that `node-redis` 5 or later gives you, so a cluster client works too.
+The adapter needs the Redis Query Engine and JSON, which ship with Redis 8, Redis Stack 7.4 or later, and Redis Cloud. A server without them returns `unsupported` with `feature: "queryEngine"`. The client is anything with the `ft`, `json`, and `unlink` calls that `node-redis` 5 or later gives you. A cluster client has that shape, but `fetch` reads with one `JSON.MGET` per batch and `delete` removes with `UNLINK`, and a cluster accepts a multi-key command only when the keys share a hash slot. Put a hash tag in `keyPrefix`, such as `{vecstore}:`, to keep them together. No test runs against a cluster.
 
 An index is a real Redis index over JSON documents. `createIndex` runs `FT.CREATE ... ON JSON PREFIX 1 vecstore:{index}:`, and a record is stored at `vecstore:{index}:{namespace}:{id}` as `{ namespace, vector, metadata }`. An index name cannot contain `:`. The namespace segment is URL-encoded, so a namespace with `:` or `/` in it still yields one key segment. Pass `keyPrefix` to move the keyspace, and `algorithm` to pick `"HNSW"` over the exact `"FLAT"` default. `listIndexes` returns every index in the database, because `FT._LIST` has no way to tell one owner from another.
 

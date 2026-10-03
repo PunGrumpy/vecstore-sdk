@@ -31,7 +31,7 @@ Three constraints applied:
 - Extra payload keys on Qdrant and Upstash and an extra column on pgvector and Supabase, in exchange for namespaces everywhere.
 - Provider-native scores, in exchange for not guessing a normalization that Pinecone's squared euclidean distance would break. Upstash normalizes on its own and the adapter passes that through unchanged.
 - Negation on missing fields differs by provider, and the docs say so. In exchange, the compilers use native operators and keep indexes usable.
-- pgvector runs one catalog query per index handle to learn the metric, in exchange for working against tables the caller created.
+- pgvector runs one catalog query per table to learn the metric and caches the answer on the store, in exchange for working against tables the caller created.
 - Supabase asks for a one-time SQL install, in exchange for the whole store contract working over HTTP where PostgREST alone cannot order by a vector operator.
 - Upstash's default mode makes every query a filtered query, and so subject to Upstash's filtering budget, in exchange for a tenant count no provider limit bounds. `namespaceMode: "native"` inverts the trade.
 - Three Vectorize verbs return `unsupported`, in exchange for an adapter that says what the product does instead of pretending. Vectorize deletes by id only, and its filter language has no OR.

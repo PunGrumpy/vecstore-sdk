@@ -43,7 +43,7 @@ The adapter uses the Redis Query Engine (`FT.CREATE`, `FT.SEARCH`) and JSON (`JS
 
 The query engine has to be 2.10 or later, because the schema uses `INDEXMISSING` and `INDEXEMPTY`. Redis Stack 7.4 ships 2.10.
 
-The client is structural. Anything with the `ft`, `json`, and `unlink` calls that `node-redis` 5 or later gives you fits, including a cluster client.
+The client is structural. Anything with the `ft`, `json`, and `unlink` calls that `node-redis` 5 or later gives you fits. A cluster client has that shape, but `fetch` reads with one `JSON.MGET` per batch and `delete` removes with `UNLINK`, and a cluster accepts a multi-key command only when the keys share a hash slot. Put a hash tag in `keyPrefix`, such as `{vecstore}:`, to keep them together. No test runs against a cluster.
 
 ## What the adapter stores
 
@@ -149,7 +149,7 @@ A namespace is a tag on the document and a segment in the key. Every query, ever
 
 The default namespace stores the empty tag. Redis skips an empty value unless the field carries `INDEXEMPTY`, so the adapter sets it on every tag field, and `@namespace:{""}` then matches the records no namespace option was passed for.
 
-`fetch` and `delete({ ids })` skip the search entirely and address the keys directly, so both cost one round trip.
+`fetch` and `delete({ ids })` skip the search entirely and address the keys directly, so both cost one round trip per 500 keys.
 
 ## Filter compilation
 

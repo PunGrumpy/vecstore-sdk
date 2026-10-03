@@ -49,7 +49,7 @@ create policy "tenants read their namespace" on "docs"
   using (namespace = (auth.jwt() ->> 'tenant'));
 ```
 
-Tables created before this version have row level security off. Turn it on with `alter table "docs" enable row level security;`.
+Tables created before version 0.1.3 have row level security off. Turn it on with `alter table "docs" enable row level security;`.
 
 `createIndex` and `deleteIndex` run DDL. The `anon` and `authenticated` roles cannot create or drop tables, so those two calls return `{ kind: "unauthorized" }` under a publishable key. Call them with the service role key from a trusted server, or create the tables in a migration and never call them at all. The install script revokes `vecstore_create_index` and `vecstore_drop_index` from `anon` and `authenticated`.
 
@@ -97,7 +97,7 @@ The adapter calls seven functions:
 | `vecstore_fetch`        | `fetch`                             |
 | `vecstore_delete`       | `delete`                            |
 
-Three more functions support them: `vecstore_table` quotes an index name into a table reference, `vecstore_filter_sql` compiles a filter, and `vecstore_metric` reads the metric from the index definition.
+Four more functions support them: `vecstore_table` quotes an index name into a table reference, `vecstore_filter_sql` compiles a filter, `vecstore_contains_any` writes the containment test that `eq` and `isIn` share, and `vecstore_metric` reads the metric from the index definition.
 
 ## What the adapter stores
 

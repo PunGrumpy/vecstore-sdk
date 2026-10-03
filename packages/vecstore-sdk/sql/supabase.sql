@@ -1,6 +1,6 @@
 -- vecstore-sdk: server side for the Supabase adapter.
 -- Run once per project, with a role that can create functions.
---   supabase db execute --file node_modules/vecstore-sdk/sql/supabase.sql
+--   psql "$SUPABASE_DB_URL" -f node_modules/vecstore-sdk/sql/supabase.sql
 -- Every function runs with the privileges of the caller. Tables that
 -- vecstore_create_index creates have row level security enabled and no
 -- policies, so the anon and authenticated roles read and write nothing until
@@ -284,21 +284,41 @@ declare
     when 'dot' then '-(' || distance || ')'
     else '1 - (' || distance || ')'
   end;
+  score_order text := case metric when 'euclidean' then 'asc' else 'desc' end;
   where_sql text := 'namespace = ' || quote_literal(match_namespace);
 begin
   if match_filter is not null then
     where_sql := where_sql || ' AND ' || vecstore_filter_sql(match_filter, 'metadata');
   end if;
 
+  if exists (
+    select 1 from pg_extension
+    where extname = 'vector'
+      and (split_part(extversion, '.', 1)::int > 0 or split_part(extversion, '.', 2)::int >= 8)
+  ) then
+    perform set_config(
+      'hnsw.iterative_scan',
+      case
+        when current_setting('hnsw.iterative_scan', true) in ('strict_order', 'relaxed_order')
+          then current_setting('hnsw.iterative_scan', true)
+        else 'strict_order'
+      end,
+      true
+    );
+  end if;
+
   return query execute format(
-    'select id, metadata, %s as embedding, %s as score
-     from %s where %s order by %s limit %s',
+    'select hits.id, hits.metadata, hits.embedding, hits.score from (
+       select id, metadata, %s as embedding, %s as score
+       from %s where %s order by %s limit %s
+     ) as hits order by hits.score %s',
     case when include_vector then 'embedding::text' else 'null::text' end,
     score_sql,
     vecstore_table(index_name, index_schema),
     where_sql,
     distance,
-    match_count
+    match_count,
+    score_order
   );
 end;
 $$;

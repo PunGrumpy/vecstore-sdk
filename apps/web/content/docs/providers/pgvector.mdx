@@ -45,9 +45,15 @@ An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metada
 
 Queries read the metric from the HNSW or IVFFlat index definition in `pg_indexes`. When no index exists, they default to cosine. This also works for tables the SDK did not create.
 
-The store caches the metric per table after the first query and forgets it when `createIndex` or `deleteIndex` on the same store touches that table. If another process recreates a table with a different metric, create a new store.
+The store caches the metric per table after the first query and forgets it when `createIndex` or `deleteIndex` on the same store touches that table, or when a query on that table fails. If another process recreates a table with a different metric, create a new store.
 
 `listIndexes` returns the tables in the schema that have an `embedding vector` column.
+
+## Filtered and large queries
+
+pgvector applies the namespace and the filter after it scans the HNSW index, and a scan stops at `hnsw.ef_search` candidates, 40 by default. Without an iterative scan, a query with a `topK` above 40, a selective filter, or a namespace that holds part of the table returns fewer than `topK` records. On pgvector 0.8.0 or later the adapter turns on an iterative scan for each query, so the scan continues until `topK` records pass. It sets `hnsw.iterative_scan` to `strict_order` for that one statement and keeps a value you set yourself, such as `relaxed_order` on the database.
+
+On an older pgvector there is no iterative scan and the adapter sends the plain statement. Upgrade the extension, or raise `hnsw.ef_search` for the role or the database. A filter that matches few records can still return fewer than `topK` records on any version, because pgvector stops an iterative scan after `hnsw.max_scan_tuples` tuples, 20,000 by default. The adapter also sends the plain statement to a table with an IVFFlat index, which the SDK never creates.
 
 ## What the adapter stores
 

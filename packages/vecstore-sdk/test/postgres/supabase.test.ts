@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { PGlite } from "@electric-sql/pglite";
 
 import { errorMessage } from "../../src/errors";
+import { eq } from "../../src/filter/ast";
 import { isBoolean, isNumber, isString } from "../../src/internal/guards";
 import { hasCode } from "../../src/internal/postgres";
 import type { SupabaseCall, SupabaseClientLike } from "../../src/supabase";
@@ -11,7 +12,13 @@ import {
   normalizeSupabaseError,
 } from "../../src/supabase";
 import { containsCases, liveCases, setupLive } from "../live/conformance";
-import { createPostgres, installSupabaseSql } from "./pglite";
+import {
+  createPostgres,
+  FORCE_INDEX_SCAN,
+  installSupabaseSql,
+  isDescending,
+  spreadRecords,
+} from "./pglite";
 
 type ValueOf<T> = T extends object ? T[keyof T] : never;
 type RpcArgValue = ValueOf<SupabaseCall["args"]>;
@@ -196,5 +203,37 @@ describe("supabase install script", () => {
     expect(hasCode(deleteError) && deleteError.code).toBe("22023");
 
     expect(await countSecured()).toBe(1);
+  });
+});
+
+describe("vecstore_query through the HNSW index on PGlite", () => {
+  const db = createPostgres();
+  const store = createSupabaseStore({ client: rpcClient(db) });
+  const index = store.index("filled", { namespace: "tenant-a" });
+  beforeAll(async () => {
+    await installSupabaseSql(db);
+    await store.createIndex({ dimension: 3, name: "filled" });
+    await index.upsert(spreadRecords("a"));
+    await store
+      .index("filled", { namespace: "tenant-b" })
+      .upsert(spreadRecords("b"));
+    await db.exec(FORCE_INDEX_SCAN);
+  });
+  afterAll(() => db.close());
+
+  test("a topK above the HNSW candidate list returns topK records, nearest first", async () => {
+    const result = await index.query({ topK: 100, vector: [1, 0, 0] });
+    const scores = result.ok ? result.value.map((match) => match.score) : [];
+    expect(scores).toHaveLength(100);
+    expect(isDescending(scores)).toBeTruthy();
+  });
+
+  test("a selective filter returns topK records", async () => {
+    const result = await index.query({
+      filter: eq("kind", "rare"),
+      topK: 10,
+      vector: [1, 0, 0],
+    });
+    expect(result.ok && result.value).toHaveLength(10);
   });
 });

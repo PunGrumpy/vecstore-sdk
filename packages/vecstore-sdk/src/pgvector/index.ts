@@ -3,7 +3,7 @@ import { compilePgvectorFilter } from "../filter/pgvector";
 import type { PgvectorSql } from "../filter/pgvector";
 import { attempt } from "../internal/attempt";
 import { lastById, mapBatches, sortByIds } from "../internal/collections";
-import { isObjectLike } from "../internal/guards";
+import { isObjectLike, isString } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
   DOLLAR_TAG,
@@ -73,6 +73,17 @@ const DISTANCE_OPERATORS: Record<Metric, string> = {
   euclidean: "<->",
 };
 
+const SCORE_ORDERS: Record<Metric, string> = {
+  cosine: "DESC",
+  dot: "DESC",
+  euclidean: "ASC",
+};
+
+const HNSW_METHOD = "USING hnsw";
+const ITERATIVE_SCAN_MINOR = 8;
+const ITERATIVE_SCAN_SETTING =
+  "set_config('hnsw.iterative_scan', CASE WHEN current_setting('hnsw.iterative_scan', true) IN ('strict_order', 'relaxed_order') THEN current_setting('hnsw.iterative_scan', true) ELSE 'strict_order' END, true)";
+
 const quoteIdent = (name: string): string => `"${name.replaceAll('"', '""')}"`;
 
 export const normalizePgvectorError = (
@@ -87,8 +98,21 @@ interface IndexDefinitionRow {
   readonly indexdef: string;
 }
 
+interface SearchProfile {
+  readonly metric: Metric;
+  readonly iterativeScan: boolean;
+}
+
+const supportsIterativeScan = (version: string): boolean => {
+  const [major = 0, minor = 0] = version.split(".").map(Number);
+  return major > 0 || minor >= ITERATIVE_SCAN_MINOR;
+};
+
 const isIndexDefinitionRow = (row: unknown): row is IndexDefinitionRow =>
   isObjectLike(row) && "indexdef" in row && typeof row.indexdef === "string";
+
+const extensionVersion = (row: IndexDefinitionRow): string =>
+  "extversion" in row && isString(row.extversion) ? row.extversion : "";
 
 const OPCLASS_METRICS: readonly (readonly [string, Metric])[] = [
   [OPCLASSES.cosine, "cosine"],
@@ -120,33 +144,63 @@ const scoreExpression = (metric: Metric, vectorParam: string): string => {
 
 interface TableContext {
   readonly client: PgQueryable;
-  readonly metric: () => Promise<Metric>;
+  readonly forget: () => void;
+  readonly profile: () => Promise<SearchProfile>;
   readonly name: string;
   readonly schema: string | undefined;
   readonly table: string;
 }
 
-type MetricTarget = Pick<TableContext, "client" | "name" | "schema">;
+type ProfileTarget = Pick<TableContext, "client" | "name" | "schema">;
+
+const DEFAULT_PROFILE: SearchProfile = {
+  iterativeScan: false,
+  metric: "cosine",
+};
 
 const schemaPredicate = (schema: string | undefined, param: string): string =>
   schema === undefined ? "current_schema()" : param;
 
-const resolveMetric = async (context: MetricTarget): Promise<Metric> => {
+const resolveProfile = async (
+  context: ProfileTarget
+): Promise<SearchProfile> => {
   const params: PgParam[] =
     context.schema === undefined
       ? [context.name]
       : [context.name, context.schema];
   const { rows } = await context.client.query(
-    `SELECT indexdef FROM pg_indexes WHERE tablename = $1 AND schemaname = ${schemaPredicate(context.schema, "$2")}`,
+    `SELECT indexdef, (SELECT extversion FROM pg_extension WHERE extname = 'vector') AS extversion FROM pg_indexes WHERE tablename = $1 AND schemaname = ${schemaPredicate(context.schema, "$2")}`,
     params
   );
   for (const row of rows.filter(isIndexDefinitionRow)) {
     const metric = metricFromIndexDef(row.indexdef);
     if (metric !== undefined) {
-      return metric;
+      return {
+        iterativeScan:
+          row.indexdef.includes(HNSW_METHOD) &&
+          supportsIterativeScan(extensionVersion(row)),
+        metric,
+      };
     }
   }
-  return "cosine";
+  return DEFAULT_PROFILE;
+};
+
+const withIterativeScan = (search: string, metric: Metric): string =>
+  `SELECT hits.* FROM (SELECT ${ITERATIVE_SCAN_SETTING} AS scan) AS tuning CROSS JOIN LATERAL (${search}) AS hits ORDER BY hits.score ${SCORE_ORDERS[metric]}`;
+
+const searchRows = async (
+  context: TableContext,
+  text: string,
+  params: PgParam[]
+): Promise<object[]> => {
+  try {
+    const { rows } = await context.client.query(text, params);
+    return rows;
+  } catch (error) {
+    context.forget();
+    throw error;
+  }
 };
 
 const upsertStatement = (
@@ -231,7 +285,7 @@ const createIndex = (
         return Promise.resolve(err(invalid));
       }
       return run(name, async () => {
-        const resolved = await context.metric();
+        const { iterativeScan, metric } = await context.profile();
         const params: PgParam[] = [namespace, vectorLiteral(query.vector)];
         const filter: PgvectorSql | undefined =
           query.filter === undefined
@@ -243,15 +297,20 @@ const createIndex = (
           params.push(...filter.params);
         }
         params.push(query.topK);
-        const where =
+        const scoped =
           filter === undefined
             ? "namespace = $1"
             : `namespace = $1 AND ${filter.text}`;
+        const where = iterativeScan
+          ? `${scoped} AND tuning.scan IS NOT NULL`
+          : scoped;
         const vectorColumn = query.includeVector
           ? "embedding::text AS embedding,"
           : "";
-        const { rows } = await client.query(
-          `SELECT id, metadata, ${vectorColumn} ${scoreExpression(resolved, "$2")} AS score FROM ${table} WHERE ${where} ORDER BY embedding ${DISTANCE_OPERATORS[resolved]} $2::vector LIMIT $${params.length}`,
+        const search = `SELECT id, metadata, ${vectorColumn} ${scoreExpression(metric, "$2")} AS score FROM ${table} WHERE ${where} ORDER BY embedding ${DISTANCE_OPERATORS[metric]} $2::vector LIMIT $${params.length}`;
+        const rows = await searchRows(
+          context,
+          iterativeScan ? withIterativeScan(search, metric) : search,
           params
         );
         const includeMetadata = query.includeMetadata ?? true;
@@ -291,34 +350,38 @@ export const createPgvectorStore = <Client extends PgQueryable>(
     schema === undefined
       ? quoteIdent(name)
       : `${quoteIdent(schema)}.${quoteIdent(name)}`;
-  const metrics = new Map<string, Promise<Metric>>();
-  const metricKey = (name: string): string => `${schema ?? ""}.${name}`;
-  const forgetMetric = (name: string): void => {
-    metrics.delete(metricKey(name));
+  const profiles = new Map<string, Promise<SearchProfile>>();
+  const profileKey = (name: string): string => `${schema ?? ""}.${name}`;
+  const forgetProfile = (name: string): void => {
+    profiles.delete(profileKey(name));
   };
-  const lookup = async (target: MetricTarget, key: string): Promise<Metric> => {
+  const lookup = async (
+    target: ProfileTarget,
+    key: string
+  ): Promise<SearchProfile> => {
     try {
-      return await resolveMetric(target);
+      return await resolveProfile(target);
     } catch (error) {
-      metrics.delete(key);
+      profiles.delete(key);
       throw error;
     }
   };
-  const metricFor = (target: MetricTarget): Promise<Metric> => {
-    const key = metricKey(target.name);
-    const cached = metrics.get(key);
+  const profileFor = (target: ProfileTarget): Promise<SearchProfile> => {
+    const key = profileKey(target.name);
+    const cached = profiles.get(key);
     if (cached !== undefined) {
       return cached;
     }
     const pending = lookup(target, key);
-    metrics.set(key, pending);
+    profiles.set(key, pending);
     return pending;
   };
   const context = (name: string): TableContext => {
-    const target: MetricTarget = { client, name, schema };
+    const target: ProfileTarget = { client, name, schema };
     return {
       ...target,
-      metric: () => metricFor(target),
+      forget: () => forgetProfile(name),
+      profile: () => profileFor(target),
       table: tableRef(name),
     };
   };
@@ -331,7 +394,7 @@ export const createPgvectorStore = <Client extends PgQueryable>(
         return Promise.resolve(err(invalid));
       }
       return run(spec.name, async () => {
-        forgetMetric(spec.name);
+        forgetProfile(spec.name);
         const table = tableRef(spec.name);
         const embeddingIndex = quoteIdent(`${spec.name}_embedding_idx`);
         const metadataIndex = quoteIdent(`${spec.name}_metadata_idx`);
@@ -340,15 +403,15 @@ export const createPgvectorStore = <Client extends PgQueryable>(
           `DO ${DOLLAR_TAG} BEGIN CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE ${table} (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(${spec.dimension}) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id)); CREATE INDEX ${embeddingIndex} ON ${table} USING hnsw (embedding ${opclass}); CREATE INDEX ${metadataIndex} ON ${table} USING gin (metadata); END ${DOLLAR_TAG}`,
           []
         );
-        forgetMetric(spec.name);
+        forgetProfile(spec.name);
       });
     },
 
     deleteIndex: (name) =>
       run(name, async () => {
-        forgetMetric(name);
+        forgetProfile(name);
         await client.query(`DROP TABLE ${tableRef(name)}`, []);
-        forgetMetric(name);
+        forgetProfile(name);
       }),
 
     index: (name, indexOptions = {}) =>

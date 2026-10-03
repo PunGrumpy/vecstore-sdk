@@ -114,6 +114,7 @@ export interface SupabaseStoreOptions<Client> {
 
 const PROVIDER = "supabase";
 const UPSERT_BATCH = 100;
+const FETCH_BATCH = 500;
 const DEFAULT_NAMESPACE = "";
 
 const MISSING_FUNCTION = "PGRST202";
@@ -244,18 +245,20 @@ const createIndexHandle = (
 
     fetch: (ids, fetchOptions: FetchOptions = {}) =>
       run(context("vecstore_fetch"), async () => {
-        if (ids.length === 0) {
-          return [];
-        }
-        const rows = await invoke(client, {
-          args: {
-            ...scope,
-            ids: [...ids],
-            include_vector: fetchOptions.includeVector ?? false,
-          },
-          fn: "vecstore_fetch",
+        const pages = await mapBatches({
+          action: (batch) =>
+            invoke(client, {
+              args: {
+                ...scope,
+                ids: batch,
+                include_vector: fetchOptions.includeVector ?? false,
+              },
+              fn: "vecstore_fetch",
+            }),
+          items: ids,
+          size: FETCH_BATCH,
         });
-        return sortByIds(ids, readRecords(rows));
+        return sortByIds(ids, readRecords(pages.flat()));
       }),
 
     name: target.index_name,

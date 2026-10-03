@@ -292,6 +292,24 @@ describe(createSupabaseStore, () => {
     ]);
   });
 
+  test("fetch splits ids into batches of 500", async () => {
+    const { client, calls } = fakeClient();
+    const ids = Array.from(
+      { length: 1200 },
+      (_, position) => `doc-${position}`
+    );
+    await createSupabaseStore({ client }).index("docs").fetch(ids);
+    const sizes = calls.map((call) =>
+      "ids" in call.args ? call.args.ids?.length : undefined
+    );
+    expect(calls.map((call) => call.fn)).toStrictEqual([
+      "vecstore_fetch",
+      "vecstore_fetch",
+      "vecstore_fetch",
+    ]);
+    expect(sizes.toSorted()).toStrictEqual([200, 500, 500]);
+  });
+
   test("each delete selector maps to one set of arguments", async () => {
     const { client, calls } = fakeClient();
     const index = createSupabaseStore({ client }).index("docs");

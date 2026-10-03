@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import { and, eq, exists, gt, isIn, lt, not, or } from "../src/filter/ast";
+import type { Filter } from "../src/filter/ast";
 import {
   chunk,
   lastById,
   mapBatches,
   sortByIds,
 } from "../src/internal/collections";
+import { filterError } from "../src/internal/filter";
 import { indexSpecError } from "../src/internal/index-spec";
 import {
   isMetadataEntry,
@@ -19,6 +22,49 @@ import {
   isSurrogateUuid,
   isUuid,
 } from "../src/internal/uuid";
+
+const looseFilter = (json: string): Filter => JSON.parse(json);
+
+const wellFormedFilters: [string, Filter][] = [
+  ["a string equality", eq("genre", "drama")],
+  ["a boolean equality", eq("published", true)],
+  ["a float equality", eq("score", 0.5)],
+  ["a range", gt("year", 2000)],
+  ["a mixed membership list", isIn("tag", ["a", 1, false])],
+  ["a presence test", exists("genre")],
+  ["nested combinators", and(not(or(eq("a", 1), lt("b", 2))), exists("c"))],
+];
+
+const malformedFilters: [string, Filter][] = [
+  ["a NaN range bound", gt("year", Number.NaN)],
+  ["an infinite range bound", lt("year", Number.POSITIVE_INFINITY)],
+  ["a NaN equality value", eq("year", Number.NaN)],
+  ["a NaN inside a membership list", isIn("year", [1, Number.NaN])],
+  ["a missing equality value", looseFilter('{"kind":"eq","field":"genre"}')],
+  [
+    "a null equality value",
+    looseFilter('{"kind":"ne","field":"genre","value":null}'),
+  ],
+  [
+    "a string range bound",
+    looseFilter('{"kind":"gt","field":"year","value":"2005"}'),
+  ],
+  [
+    "an empty membership list",
+    looseFilter('{"kind":"in","field":"genre","values":[]}'),
+  ],
+  ["an empty and", looseFilter('{"kind":"and","filters":[]}')],
+  ["a not without a child", looseFilter('{"kind":"not"}')],
+  ["a missing field", looseFilter('{"kind":"eq","value":"drama"}')],
+  [
+    "an unknown kind",
+    looseFilter('{"kind":"like","field":"genre","value":"dr"}'),
+  ],
+  [
+    "a problem nested under not and or",
+    not(or(eq("genre", "drama"), gt("year", Number.NaN))),
+  ],
+];
 
 describe(deterministicUuid, () => {
   test("is stable for the same input and distinct across namespaces", () => {
@@ -239,5 +285,42 @@ describe(mapBatches, () => {
         size: 1,
       })
     ).rejects.toThrow(failure);
+  });
+});
+
+describe(filterError, () => {
+  test.each(wellFormedFilters)("accepts %s", (_name, filter) => {
+    expect(filterError("pgvector", filter)).toBeUndefined();
+  });
+
+  test.each(malformedFilters)("rejects %s", (_name, filter) => {
+    expect(filterError("pgvector", filter)?.kind).toBe("invalid_argument");
+  });
+
+  test("names the field and the value it rejects", () => {
+    const error = filterError("qdrant", gt("year", Number.NaN));
+    expect(error?.provider).toBe("qdrant");
+    expect(error?.message).toBe(
+      '"gt" on "year" needs a finite number, received NaN.'
+    );
+  });
+});
+
+describe("queryOptionsError with a filter", () => {
+  test("rejects a malformed filter and accepts a well formed one", () => {
+    expect(
+      queryOptionsError("qdrant", {
+        filter: gt("year", Number.NaN),
+        topK: 1,
+        vector: [1],
+      })?.kind
+    ).toBe("invalid_argument");
+    expect(
+      queryOptionsError("qdrant", {
+        filter: gt("year", 2000),
+        topK: 1,
+        vector: [1],
+      })
+    ).toBeUndefined();
   });
 });

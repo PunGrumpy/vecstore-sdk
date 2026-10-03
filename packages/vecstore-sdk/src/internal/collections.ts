@@ -49,15 +49,21 @@ export const mapBatches = async <T, R>({
   const batches = chunk(items, size);
   const results: R[] = Array.from({ length: batches.length });
   let next = 0;
+  let failed = false;
   const worker = async (): Promise<void> => {
     const position = next;
-    if (position >= batches.length) {
+    if (failed || position >= batches.length) {
       return;
     }
     next += 1;
     const batch = batches[position];
     if (batch !== undefined) {
-      results[position] = await action(batch);
+      try {
+        results[position] = await action(batch);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
     }
     await worker();
   };
@@ -65,6 +71,11 @@ export const mapBatches = async <T, R>({
     { length: Math.min(concurrency, batches.length) },
     () => worker()
   );
-  await Promise.all(workers);
+  const outcomes = await Promise.allSettled(workers);
+  for (const outcome of outcomes) {
+    if (outcome.status === "rejected") {
+      throw outcome.reason;
+    }
+  }
   return results;
 };

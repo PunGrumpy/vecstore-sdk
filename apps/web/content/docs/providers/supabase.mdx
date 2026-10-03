@@ -94,7 +94,7 @@ The adapter calls seven functions:
 | `vecstore_list_indexes` | `listIndexes`                       |
 | `vecstore_upsert`       | `upsert`, in batches of 100 records |
 | `vecstore_query`        | `query`                             |
-| `vecstore_fetch`        | `fetch`                             |
+| `vecstore_fetch`        | `fetch`, in batches of 500 ids      |
 | `vecstore_delete`       | `delete`                            |
 
 Four more functions support them: `vecstore_table` quotes an index name into a table reference, `vecstore_filter_sql` compiles a filter, `vecstore_contains_any` writes the containment test that `eq` and `isIn` share, and `vecstore_metric` reads the metric from the index definition.

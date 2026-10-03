@@ -441,6 +441,12 @@ const describeSpecMismatch = (
   return undefined;
 };
 
+const dropNamespaces = (
+  client: UpstashIndexLike,
+  namespaces: readonly string[]
+): Promise<string[]> =>
+  Promise.all(namespaces.map((found) => client.deleteNamespace(found)));
+
 const createIndex = (
   client: UpstashIndexLike,
   layout: UpstashLayout,
@@ -636,7 +642,11 @@ export const createUpstashStore = <Client extends UpstashIndexLike>(
             `The Upstash index has no namespace for "${name}".`
           );
         }
-        await Promise.all(owned.map((found) => client.deleteNamespace(found)));
+        await mapBatches({
+          action: (batch) => dropNamespaces(client, batch),
+          items: owned,
+          size: 1,
+        });
       }),
 
     index: (name, indexOptions = {}) =>

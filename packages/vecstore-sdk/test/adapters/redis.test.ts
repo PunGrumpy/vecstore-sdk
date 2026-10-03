@@ -13,6 +13,7 @@ import type {
 } from "../../src/redis";
 import { createRedisStore, normalizeRedisError } from "../../src/redis";
 import type { VectorRecord } from "../../src/types";
+import { emptySelector, filterWithoutValue } from "../malformed";
 
 const INDEX = "docs";
 const NAMESPACE = "tenant-a";
@@ -283,6 +284,24 @@ describe(createRedisStore, () => {
     const result = await index.query({ topK: 0, vector: [1, 0, 0] });
     expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
     expect(fake.searches).toStrictEqual([]);
+  });
+
+  test("query and delete reject a malformed filter or selector before calling the provider", async () => {
+    const { fake, index } = await setup();
+    const queried = await index.query({
+      filter: filterWithoutValue,
+      topK: 1,
+      vector: [1, 0, 0],
+    });
+    const filtered = await index.delete({ filter: filterWithoutValue });
+    const emptied = await index.delete(emptySelector);
+    expect([queried, filtered, emptied]).toMatchObject([
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+    ]);
+    expect(fake.searches).toStrictEqual([]);
+    expect(fake.unlinked).toStrictEqual([]);
   });
 
   test("query passes the vector as a float32 blob", async () => {

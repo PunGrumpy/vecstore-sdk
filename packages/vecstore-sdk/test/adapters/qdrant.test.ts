@@ -18,6 +18,7 @@ import {
   normalizeQdrantError,
   scopeQdrantFilter,
 } from "../../src/qdrant";
+import { emptySelector, filterWithoutValue } from "../malformed";
 
 const UUID = "0f8fad5b-d9cb-469f-a165-70867728950e";
 
@@ -334,6 +335,25 @@ describe(createQdrantStore, () => {
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(recorded.queries).toStrictEqual([]);
+  });
+
+  test("query and delete reject a malformed filter or selector before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+    const index = createQdrantStore({ client }).index("docs");
+    const queried = await index.query({
+      filter: filterWithoutValue,
+      topK: 1,
+      vector: [1, 0, 0],
+    });
+    const filtered = await index.delete({ filter: filterWithoutValue });
+    const emptied = await index.delete(emptySelector);
+    expect([queried, filtered, emptied]).toMatchObject([
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+    ]);
+    expect(recorded.queries).toStrictEqual([]);
+    expect(recorded.deletes).toStrictEqual([]);
   });
 
   test("the default namespace matches points without a namespace", () => {

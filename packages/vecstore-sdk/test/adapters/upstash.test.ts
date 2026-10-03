@@ -17,6 +17,7 @@ import {
   normalizeUpstashError,
   scopeUpstashFilter,
 } from "../../src/upstash";
+import { emptySelector, filterWithoutValue } from "../malformed";
 
 const upstashError = (message: string) =>
   Object.assign(new Error(message), { name: "UpstashError" });
@@ -186,6 +187,25 @@ describe(createUpstashStore, () => {
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(recorded.queries).toStrictEqual([]);
+  });
+
+  test("query and delete reject a malformed filter or selector before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+    const index = createUpstashStore({ client }).index("docs");
+    const queried = await index.query({
+      filter: filterWithoutValue,
+      topK: 1,
+      vector: [1, 0, 0],
+    });
+    const filtered = await index.delete({ filter: filterWithoutValue });
+    const emptied = await index.delete(emptySelector);
+    expect([queried, filtered, emptied]).toMatchObject([
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+    ]);
+    expect(recorded.queries).toStrictEqual([]);
+    expect(recorded.deletes).toStrictEqual([]);
   });
 
   test("query scopes the filter to the namespace and hides reserved keys", async () => {

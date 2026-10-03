@@ -30,7 +30,7 @@ return result.value;
 | --- | --- |
 | `not_found` | The index does not exist. Carries `name`. |
 | `already_exists` | `createIndex` found an existing index. Carries `name`. |
-| `invalid_argument` | The provider rejected the request: wrong dimension, bad id, or bad metadata. |
+| `invalid_argument` | The adapter or the provider rejected the request: a malformed filter or delete selector, wrong dimension, bad id, or bad metadata. |
 | `unsupported` | The provider cannot do this. Carries `feature`, for example `deleteByFilter` on Pinecone serverless, or a `vecstore_` function that Supabase has no install for. |
 | `unauthorized` | Bad credentials or a missing permission. |
 | `connection` | The provider was unreachable or timed out. |

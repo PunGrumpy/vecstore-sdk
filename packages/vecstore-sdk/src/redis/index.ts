@@ -23,6 +23,7 @@ import type {
 } from "../filter/redis";
 import { attempt } from "../internal/attempt";
 import { chunk, mapBatches, sortByIds } from "../internal/collections";
+import { deleteSelectorError } from "../internal/delete-selector";
 import {
   isNumber,
   isNumberArray,
@@ -674,6 +675,10 @@ const createIndex = (
     delete: (selector: DeleteSelector) => {
       if (nameMessage !== undefined) {
         return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
+      }
+      const rejected = deleteSelectorError(PROVIDER, selector);
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
       }
       if ("ids" in selector) {
         return run(name, async () => {

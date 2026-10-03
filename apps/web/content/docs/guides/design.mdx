@@ -12,7 +12,7 @@ Seven vector databases share four verbs and disagree on the metadata filter lang
 Three constraints applied:
 
 - The provider SDKs stay optional peer dependencies. The adapters import only their types.
-- Types are the contract. There is no runtime schema library and no validation of caller input.
+- Types are the contract, and there is no runtime schema library. The adapters check only what a type cannot express and what would make a `delete` remove more than you asked for. That covers a finite number in a filter, a positive integer for `topK` and the dimension, a `delete` selector that names its target, and the naming rules each provider page lists.
 - Provider payloads are narrowed at the boundary with named type predicates.
 
 ## Shape

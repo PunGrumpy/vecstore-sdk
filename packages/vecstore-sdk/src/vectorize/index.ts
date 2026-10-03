@@ -19,6 +19,7 @@ import type {
 } from "../filter/vectorize";
 import { attempt } from "../internal/attempt";
 import { lastById, mapBatches, sortByIds } from "../internal/collections";
+import { deleteSelectorError } from "../internal/delete-selector";
 import { isNumberArray, isObjectLike, isString } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -292,8 +293,9 @@ const createIndex = (
   const invalid = namespaceError(PROVIDER, namespace);
   return {
     delete: (selector: DeleteSelector): VecResult<void> => {
-      if (invalid !== undefined) {
-        return Promise.resolve(err(invalid));
+      const rejected = invalid ?? deleteSelectorError(PROVIDER, selector);
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
       }
       if ("ids" in selector) {
         return run(name, async () => {

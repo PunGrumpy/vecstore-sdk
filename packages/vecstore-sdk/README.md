@@ -104,7 +104,7 @@ Every verb returns a `Result`, either `{ ok: true, value }` or `{ ok: false, err
 | `upsert(records)` | Inserts or replaces records by id. Large batches are sent as several provider requests, four at a time. If one fails, earlier requests may already be written, so retry the whole call. Upserts are idempotent. |
 | `query({ vector, topK, filter?, includeMetadata?, includeVector? })` | Returns the nearest records with `score`. |
 | `fetch(ids, { includeVector? })` | Returns the records that exist, in request order. |
-| `delete({ ids })`, `delete({ filter })`, `delete({ all: true })` | Removes records in the namespace. |
+| `delete({ ids })`, `delete({ filter })`, `delete({ all: true })` | Removes records in the namespace. A selector that names none of the three, or an empty `ids` list, returns `invalid_argument` and deletes nothing. |
 
 Metadata values are `string`, `number`, `boolean`, or `string[]`. That is the intersection the seven providers accept.
 
@@ -127,6 +127,10 @@ Build filters with the exported helpers. Each compiler is also exported from its
 
 `isIn`, `notIn`, `and`, and `or` require at least one element, and the types enforce it.
 
+Every adapter checks a filter before it sends anything. A value has to be a string, a finite number, or a boolean, a range bound has to be a finite number, and a list or a combinator cannot be empty. `NaN`, `Infinity`, and a value that reached the builder as `undefined` return `invalid_argument`.
+
+Without the check, `JSON.stringify` turns those values into `null` or drops them, and a provider reads the result as a wider filter, up to one that matches every record in the namespace. The exported compilers skip this check, so validate values yourself when you call one directly.
+
 Supabase has no compiler to import. The filter travels to Postgres as JSON and `vecstore_filter_sql` emits the pgvector predicates there.
 
 Two compilers return a `Result`, and the verb turns a failure into an error before it sends the request. `compileVectorizeFilter` fails because a Vectorize filter is smaller than the filter AST. `compileRedisFilter` fails because it holds the index schema and knows which fields Redis can match on.
@@ -139,7 +143,7 @@ Two compilers return a `Result`, and the verb turns a failure into an error befo
 | --- | --- |
 | `not_found` | The index does not exist. Carries `name`. |
 | `already_exists` | `createIndex` hit an existing index. |
-| `invalid_argument` | The provider rejected the request: wrong dimension, bad id, bad metadata. |
+| `invalid_argument` | The adapter or the provider rejected the request: a malformed filter or delete selector, wrong dimension, bad id, bad metadata. |
 | `unsupported` | The provider cannot do this. Carries `feature`, for example `deleteByFilter` on Pinecone serverless, `orFilter` on Vectorize, `queryEngine` on a Redis server without the query engine, or a `vecstore_` function that Supabase has no install for. |
 | `unauthorized` | Bad credentials or missing permission. |
 | `connection` | The provider was unreachable or timed out. |

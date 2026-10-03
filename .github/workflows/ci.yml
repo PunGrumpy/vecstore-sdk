@@ -23,6 +23,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check the lockfile version Dependabot can read
+        run: |
+          if ! grep -q '"lockfileVersion": 1,' bun.lock; then
+            echo "::error file=bun.lock::bun.lock must stay at lockfileVersion 1 until Dependabot reads newer versions (dependabot/dependabot-core#16071). Set line 2 back to 1 and run bun install."
+            exit 1
+          fi
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:

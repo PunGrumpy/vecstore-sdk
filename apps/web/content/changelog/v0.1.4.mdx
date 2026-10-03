@@ -1,0 +1,36 @@
+---
+title: Full topK on pgvector and Supabase, rejected malformed filters, and batches that stop on failure
+description: pgvector and Supabase queries return topK records once Postgres uses the HNSW index, every adapter rejects a malformed filter or delete selector before it reaches the provider, a failed bulk call stops sending batches, and a Vectorize default-namespace query stays in its namespace.
+date: 2026-10-04
+version: 0.1.4
+---
+
+VecStore SDK 0.1.4 fixes queries that returned fewer records than they asked for on pgvector and Supabase, rejects malformed filters and delete selectors before they reach a provider, and stops a failed bulk call from sending more batches. Supabase users should re-run `sql/supabase.sql`.
+
+## pgvector and Supabase queries return topK records
+
+pgvector applies the namespace and the filter after it scans the HNSW index, and a scan stops at `hnsw.ef_search` candidates, 40 by default. A `topK` above 40, a selective filter, or a namespace holding part of the table returned fewer records with no error. Small tables hid it, because Postgres scans them exactly.
+
+On pgvector 0.8.0 or later, both adapters now turn on an iterative scan for the one statement, so the scan continues until `topK` records pass. They keep a scan mode you set yourself, and older versions keep the previous statement. Re-run `sql/supabase.sql` to get the new `vecstore_query`.
+
+## Malformed filters and delete selectors are rejected
+
+A filter value goes through `JSON.stringify`, so `NaN` and `Infinity` became `null` and a value that was `undefined` at runtime disappeared. The provider read the result as a wider filter. On pgvector, `delete({ filter: gte("year", NaN) })` removed every record with a numeric `year`.
+
+Every adapter’s `query` and `delete` now return `invalid_argument` for a value that is not a string, a finite number, or a boolean, and for an empty list or combinator. `delete` also returns `invalid_argument` for a selector that is not `{ ids }` with at least one id, `{ filter }`, or `{ all: true }`. Before, `{}` from untyped code deleted the whole namespace on six adapters. Calls that satisfy the types and carry finite numbers behave as before.
+
+## A failed bulk call stops sending batches
+
+A large `upsert` or `delete({ ids })` runs four requests at a time. When one failed, the call returned its error while the other workers went on sending every remaining batch, so a retry ran alongside the first call’s remaining requests. Now no further batch starts after a failure, and the call returns once the requests in flight have finished.
+
+## Vectorize default-namespace queries stay in their namespace
+
+Vectorize searches the whole index when a query names no namespace, and the adapter sends none for the default namespace. A default-namespace query could return a record written to a named namespace, with its metadata and original id. `query` now drops matches that report another namespace. On an index that also holds namespaced records, such a query can return fewer than `topK` records.
+
+## Also in this release
+
+- Supabase `fetch` sends 500 ids per request, because PostgREST caps the rows a function returns and truncates without an error.
+- Upstash `deleteIndex` deletes an index’s namespaces four at a time.
+- `@upstash/vector` 1.2.1 or later is required, the first version whose `delete` accepts `{ ids }` and `{ filter }`.
+- The pgvector store forgets its cached metric when a query fails.
+- The Redis page no longer suggests `deleteIndex` for adding a filterable field. `deleteIndex` deletes every record, so drop the index through the native client instead.

@@ -19,7 +19,7 @@ Embedding is out of scope. Generate vectors with your model provider and pass th
 
 ## Providers
 
-VecStore SDK supports seven providers. Every verb and every filter builder works on all of them, except where Vectorize has no equivalent. The badges show what each adapter does differently.
+VecStore SDK supports seven providers. Every verb and every filter builder works on all of them, except where a provider has no equivalent: Vectorize has no OR, no `exists`, and deletes by id only, and Pinecone serverless indexes reject `delete({ filter })`. The badges show what each adapter does differently.
 
 <ProviderCards />
 

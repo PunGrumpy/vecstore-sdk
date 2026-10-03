@@ -12,7 +12,7 @@ Create a store with the adapter for your provider: `createQdrantStore`, `createP
 | Method | Description |
 | --- | --- |
 | `createIndex({ name, dimension, metric? })` | Creates a collection, table, index, or namespace. `metric` is `cosine` (default), `euclidean`, or `dot`. |
-| `deleteIndex(name)` | Drops the index. Returns `not_found` if the index does not exist. |
+| `deleteIndex(name)` | Drops the index and every record in it. Returns `not_found` if the index does not exist. |
 | `listIndexes()` | Returns the index names. |
 | `index(name, { namespace? })` | Returns an index handle scoped to one namespace. |
 | `provider` | `"qdrant"`, `"pgvector"`, `"pinecone"`, `"supabase"`, `"upstash"`, `"vectorize"`, or `"redis"`. |

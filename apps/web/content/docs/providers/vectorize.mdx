@@ -81,10 +81,14 @@ To clear records without a delete-by-filter, query for the ids you want gone and
 const clear = async () => {
   for (;;) {
     const matches = await docs.query({ vector, topK: 50, filter });
-    if (!matches.ok || matches.value.length === 0) {
+    if (!matches.ok) {
       return matches;
     }
-    await docs.delete({ ids: matches.value.map((match) => match.id) });
+    const [first, ...rest] = matches.value.map((match) => match.id);
+    if (first === undefined) {
+      return matches;
+    }
+    await docs.delete({ ids: [first, ...rest] });
   }
 };
 ```

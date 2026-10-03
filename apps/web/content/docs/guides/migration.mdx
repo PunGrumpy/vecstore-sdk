@@ -58,6 +58,9 @@ const store = createVectorizeStore({
 import { createClient } from "redis";
 import { createRedisStore } from "vecstore-sdk/redis";
 
+const client = createClient({ url });
+await client.connect();
+
 const store = createRedisStore({
   client,
   metadataFields: [{ field: "genre", type: "tag" }],

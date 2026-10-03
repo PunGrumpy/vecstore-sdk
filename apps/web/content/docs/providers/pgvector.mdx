@@ -21,7 +21,7 @@ Install the client alongside the SDK:
 bun add vecstore-sdk pg
 ```
 
-For postgres.js, pass `{ query: (text, params) => sql.unsafe(text, params) }` as the client.
+For postgres.js, wrap `sql.unsafe` so it resolves to `{ rows }`, and pass `{ query: async (text, params) => ({ rows: await sql.unsafe(text, params) }) }` as the client. The test suite does not run against postgres.js.
 
 ## Table layout
 

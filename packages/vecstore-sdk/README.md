@@ -169,7 +169,7 @@ import { createPgvectorStore } from "vecstore-sdk/pgvector";
 const store = createPgvectorStore({ client: pool, schema: "public" });
 ```
 
-The client is anything with `query(text, params)` that resolves to `{ rows }`. A `pg` Pool or Client works as is. For postgres.js, pass `{ query: (text, params) => sql.unsafe(text, params) }`.
+The client is anything with `query(text, params)` that resolves to `{ rows }`. A `pg` Pool or Client works as is. For postgres.js, wrap `sql.unsafe` so it resolves to `{ rows }`: `{ query: async (text, params) => ({ rows: await sql.unsafe(text, params) }) }`. The test suite does not run against postgres.js.
 
 `createIndex` runs `CREATE EXTENSION IF NOT EXISTS vector` and creates this table plus an HNSW index for the metric and a GIN index on `metadata`, all in one statement, so a failed index build leaves no table behind:
 

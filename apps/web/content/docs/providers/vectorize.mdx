@@ -52,6 +52,8 @@ Vectorize allows ten metadata indexes per index. An index created later does not
 
 Namespaces are native. The adapter sends the namespace with every vector and scopes every query to it. Vectorize allows 1,000 namespaces per index on the free plan and 50,000 on Workers Paid, and a namespace is at most 64 bytes.
 
+The default namespace has no name to send, and Vectorize searches the whole index when a query names none. The adapter therefore drops the matches that belong to a namespace. A default-namespace query on an index that also holds namespaced records can return fewer than `topK` records.
+
 A Vectorize id is unique across the whole index rather than within a namespace, and it is capped at 64 bytes. Writing `doc-1` to two namespaces would move one record instead of creating two. The adapter therefore stores a record under a deterministic UUID and keeps your id in the `_id` metadata key:
 
 | Record | Stored id |

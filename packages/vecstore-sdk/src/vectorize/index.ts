@@ -240,6 +240,11 @@ const belongsToNamespace = (
   return reported === namespace;
 };
 
+const reportsAnotherNamespace = (
+  namespace: string,
+  record: VectorizeStoredVector
+): boolean => isString(record.namespace) && record.namespace !== namespace;
+
 const nativeNamespace = (namespace: string): string | undefined =>
   namespace === DEFAULT_NAMESPACE ? undefined : namespace;
 
@@ -395,7 +400,10 @@ const createIndex = (
         const response = await indexes.query(name, params);
         const records: ScoredRecord[] = [];
         for (const match of response?.matches ?? []) {
-          if (isScoredVector(match)) {
+          if (
+            isScoredVector(match) &&
+            !reportsAnotherNamespace(namespace, match)
+          ) {
             records.push({
               id: readId(match),
               metadata: includeMetadata ? readMetadata(match) : undefined,

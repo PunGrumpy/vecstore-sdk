@@ -201,7 +201,8 @@ $4 = '2000'`,
 }`,
       redis: `(@genre:{"drama"}
   @year:[(2000 +inf])`,
-      supabase: `(metadata @> '{"genre": "drama"}'::jsonb
+      supabase: `((metadata @> '{"genre": "drama"}'::jsonb
+  OR metadata @> '{"genre": ["drama"]}'::jsonb)
   AND (jsonb_typeof((metadata -> 'year'::text))
         = 'number'
     AND (metadata -> 'year'::text) > '2000'::jsonb))`,
@@ -297,18 +298,23 @@ $6 = '{"status":["draft"]}'`,
       "match": { "any": ["en", "th"] }
     },
     {
-      "key": "status",
-      "match": { "except": ["draft"] }
+      "must_not": [
+        {
+          "key": "status",
+          "match": { "any": ["draft"] }
+        }
+      ]
     }
   ]
 }`,
       redis: `(@lang:{"en" | "th"}
   -(@status:{"draft"}))`,
-      supabase: `((metadata -> 'lang'::text)
-    <@ '["en", "th"]'::jsonb
-  AND NOT COALESCE(
-    (metadata -> 'status'::text) <@ '["draft"]'::jsonb,
-    false))`,
+      supabase: `((metadata @> '{"lang": "en"}'::jsonb
+  OR metadata @> '{"lang": ["en"]}'::jsonb
+  OR metadata @> '{"lang": "th"}'::jsonb
+  OR metadata @> '{"lang": ["th"]}'::jsonb)
+  AND NOT (metadata @> '{"status": "draft"}'::jsonb
+    OR metadata @> '{"status": ["draft"]}'::jsonb))`,
       upstash: `(lang IN ('en', 'th') AND status NOT IN ('draft'))`,
       vectorize: `{
   "lang": { "$in": ["en", "th"] },
@@ -359,8 +365,10 @@ $4 = '{"region":["eu"]}'`,
 }`,
       redis: `(@tier:{"pro"}
   | -(@region:{"eu"}))`,
-      supabase: `(metadata @> '{"tier": "pro"}'::jsonb
-  OR NOT (metadata @> '{"region": "eu"}'::jsonb))`,
+      supabase: `((metadata @> '{"tier": "pro"}'::jsonb
+  OR metadata @> '{"tier": ["pro"]}'::jsonb)
+  OR NOT ((metadata @> '{"region": "eu"}'::jsonb
+    OR metadata @> '{"region": ["eu"]}'::jsonb)))`,
       upstash: `(tier = 'pro' OR region != 'eu')`,
       vectorize: `{
   "kind": "unsupported",

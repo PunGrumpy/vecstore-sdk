@@ -118,7 +118,26 @@ await docs.upsert([{ id: "doc-1", vector, metadata: { year: "1999" } }]);
 // ok: false, error.kind: "invalid_argument"
 ```
 
-Adding a field to `metadataFields` later changes the schema of indexes you create after that. To filter on a new field in an index that already exists, drop the index and create it again. Redis reindexes the documents, which stay where they are as long as you keep the same `keyPrefix`.
+Adding a field to `metadataFields` later changes the schema of indexes you create after that. To filter on a new field in an index that already exists, drop the index without its documents and create it again from a store that lists the new field.
+
+Do not use `deleteIndex` for this. It runs `FT.DROPINDEX … DD`, which deletes every record in the index. Call the native client, which drops the index and leaves the documents:
+
+```ts
+await store.raw.ft.dropIndex("docs");
+
+const next = createRedisStore({
+  client: store.raw,
+  metadataFields: [
+    { field: "genre", type: "tag" },
+    { field: "year", type: "numeric" },
+    { field: "director", type: "tag" },
+  ],
+});
+
+await next.createIndex({ name: "docs", dimension: 1536, metric: "cosine" });
+```
+
+Redis indexes the existing documents again in the background, as long as you keep the same `keyPrefix`, dimension, and metric.
 
 ## Namespaces
 

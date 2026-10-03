@@ -90,7 +90,7 @@ Moving to Upstash needs one step the others do not. Create the vector index in t
 
 Moving to Vectorize needs one too. Name the properties you filter on in `metadataIndexes` before the first `upsert`, because a Vectorize filter matches nothing on a property that has no metadata index, and an index added later does not cover data already written. Vectorize also has no OR operator, no `exists`, and no delete beyond delete-by-id. See [Cloudflare Vectorize](/docs/providers/vectorize).
 
-Moving to Redis needs the same kind of step. Name the fields you filter on in `metadataFields`, because the Redis index schema decides what a query can match on. Unlike Vectorize, adding a field later costs only a `deleteIndex` and a `createIndex`: the documents stay where they are and Redis indexes them again. The server also has to carry the query engine and JSON. See [Redis](/docs/providers/redis).
+Moving to Redis needs the same kind of step. Name the fields you filter on in `metadataFields`, because the Redis index schema decides what a query can match on. Unlike Vectorize, you can add a field later without writing the records again, but not with `deleteIndex`, which deletes the documents along with the index. Drop the index alone through the native client and create it again, as [the Redis page](/docs/providers/redis#declare-the-fields-you-filter-on) shows. The server also has to carry the query engine and JSON. See [Redis](/docs/providers/redis).
 
 ## Re-check score thresholds
 

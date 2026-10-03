@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { and, eq, exists, gt, isIn, lt, not, or } from "../src/filter/ast";
 import type { Filter } from "../src/filter/ast";
@@ -289,6 +290,49 @@ describe(mapBatches, () => {
     });
     expect(results).toStrictEqual([]);
     expect(counter.calls).toBe(0);
+  });
+
+  test("starts no further batch once one has failed", async () => {
+    const started: number[] = [];
+    const items = Array.from({ length: 12 }, (_, index) => index);
+    await expect(
+      mapBatches({
+        action: async (batch) => {
+          started.push(...batch);
+          await Promise.resolve();
+          if (batch.includes(1)) {
+            throw new Error("batch failed");
+          }
+          return batch;
+        },
+        concurrency: 2,
+        items,
+        size: 1,
+      })
+    ).rejects.toThrow("batch failed");
+    const startedAtRejection = started.length;
+    await sleep(20);
+    expect(started).toHaveLength(startedAtRejection);
+    expect(startedAtRejection).toBeLessThan(items.length);
+  });
+
+  test("lets batches already in flight finish before it rejects", async () => {
+    const finished: number[] = [];
+    await expect(
+      mapBatches({
+        action: async ([item]) => {
+          if (item === 0) {
+            throw new Error("first batch failed");
+          }
+          await sleep(10);
+          finished.push(item ?? -1);
+        },
+        concurrency: 3,
+        items: [0, 1, 2, 3, 4, 5],
+        size: 1,
+      })
+    ).rejects.toThrow("first batch failed");
+    expect(finished.toSorted()).toStrictEqual([1, 2]);
   });
 
   test("propagates a rejection", async () => {

@@ -247,6 +247,47 @@ describe(createPgvectorStore, () => {
     expect(calls).toStrictEqual([]);
   });
 
+  test("query asks for an iterative scan on an HNSW index with pgvector 0.8", async () => {
+    const { client, calls } = fakeClient([
+      [
+        {
+          extversion: "0.8.1",
+          indexdef:
+            "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_l2_ops)",
+        },
+      ],
+    ]);
+    await createPgvectorStore({ client })
+      .index("docs")
+      .query({ topK: 3, vector: [1, 2] });
+    expect(calls[1]?.text).toBe(
+      `SELECT hits.* FROM (SELECT set_config('hnsw.iterative_scan', CASE WHEN current_setting('hnsw.iterative_scan', true) IN ('strict_order', 'relaxed_order') THEN current_setting('hnsw.iterative_scan', true) ELSE 'strict_order' END, true) AS scan) AS tuning CROSS JOIN LATERAL (SELECT id, metadata,  embedding <-> $2::vector AS score FROM "docs" WHERE namespace = $1 AND tuning.scan IS NOT NULL ORDER BY embedding <-> $2::vector LIMIT $3) AS hits ORDER BY hits.score ASC`
+    );
+  });
+
+  test.each([
+    ["an older pgvector", "0.7.4", "USING hnsw (embedding vector_l2_ops)"],
+    ["an IVFFlat index", "0.8.1", "USING ivfflat (embedding vector_l2_ops)"],
+  ])(
+    "query keeps the plain statement on %s",
+    async (_name, extversion, method) => {
+      const { client, calls } = fakeClient([
+        [
+          {
+            extversion,
+            indexdef: `CREATE INDEX docs_embedding_idx ON public.docs ${method}`,
+          },
+        ],
+      ]);
+      await createPgvectorStore({ client })
+        .index("docs")
+        .query({ topK: 3, vector: [1, 2] });
+      expect(calls[1]?.text).toBe(
+        `SELECT id, metadata,  embedding <-> $2::vector AS score FROM "docs" WHERE namespace = $1 ORDER BY embedding <-> $2::vector LIMIT $3`
+      );
+    }
+  );
+
   test("createIndex after deleteIndex re-reads the metric", async () => {
     const ipOpsRow = {
       indexdef:

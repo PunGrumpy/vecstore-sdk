@@ -30,6 +30,10 @@ const filter = and(
 
 `isIn`, `notIn`, `and`, and `or` take at least one element. The types enforce this.
 
+Every adapter checks a filter before it sends anything. A value has to be a string, a finite number, or a boolean, a range bound has to be a finite number, and a list or a combinator cannot be empty. `NaN`, `Infinity`, and a value that reached the builder as `undefined` return `invalid_argument`.
+
+Without the check, `JSON.stringify` turns those values into `null` or drops them, and a provider reads the result as a wider filter, up to one that matches every record in the namespace. The exported compilers skip this check, so validate values yourself when you call one directly.
+
 ## Compiled output
 
 The filter `and(eq("genre", "drama"), gt("year", 2000))` compiles to:

@@ -13,6 +13,7 @@ import {
   createSupabaseStore,
   normalizeSupabaseError,
 } from "../../src/supabase";
+import { emptySelector, filterWithoutValue } from "../malformed";
 
 const UPSERT_BATCH = 100;
 
@@ -235,6 +236,24 @@ describe(createSupabaseStore, () => {
       .query({ topK: 0, vector: [1] });
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(calls).toStrictEqual([]);
+  });
+
+  test("query and delete reject a malformed filter or selector before calling the provider", async () => {
+    const { client, calls } = fakeClient();
+    const index = createSupabaseStore({ client }).index("docs");
+    const queried = await index.query({
+      filter: filterWithoutValue,
+      topK: 1,
+      vector: [1, 0, 0],
+    });
+    const filtered = await index.delete({ filter: filterWithoutValue });
+    const emptied = await index.delete(emptySelector);
+    expect([queried, filtered, emptied]).toMatchObject([
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+    ]);
     expect(calls).toStrictEqual([]);
   });
 

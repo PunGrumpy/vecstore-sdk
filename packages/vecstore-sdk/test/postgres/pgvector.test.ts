@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { eq } from "../../src/filter/ast";
+import { eq, gte, ne } from "../../src/filter/ast";
 import { createPgvectorStore } from "../../src/pgvector";
+import type { DeleteSelector } from "../../src/types";
 import { containsCases, liveCases, setupLive } from "../live/conformance";
+import { emptySelector, filterWithoutValue } from "../malformed";
 import {
   createPostgres,
   FORCE_INDEX_SCAN,
@@ -134,5 +136,36 @@ describe("a store that met a missing table on PGlite", () => {
       .query({ topK: 1, vector: [1, 0, 0] });
     expect(!missing.ok && missing.error.kind).toBe("not_found");
     expect(found.ok && found.value[0]?.score).toBe(0);
+  });
+});
+
+const refusedSelectors: [string, DeleteSelector][] = [
+  ["a NaN range bound", { filter: gte("year", Number.NaN) }],
+  ["a NaN inequality", { filter: ne("genre", Number.NaN) }],
+  ["an equality without a value", { filter: filterWithoutValue }],
+  ["an empty selector", emptySelector],
+];
+
+describe("delete fails closed on PGlite", () => {
+  const db = createPostgres();
+  const store = createPgvectorStore({ client: db });
+  const index = store.index("guarded", { namespace: "tenant-a" });
+  beforeAll(async () => {
+    await store.createIndex({ dimension: 3, name: "guarded" });
+    await index.upsert([
+      { id: "a", metadata: { genre: "drama", year: 2000 }, vector: [1, 0, 0] },
+      { id: "b", metadata: { genre: "comedy" }, vector: [0, 1, 0] },
+    ]);
+  });
+  afterAll(() => db.close());
+
+  test.each(refusedSelectors)("%s deletes nothing", async (_name, selector) => {
+    const deleted = await index.delete(selector);
+    const found = await index.fetch(["a", "b"]);
+    expect(!deleted.ok && deleted.error.kind).toBe("invalid_argument");
+    expect(found.ok && found.value.map((record) => record.id)).toStrictEqual([
+      "a",
+      "b",
+    ]);
   });
 });

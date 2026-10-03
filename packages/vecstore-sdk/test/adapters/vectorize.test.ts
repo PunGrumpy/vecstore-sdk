@@ -11,6 +11,7 @@ import {
   normalizeVectorizeError,
   toVectorizeId,
 } from "../../src/vectorize";
+import { emptySelector, filterWithoutValue } from "../malformed";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
@@ -422,6 +423,26 @@ describe(createVectorizeStore, () => {
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(bodiesFor(calls, "/query")).toStrictEqual([]);
+  });
+
+  test("query and delete reject a malformed filter or selector before calling the provider", async () => {
+    const { calls, client } = fakeCloudflare();
+    const index = createVectorizeStore({ accountId: ACCOUNT_ID, client }).index(
+      "docs"
+    );
+    const queried = await index.query({
+      filter: filterWithoutValue,
+      topK: 1,
+      vector: [1, 0, 0],
+    });
+    const filtered = await index.delete({ filter: filterWithoutValue });
+    const emptied = await index.delete(emptySelector);
+    expect([queried, filtered, emptied]).toMatchObject([
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+    ]);
+    expect(calls).toStrictEqual([]);
   });
 
   test("a filter Vectorize cannot express is reported before the request", async () => {

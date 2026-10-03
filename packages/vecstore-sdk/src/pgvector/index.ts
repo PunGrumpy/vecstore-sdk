@@ -3,6 +3,7 @@ import { compilePgvectorFilter } from "../filter/pgvector";
 import type { PgvectorSql } from "../filter/pgvector";
 import { attempt } from "../internal/attempt";
 import { lastById, mapBatches, sortByIds } from "../internal/collections";
+import { deleteSelectorError } from "../internal/delete-selector";
 import { isObjectLike, isString } from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
@@ -233,8 +234,12 @@ const createIndex = (
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
 
   return {
-    delete: (selector: DeleteSelector) =>
-      run(name, async () => {
+    delete: (selector: DeleteSelector) => {
+      const rejected = deleteSelectorError(PROVIDER, selector);
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+      return run(name, async () => {
         if ("ids" in selector) {
           await client.query(
             `DELETE FROM ${table} WHERE namespace = $1 AND id = ANY($2::text[])`,
@@ -255,7 +260,8 @@ const createIndex = (
         await client.query(`DELETE FROM ${table} WHERE namespace = $1`, [
           namespace,
         ]);
-      }),
+      });
+    },
 
     fetch: (ids, fetchOptions: FetchOptions = {}) =>
       run(name, async () => {

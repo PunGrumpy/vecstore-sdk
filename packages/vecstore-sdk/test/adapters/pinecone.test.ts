@@ -15,6 +15,7 @@ import {
   createPineconeStore,
   normalizePineconeError,
 } from "../../src/pinecone";
+import { emptySelector, filterWithoutValue } from "../malformed";
 
 const UPSERT_BATCH = 100;
 
@@ -284,6 +285,26 @@ describe(createPineconeStore, () => {
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(recorded.queries).toStrictEqual([]);
+  });
+
+  test("query and delete reject a malformed filter or selector before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+    const index = createPineconeStore({ client }).index("docs");
+    const queried = await index.query({
+      filter: filterWithoutValue,
+      topK: 1,
+      vector: [1, 0, 0],
+    });
+    const filtered = await index.delete({ filter: filterWithoutValue });
+    const emptied = await index.delete(emptySelector);
+    expect([queried, filtered, emptied]).toMatchObject([
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+      { error: { kind: "invalid_argument" } },
+    ]);
+    expect(recorded.queries).toStrictEqual([]);
+    expect(recorded.deleteManys).toStrictEqual([]);
+    expect(recorded.deleteAlls).toStrictEqual([]);
   });
 
   test("delete by filter on an index that rejects it is unsupported", async () => {

@@ -13,6 +13,7 @@ import { compilePineconeFilter } from "../filter/pinecone";
 import type { PineconeFilter } from "../filter/pinecone";
 import { attempt } from "../internal/attempt";
 import { lastById, mapBatches, sortByIds } from "../internal/collections";
+import { deleteSelectorError } from "../internal/delete-selector";
 import { indexSpecError } from "../internal/index-spec";
 import { queryOptionsError } from "../internal/query-options";
 import { err } from "../result";
@@ -231,6 +232,10 @@ const createIndex = (
   const context: ErrorContext = { index: name };
   return {
     delete: (selector: DeleteSelector) => {
+      const rejected = deleteSelectorError(PROVIDER, selector);
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
       if ("ids" in selector) {
         return run(context, async () => {
           await mapBatches({

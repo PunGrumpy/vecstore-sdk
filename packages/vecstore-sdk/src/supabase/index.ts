@@ -3,6 +3,7 @@ import type { VecstoreError } from "../errors";
 import type { Filter } from "../filter/ast";
 import { attempt } from "../internal/attempt";
 import { lastById, mapBatches, sortByIds } from "../internal/collections";
+import { deleteSelectorError } from "../internal/delete-selector";
 import { indexSpecError } from "../internal/index-spec";
 import {
   hasCode,
@@ -231,10 +232,15 @@ const createIndexHandle = (
   });
 
   return {
-    delete: (selector: DeleteSelector) =>
-      run(context("vecstore_delete"), async () => {
+    delete: (selector: DeleteSelector) => {
+      const rejected = deleteSelectorError(PROVIDER, selector);
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+      return run(context("vecstore_delete"), async () => {
         await invoke(client, deleteCall(scope, selector));
-      }),
+      });
+    },
 
     fetch: (ids, fetchOptions: FetchOptions = {}) =>
       run(context("vecstore_fetch"), async () => {

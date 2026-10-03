@@ -8,6 +8,7 @@ import {
   mapBatches,
   sortByIds,
 } from "../src/internal/collections";
+import { deleteSelectorError } from "../src/internal/delete-selector";
 import { filterError } from "../src/internal/filter";
 import { indexSpecError } from "../src/internal/index-spec";
 import {
@@ -22,8 +23,22 @@ import {
   isSurrogateUuid,
   isUuid,
 } from "../src/internal/uuid";
+import type { DeleteSelector } from "../src/types";
+import { looseFilter, looseSelector } from "./malformed";
 
-const looseFilter = (json: string): Filter => JSON.parse(json);
+const acceptedSelectors: [string, DeleteSelector][] = [
+  ["ids", { ids: ["a"] }],
+  ["a filter", { filter: eq("genre", "drama") }],
+  ["all", { all: true }],
+];
+
+const rejectedSelectors: [string, DeleteSelector][] = [
+  ["an empty selector", looseSelector("{}")],
+  ["all set to false", looseSelector('{"all":false}')],
+  ["an empty id list", looseSelector('{"ids":[]}')],
+  ["an id that is not a string", looseSelector('{"ids":[1]}')],
+  ["a filter with a NaN bound", { filter: gt("year", Number.NaN) }],
+];
 
 const wellFormedFilters: [string, Filter][] = [
   ["a string equality", eq("genre", "drama")],
@@ -322,5 +337,17 @@ describe("queryOptionsError with a filter", () => {
         vector: [1],
       })
     ).toBeUndefined();
+  });
+});
+
+describe(deleteSelectorError, () => {
+  test.each(acceptedSelectors)("accepts %s", (_name, selector) => {
+    expect(deleteSelectorError("pgvector", selector)).toBeUndefined();
+  });
+
+  test.each(rejectedSelectors)("rejects %s", (_name, selector) => {
+    expect(deleteSelectorError("pgvector", selector)?.kind).toBe(
+      "invalid_argument"
+    );
   });
 });

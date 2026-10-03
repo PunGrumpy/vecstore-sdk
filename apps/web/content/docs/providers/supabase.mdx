@@ -75,6 +75,8 @@ An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metada
 
 `vecstore_query` reads the metric from the HNSW or IVFFlat index definition in `pg_indexes` and defaults to cosine when no index exists. The lookup happens inside the same function call as the search, so a query costs one request.
 
+`vecstore_query` also turns on pgvector's iterative index scan for the call when the extension is 0.8.0 or later. Without it, an HNSW scan stops at 40 candidates before Postgres applies the namespace and the filter, and a query returns fewer than `topK` records on a large table. Run `sql/supabase.sql` again after you upgrade the package to get this version of the function. [The pgvector page](/docs/providers/pgvector#filtered-and-large-queries) describes the limits that remain.
+
 `listIndexes` returns the tables in the schema that have an `embedding vector` column.
 
 ## How filters travel

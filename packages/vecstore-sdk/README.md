@@ -179,7 +179,7 @@ CREATE TABLE "docs" (
 );
 ```
 
-Queries read the metric from the HNSW or IVFFlat index definition and default to cosine when no index exists. The store caches the metric per table after the first query and forgets it when `createIndex` or `deleteIndex` on the same store touches that table. `listIndexes` returns tables in the schema that have an `embedding vector` column.
+Queries read the metric from the HNSW or IVFFlat index definition and default to cosine when no index exists. The store caches the metric per table after the first query and forgets it when `createIndex` or `deleteIndex` on the same store touches that table, or when a query on that table fails. On pgvector 0.8.0 or later each query turns on an iterative HNSW scan for its own statement, so a `topK` above 40, a selective filter, or a namespace that holds part of the table still returns `topK` records. Older versions scan at most `hnsw.ef_search` candidates before the namespace and the filter apply, and can return fewer. `listIndexes` returns tables in the schema that have an `embedding vector` column.
 
 ### Pinecone
 
@@ -206,7 +206,7 @@ Supabase Vector is pgvector inside Postgres, and this adapter reaches it through
 psql "$SUPABASE_DB_URL" -f node_modules/vecstore-sdk/sql/supabase.sql
 ```
 
-The functions are `security invoker`. `createIndex` enables row level security on the table it creates and adds no policy, so the `anon` and `authenticated` roles read and write nothing until you add one; write your own policy for the access pattern you need. `createIndex` and `deleteIndex` run DDL and need the service role key. The table layout matches the pgvector adapter, so both adapters can read the same table. An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metadata_idx` names stay under the 63-byte Postgres identifier limit. `createIndex` returns `invalid_argument` for a longer name.
+The functions are `security invoker`. `createIndex` enables row level security on the table it creates and adds no policy, so the `anon` and `authenticated` roles read and write nothing until you add one; write your own policy for the access pattern you need. `createIndex` and `deleteIndex` run DDL and need the service role key. The table layout matches the pgvector adapter, so both adapters can read the same table. An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metadata_idx` names stay under the 63-byte Postgres identifier limit. `createIndex` returns `invalid_argument` for a longer name. `vecstore_query` turns on the same iterative scan as the pgvector adapter. Run the file again after an upgrade to install it.
 
 ### Upstash Vector
 

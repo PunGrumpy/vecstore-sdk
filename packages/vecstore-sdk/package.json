@@ -102,13 +102,13 @@
     "@electric-sql/pglite-pgvector": "0.0.9",
     "@pinecone-database/pinecone": "^9.0.0",
     "@qdrant/js-client-rest": "^1.19.0",
-    "@supabase/supabase-js": "^2.58.0",
+    "@supabase/supabase-js": "^2.117.2",
     "@types/bun": "^1.4.2",
     "@types/pg": "^8.23.1",
     "@upstash/vector": "^1.2.3",
     "cloudflare": "^7",
-    "pg": "^8.23.0",
-    "redis": "^6.2.1",
+    "pg": "^8.23.1",
+    "redis": "^6.3.0",
     "tsdown": "^0.23.0"
   },
   "peerDependencies": {

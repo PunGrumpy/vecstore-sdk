@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import type { PGlite } from "@electric-sql/pglite";
 
@@ -13,11 +13,12 @@ import {
 } from "../../src/supabase";
 import { containsCases, liveCases, setupLive } from "../live/conformance";
 import {
-  createPostgres,
+  ensureRoles,
   FORCE_INDEX_SCAN,
   installSupabaseSql,
   isDescending,
   spreadRecords,
+  usePostgres,
 } from "./pglite";
 
 type ValueOf<T> = T extends object ? T[keyof T] : never;
@@ -80,10 +81,11 @@ export const rpcClient = (db: PGlite): SupabaseClientLike => ({
 });
 
 describe("supabase on PGlite", () => {
-  const db = createPostgres();
-  beforeAll(() => installSupabaseSql(db));
-  const live = setupLive(() => createSupabaseStore({ client: rpcClient(db) }));
-  afterAll(() => db.close());
+  const db = usePostgres(installSupabaseSql);
+  const live = setupLive(
+    () => createSupabaseStore({ client: rpcClient(db()) }),
+    { isolated: true }
+  );
 
   test.each([...containsCases, ...liveCases])("%s", async (_name, run) => {
     await expect(run(live())).resolves.toBeUndefined();
@@ -91,13 +93,11 @@ describe("supabase on PGlite", () => {
 });
 
 describe("vecstore_create_index index lifecycle on PGlite", () => {
-  const db = createPostgres();
-  beforeAll(() => installSupabaseSql(db));
-  afterAll(() => db.close());
+  const db = usePostgres(installSupabaseSql);
 
   test("rejects a name over 49 bytes with a 22023 error", async () => {
     const name = "a".repeat(50);
-    const response = await rpcClient(db).rpc("vecstore_create_index", {
+    const response = await rpcClient(db()).rpc("vecstore_create_index", {
       dimension: 3,
       index_name: name,
       index_schema: null,
@@ -115,61 +115,63 @@ describe("vecstore_create_index index lifecycle on PGlite", () => {
 });
 
 describe("supabase install script", () => {
-  const db = createPostgres();
-  beforeAll(() => installSupabaseSql(db));
-  afterAll(() => db.close());
+  const db = usePostgres(installSupabaseSql);
 
   const asAnon = async <T>(fn: () => PromiseLike<T>): Promise<T> => {
-    await db.exec("set role anon");
+    await db().exec("set role anon");
     try {
       return await fn();
     } finally {
-      await db.exec("reset role");
+      await db().exec("reset role");
     }
   };
 
-  const countSecured = async (): Promise<number> => {
-    const result = await db.query<{ count: number }>(
-      "select count(*) from secured"
+  const createSecured = async (name: string): Promise<void> => {
+    const store = createSupabaseStore({ client: rpcClient(db()) });
+    const created = await store.createIndex({ dimension: 3, name });
+    expect(created.ok).toBe(true);
+  };
+
+  const countRows = async (table: string): Promise<number> => {
+    const result = await db().query<{ count: number }>(
+      `select count(*) from ${table}`
     );
     return result.rows[0]?.count ?? -1;
   };
 
   test("enables row level security on a table createIndex makes", async () => {
-    const store = createSupabaseStore({ client: rpcClient(db) });
-    const created = await store.createIndex({ dimension: 3, name: "secured" });
-    expect(created.ok).toBe(true);
+    await createSecured("secured_rls");
 
-    const rows = await db.query<{ relrowsecurity: boolean }>(
-      "select relrowsecurity from pg_class where relname = 'secured'"
+    const rows = await db().query<{ relrowsecurity: boolean }>(
+      "select relrowsecurity from pg_class where relname = 'secured_rls'"
     );
     expect(rows.rows[0]?.relrowsecurity).toBe(true);
   });
 
   test("anon reads nothing from a secured table until a policy exists", async () => {
-    const store = createSupabaseStore({ client: rpcClient(db) });
+    await createSecured("secured_anon");
+    const store = createSupabaseStore({ client: rpcClient(db()) });
     const upserted = await store
-      .index("secured")
+      .index("secured_anon")
       .upsert([{ id: "a", vector: [0, 0, 1] }]);
     expect(upserted.ok).toBe(true);
 
-    await db.exec("create role anon nologin; grant select on secured to anon");
-    expect(await asAnon(countSecured)).toBe(0);
+    await ensureRoles(db(), ["anon"]);
+    await db().exec("grant select on secured_anon to anon");
+    expect(await asAnon(() => countRows("secured_anon"))).toBe(0);
 
-    await db.exec(
-      "create policy secured_read on secured for select to anon using (true)"
+    await db().exec(
+      "create policy secured_read on secured_anon for select to anon using (true)"
     );
-    expect(await asAnon(countSecured)).toBe(1);
+    expect(await asAnon(() => countRows("secured_anon"))).toBe(1);
   });
 
   test("anon cannot call the ddl functions once the supabase roles exist", async () => {
-    await db.exec(
-      "create role authenticated nologin; create role service_role nologin"
-    );
-    await installSupabaseSql(db);
+    await ensureRoles(db(), ["anon", "authenticated", "service_role"]);
+    await installSupabaseSql(db());
 
     const response = await asAnon(() =>
-      rpcClient(db).rpc("vecstore_create_index", {
+      rpcClient(db()).rpc("vecstore_create_index", {
         dimension: 3,
         index_name: "x",
         index_schema: null,
@@ -180,6 +182,12 @@ describe("supabase install script", () => {
   });
 
   test("a filter leaf that compiles to nothing fails closed", async () => {
+    await createSecured("secured_closed");
+    const store = createSupabaseStore({ client: rpcClient(db()) });
+    await store
+      .index("secured_closed")
+      .upsert([{ id: "a", vector: [0, 0, 1] }]);
+
     const malformedQueries = [
       `select vecstore_filter_sql('{"kind":"lt","field":"price"}'::jsonb, 'metadata')`,
       `select vecstore_filter_sql('{"kind":"and","filters":[{"kind":"eq","field":"t","value":"a"},{"kind":"lt","field":"p"}]}'::jsonb, 'metadata')`,
@@ -187,49 +195,52 @@ describe("supabase install script", () => {
     ];
     await Promise.all(
       malformedQueries.map((query) =>
-        expect(db.query(query)).rejects.toMatchObject({ code: "22023" })
+        expect(db().query(query)).rejects.toMatchObject({ code: "22023" })
       )
     );
 
     let deleteError: unknown;
     try {
-      await db.query(
+      await db().query(
         "select vecstore_delete($1::text, null::text, $2::text, null::text[], $3::jsonb)",
-        ["secured", "", JSON.stringify({ field: "price", kind: "lt" })]
+        ["secured_closed", "", JSON.stringify({ field: "price", kind: "lt" })]
       );
     } catch (error) {
       deleteError = error;
     }
     expect(hasCode(deleteError) && deleteError.code).toBe("22023");
 
-    expect(await countSecured()).toBe(1);
+    expect(await countRows("secured_closed")).toBe(1);
   });
 });
 
 describe("vecstore_query through the HNSW index on PGlite", () => {
-  const db = createPostgres();
-  const store = createSupabaseStore({ client: rpcClient(db) });
-  const index = store.index("filled", { namespace: "tenant-a" });
-  beforeAll(async () => {
-    await installSupabaseSql(db);
+  const db = usePostgres(async (client) => {
+    await installSupabaseSql(client);
+    const store = createSupabaseStore({ client: rpcClient(client) });
     await store.createIndex({ dimension: 3, name: "filled" });
-    await index.upsert(spreadRecords("a"));
+    await store
+      .index("filled", { namespace: "tenant-a" })
+      .upsert(spreadRecords("a"));
     await store
       .index("filled", { namespace: "tenant-b" })
       .upsert(spreadRecords("b"));
-    await db.exec(FORCE_INDEX_SCAN);
+    await client.exec(FORCE_INDEX_SCAN);
   });
-  afterAll(() => db.close());
+  const index = () =>
+    createSupabaseStore({ client: rpcClient(db()) }).index("filled", {
+      namespace: "tenant-a",
+    });
 
   test("a topK above the HNSW candidate list returns topK records, nearest first", async () => {
-    const result = await index.query({ topK: 100, vector: [1, 0, 0] });
+    const result = await index().query({ topK: 100, vector: [1, 0, 0] });
     const scores = result.ok ? result.value.map((match) => match.score) : [];
     expect(scores).toHaveLength(100);
     expect(isDescending(scores)).toBeTruthy();
   });
 
   test("a selective filter returns topK records", async () => {
-    const result = await index.query({
+    const result = await index().query({
       filter: eq("kind", "rare"),
       topK: 10,
       vector: [1, 0, 0],

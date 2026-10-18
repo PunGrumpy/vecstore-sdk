@@ -41,6 +41,8 @@ CREATE TABLE "docs" (
 
 An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metadata_idx` index names stay under the 63-byte Postgres identifier limit. `createIndex` returns `invalid_argument` for a longer name.
 
+When the database has a role named `anon`, as every Supabase project does, `createIndex` also turns on row level security for the new table and adds no policy. The role that ran `createIndex` owns the table and keeps full access. `anon` and `authenticated` see and change nothing through the Supabase REST API until you write a policy, the same as for a table the Supabase adapter creates. On a database without an `anon` role the table is created without row level security. Tables created by version 0.1.4 or earlier have it off; turn it on with `alter table "docs" enable row level security;`.
+
 ## Metric detection
 
 Queries read the metric from the HNSW or IVFFlat index definition in `pg_indexes`. When no index exists, they default to cosine. This also works for tables the SDK did not create.

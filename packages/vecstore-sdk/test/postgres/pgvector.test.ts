@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import type { PGlite } from "@electric-sql/pglite";
+
 import { eq, gte, ne } from "../../src/filter/ast";
 import { createPgvectorStore } from "../../src/pgvector";
 import type { DeleteSelector } from "../../src/types";
 import { containsCases, liveCases, setupLive } from "../live/conformance";
 import { emptySelector, filterWithoutValue } from "../malformed";
 import {
+  ensureRoles,
   FORCE_INDEX_SCAN,
   isDescending,
   spreadRecords,
@@ -174,5 +177,73 @@ describe("delete fails closed on PGlite", () => {
       "a",
       "b",
     ]);
+  });
+});
+
+const rowSecurity = async (
+  db: PGlite,
+  table: string
+): Promise<boolean | undefined> => {
+  const result = await db.query<{ relrowsecurity: boolean }>(
+    "select relrowsecurity from pg_class where relname = $1",
+    [table]
+  );
+  return result.rows[0]?.relrowsecurity;
+};
+
+describe("row level security without an anon role on PGlite", () => {
+  const db = usePostgres();
+
+  test("createIndex leaves row level security off", async () => {
+    const store = createPgvectorStore({ client: db() });
+    const created = await store.createIndex({ dimension: 3, name: "open" });
+    expect(created.ok).toBe(true);
+    expect(await rowSecurity(db(), "open")).toBe(false);
+  });
+});
+
+describe("row level security with an anon role on PGlite", () => {
+  const db = usePostgres((client) => ensureRoles(client, ["anon"]));
+
+  test("createIndex turns row level security on", async () => {
+    const store = createPgvectorStore({ client: db() });
+    const created = await store.createIndex({ dimension: 3, name: "secured" });
+    expect(created.ok).toBe(true);
+    expect(await rowSecurity(db(), "secured")).toBe(true);
+  });
+
+  test("a role that is not a superuser keeps full access to the table it created", async () => {
+    await ensureRoles(db(), ["app_owner"]);
+    await db().exec(
+      "create extension if not exists vector; grant create on schema public to app_owner; set role app_owner"
+    );
+    try {
+      const store = createPgvectorStore({ client: db() });
+      const created = await store.createIndex({ dimension: 3, name: "owned" });
+      const index = store.index("owned");
+      const upserted = await index.upsert([{ id: "a", vector: [1, 0, 0] }]);
+      const found = await index.query({ topK: 1, vector: [1, 0, 0] });
+      expect(created.ok && upserted.ok).toBe(true);
+      expect(found.ok && found.value.map((match) => match.id)).toStrictEqual([
+        "a",
+      ]);
+    } finally {
+      await db().exec("reset role");
+    }
+  });
+
+  test("anon reads nothing from the table without a policy", async () => {
+    const store = createPgvectorStore({ client: db() });
+    await store.createIndex({ dimension: 3, name: "hidden" });
+    await store.index("hidden").upsert([{ id: "a", vector: [1, 0, 0] }]);
+    await db().exec("grant select on hidden to anon; set role anon");
+    try {
+      const rows = await db().query<{ count: number }>(
+        "select count(*) from hidden"
+      );
+      expect(rows.rows[0]?.count).toBe(0);
+    } finally {
+      await db().exec("reset role");
+    }
   });
 });

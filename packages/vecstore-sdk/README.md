@@ -183,7 +183,7 @@ CREATE TABLE "docs" (
 );
 ```
 
-Queries read the metric from the HNSW or IVFFlat index definition and default to cosine when no index exists. The store caches the metric per table after the first query and forgets it when `createIndex` or `deleteIndex` on the same store touches that table, or when a query on that table fails. On pgvector 0.8.0 or later each query turns on an iterative HNSW scan for its own statement, so a `topK` above 40, a selective filter, or a namespace that holds part of the table still returns `topK` records. Older versions scan at most `hnsw.ef_search` candidates before the namespace and the filter apply, and can return fewer. `listIndexes` returns tables in the schema that have an `embedding vector` column.
+On a database with an `anon` role, such as a Supabase project, `createIndex` also turns on row level security for the table and adds no policy, so the table is closed to the public key until you write one. Queries read the metric from the HNSW or IVFFlat index definition and default to cosine when no index exists. The store caches the metric per table after the first query and forgets it when `createIndex` or `deleteIndex` on the same store touches that table, or when a query on that table fails. On pgvector 0.8.0 or later each query turns on an iterative HNSW scan for its own statement, so a `topK` above 40, a selective filter, or a namespace that holds part of the table still returns `topK` records. Older versions scan at most `hnsw.ef_search` candidates before the namespace and the filter apply, and can return fewer. `listIndexes` returns tables in the schema that have an `embedding vector` column.
 
 ### Pinecone
 

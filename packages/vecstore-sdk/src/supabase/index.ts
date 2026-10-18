@@ -40,6 +40,7 @@ export interface SupabaseRpcError {
 export interface SupabaseRpcResponse {
   readonly data: readonly object[] | null;
   readonly error: SupabaseRpcError | null;
+  readonly status?: number;
 }
 
 export interface SupabaseIndexTarget {
@@ -129,14 +130,21 @@ interface CallContext {
   readonly index: string;
 }
 
+const NO_HTTP_RESPONSE = 0;
+
 const isFetchFailure = (cause: unknown): boolean =>
   cause instanceof Error && FETCH_FAILURE.test(cause.message);
+
+const hasNoResponse = (cause: unknown): boolean =>
+  cause instanceof Error &&
+  "status" in cause &&
+  cause.status === NO_HTTP_RESPONSE;
 
 export const normalizeSupabaseError = (
   cause: unknown,
   context: CallContext
 ): VecstoreError => {
-  if (isFetchFailure(cause)) {
+  if (hasNoResponse(cause) || isFetchFailure(cause)) {
     return connection(PROVIDER, cause);
   }
   if (hasCode(cause)) {
@@ -154,9 +162,13 @@ export const normalizeSupabaseError = (
   return normalizePostgresError(PROVIDER, cause, context.index);
 };
 
-const rpcFailure = (error: SupabaseRpcError): Error & { code: string } =>
+const rpcFailure = (
+  error: SupabaseRpcError,
+  status: number | undefined
+): Error & { code: string } =>
   Object.assign(new Error(error.message, { cause: error }), {
     code: error.code ?? "",
+    status,
   });
 
 const invoke = async (
@@ -165,7 +177,7 @@ const invoke = async (
 ): Promise<readonly object[]> => {
   const response = await client.rpc(call.fn, call.args);
   if (response.error !== null && response.error !== undefined) {
-    throw rpcFailure(response.error);
+    throw rpcFailure(response.error, response.status);
   }
   return response.data ?? [];
 };

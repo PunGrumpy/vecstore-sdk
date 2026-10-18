@@ -251,7 +251,7 @@ describe(createPgvectorStore, () => {
         "2000",
         3,
       ],
-      text: `SELECT id, metadata, embedding::text AS embedding, -(embedding <#> $2::vector) AS score FROM "docs" WHERE namespace = $1 AND ((metadata @> $3::jsonb OR metadata @> $4::jsonb) AND (jsonb_typeof((metadata->$5::text)) = 'number' AND (metadata->$5::text) > $6::jsonb)) ORDER BY embedding <#> $2::vector LIMIT $7`,
+      text: `SELECT id, metadata, embedding::text AS embedding, -(embedding <#> $2::vector) AS score FROM "docs" WHERE namespace = $1 AND ((metadata @> $3::jsonb OR metadata @> $4::jsonb) AND ((metadata->$5::text) IS NOT NULL AND jsonb_typeof((metadata->$5::text)) = 'number' AND (metadata->$5::text) > $6::jsonb)) ORDER BY embedding <#> $2::vector LIMIT $7`,
     });
     await store.index("docs").query({ topK: 1, vector: [0, 0] });
     expect(calls).toHaveLength(3);

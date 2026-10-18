@@ -104,7 +104,7 @@ begin
       when 'lt' then '<'
       else '<='
     end;
-    return '(jsonb_typeof(' || path || ') = ''number'' AND ' || path || ' '
+    return '(' || path || ' IS NOT NULL AND jsonb_typeof(' || path || ') = ''number'' AND ' || path || ' '
       || operator || ' ' || quote_literal(match_filter -> 'value') || '::jsonb)';
   end if;
 

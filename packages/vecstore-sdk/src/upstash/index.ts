@@ -219,7 +219,15 @@ export const scopeUpstashFilter = (
   );
 };
 
+const DOT_SEGMENTS: ReadonlySet<string> = new Set([".", ".."]);
+
 const requireUrlSafe = (label: string, value: string): void => {
+  if (DOT_SEGMENTS.has(value)) {
+    throw taggedError(
+      ARGUMENT_ERROR,
+      `Upstash puts the ${label} straight into the request path, where "." and ".." are read as path segments instead of names. Received "${value}".`
+    );
+  }
   if (encodeURIComponent(value) !== value) {
     throw taggedError(
       ARGUMENT_ERROR,
@@ -306,6 +314,8 @@ interface UpstashLayout {
   readonly compileFilter: (namespace: string, filter: Filter) => string;
   readonly defaultFilter?: (namespace: string) => string;
   readonly emulatesNamespace: boolean;
+  readonly namespaceError?: (namespace: string) => VecstoreError | undefined;
+  readonly holds: (namespace: string, record: UpstashResultRecord) => boolean;
   readonly clear: (
     client: UpstashIndexLike,
     index: string,
@@ -325,6 +335,19 @@ interface UpstashLayout {
 }
 
 const INDEX_LABEL = "index name";
+
+const scopeError = (namespace: string): VecstoreError | undefined => {
+  try {
+    scopeUpstashFilter(namespace);
+    return undefined;
+  } catch (error) {
+    return invalidArgument(
+      PROVIDER,
+      `In metadata namespace mode the adapter filters every query and delete on the namespace, and Upstash cannot express this one. ${errorMessage(error)}`,
+      error
+    );
+  }
+};
 
 const metadataNamespace = (index: string): string => {
   requireUrlSafe(INDEX_LABEL, index);
@@ -369,7 +392,10 @@ const METADATA_LAYOUT: UpstashLayout = {
   defaultFilter: (namespace) => scopeUpstashFilter(namespace),
   deletableIds: metadataDeletableIds,
   emulatesNamespace: true,
+  holds: (namespace, record) => readStoredNamespace(record) === namespace,
   indexOf: (upstashNamespace) => upstashNamespace,
+  namespaceError: (namespace) =>
+    namespaceError(PROVIDER, namespace) ?? scopeError(namespace),
   owns: (index, upstashNamespace) => upstashNamespace === index,
   readId: readStoredId,
   readMetadata: (record) =>
@@ -403,6 +429,7 @@ const NATIVE_LAYOUT: UpstashLayout = {
   deletableIds: (_client, _index, _namespace, storedIds) =>
     Promise.resolve([...storedIds]),
   emulatesNamespace: false,
+  holds: () => true,
   indexOf: (upstashNamespace) =>
     upstashNamespace.split(NAMESPACE_SEPARATOR)[0] ?? upstashNamespace,
   owns: (index, upstashNamespace) =>
@@ -457,9 +484,7 @@ const createIndex = (
   const scope = (): UpstashNamespaceOptions => ({
     namespace: layout.upstashNamespace(name, namespace),
   });
-  const invalid = layout.emulatesNamespace
-    ? namespaceError(PROVIDER, namespace)
-    : undefined;
+  const invalid = layout.namespaceError?.(namespace);
   const upsertRejection = (
     records: readonly VectorRecord[]
   ): VecstoreError | undefined => {
@@ -537,7 +562,7 @@ const createIndex = (
         });
         const records: VectorRecord[] = [];
         for (const record of responses.flat()) {
-          if (record !== null) {
+          if (record !== null && layout.holds(namespace, record)) {
             records.push({
               id: layout.readId(record),
               metadata: layout.readMetadata(record),

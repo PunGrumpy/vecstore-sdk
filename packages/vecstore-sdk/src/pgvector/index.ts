@@ -406,7 +406,7 @@ export const createPgvectorStore = <Client extends PgQueryable>(
         const metadataIndex = quoteIdent(`${spec.name}_metadata_idx`);
         const opclass = OPCLASSES[spec.metric ?? "cosine"];
         await client.query(
-          `DO ${DOLLAR_TAG} BEGIN CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE ${table} (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(${spec.dimension}) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id)); CREATE INDEX ${embeddingIndex} ON ${table} USING hnsw (embedding ${opclass}); CREATE INDEX ${metadataIndex} ON ${table} USING gin (metadata); END ${DOLLAR_TAG}`,
+          `DO ${DOLLAR_TAG} BEGIN CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE ${table} (id text NOT NULL, namespace text NOT NULL DEFAULT '', embedding vector(${spec.dimension}) NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (namespace, id)); CREATE INDEX ${embeddingIndex} ON ${table} USING hnsw (embedding ${opclass}); CREATE INDEX ${metadataIndex} ON ${table} USING gin (metadata); IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY; END IF; END ${DOLLAR_TAG}`,
           []
         );
         forgetProfile(spec.name);

@@ -33,3 +33,7 @@ The compilers agree on scalar fields with present values. Two cases differ acros
 - Redis tag matching is case-sensitive, so `eq("genre", "Drama")` does not match `drama`.
 - Redis returns the vector distance as the score, where lower is closer, for every metric. See [Redis](/docs/providers/redis).
 - Redis `listIndexes` returns every index in the database, including indexes another application created.
+
+## Metadata keys that contain a dot
+
+Qdrant, Upstash, and Vectorize read a `.` in a filter field as a step into a nested object, and the adapters store metadata flat. A filter on a key that contains a dot, such as `eq("file.name", "a.pdf")`, therefore never sees the value. `eq` matches nothing on those three, and `ne` matches every record on Qdrant and none on Upstash and Vectorize, which evaluate operators against present fields only. pgvector and Supabase look the key up as written, and Redis rejects the field name with `invalid_argument`. Use metadata keys without dots for anything you filter on.

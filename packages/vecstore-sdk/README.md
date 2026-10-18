@@ -297,6 +297,8 @@ The compilers are exact for scalar fields. Two cases differ across providers:
 - Negations (`ne`, `notIn`, `not`) match records that lack the field on Qdrant, pgvector, Supabase, and Redis. Pinecone, Upstash, and Vectorize apply operators to present fields only.
 - `eq` and `isIn` on array-valued fields mean "contains" on Qdrant, pgvector, Supabase, and Redis, where each element of a string list is its own tag. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself. Reach an element with the accessors it documents, such as `eq("tags[0]", "x")`. Vectorize indexes string, number, and boolean properties only, so an array-valued field is not filterable there.
 
+A metadata key that contains a `.` cannot be filtered on Qdrant, Upstash, or Vectorize, which read the dot as a step into a nested object. Keep dots out of keys you filter on.
+
 ## Testing
 
 Unit tests run with `bun test` against in-memory fakes:

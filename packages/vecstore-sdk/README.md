@@ -171,7 +171,7 @@ const store = createPgvectorStore({ client: pool, schema: "public" });
 
 The client is anything with `query(text, params)` that resolves to `{ rows }`. A `pg` Pool or Client works as is. For postgres.js, wrap `sql.unsafe` so it resolves to `{ rows }`: `{ query: async (text, params) => ({ rows: await sql.unsafe(text, params) }) }`. The test suite does not run against postgres.js.
 
-`createIndex` runs `CREATE EXTENSION IF NOT EXISTS vector` and creates this table plus an HNSW index for the metric and a GIN index on `metadata`, all in one statement, so a failed index build leaves no table behind:
+`createIndex` runs `CREATE EXTENSION IF NOT EXISTS vector` and creates this table plus an HNSW index for the metric and a GIN index on `metadata`, all in one statement, so a failed index build leaves no table behind. pgvector's HNSW index holds at most 2,000 dimensions, so a larger `dimension` fails with `provider` and creates nothing, on this adapter and on Supabase:
 
 ```sql
 CREATE TABLE "docs" (
@@ -183,7 +183,7 @@ CREATE TABLE "docs" (
 );
 ```
 
-On a database with an `anon` role, such as a Supabase project, `createIndex` also turns on row level security for the table and adds no policy, so the table is closed to the public key until you write one. Queries read the metric from the HNSW or IVFFlat index definition and default to cosine when no index exists. The store caches the metric per table after the first query and forgets it when `createIndex` or `deleteIndex` on the same store touches that table, or when a query on that table fails. On pgvector 0.8.0 or later each query turns on an iterative HNSW scan for its own statement, so a `topK` above 40, a selective filter, or a namespace that holds part of the table still returns `topK` records. Older versions scan at most `hnsw.ef_search` candidates before the namespace and the filter apply, and can return fewer. `listIndexes` returns tables in the schema that have an `embedding vector` column.
+On a database with an `anon` role, such as a Supabase project, `createIndex` also turns on row level security for the table and adds no policy, so the table is closed to the public key until you write one. Queries read the metric from the HNSW or IVFFlat index definition and default to cosine when no index exists. The store caches the metric per table after the first query and forgets it when `createIndex` or `deleteIndex` on the same store touches that table, or when a query on that table fails. On pgvector 0.8.0 or later each query turns on an iterative HNSW scan for its transaction, which under autocommit is its own statement, so a `topK` above 40, a selective filter, or a namespace that holds part of the table still returns `topK` records. Older versions scan at most `hnsw.ef_search` candidates before the namespace and the filter apply, and can return fewer. `listIndexes` returns tables in the schema that have an `embedding vector` column.
 
 ### Pinecone
 
@@ -226,7 +226,7 @@ The index name already uses the one namespace Upstash gives you, so `namespaceMo
 
 `"native"` gives each index and namespace pair its own Upstash namespace, named `{index}` or `{index}~{namespace}`. Ids and metadata are stored as you wrote them, queries carry no namespace filter, and `delete({ all: true })` resets the namespace in one call. Upstash caps namespaces at 100 on the free plan and 10,000 on the paid plans, so choose this mode when you can name your namespaces up front. Nothing migrates between the two modes.
 
-Upstash gives each query a filtering budget and can return fewer than `topK` records when the filter is selective. In metadata mode the adapter scopes every query by namespace, so this applies to every Upstash query. Ask for more than you need, or page with a second query.
+Upstash gives each query a filtering budget and can return fewer than `topK` records when the filter is selective. In metadata mode the adapter scopes every query by namespace, so this applies to every Upstash query. Ask for a larger `topK` than you need; `query` has no offset to page with.
 
 Upstash filters are a string rather than an object, so `compileUpstashFilter` validates what it writes. It rejects a field name that breaks Upstash's identifier rule, a string value holding a backslash or both quote characters, and a non-finite number, and the verb returns an `invalid_argument` error.
 
@@ -296,6 +296,8 @@ The compilers are exact for scalar fields. Two cases differ across providers:
 
 - Negations (`ne`, `notIn`, `not`) match records that lack the field on Qdrant, pgvector, Supabase, and Redis. Pinecone, Upstash, and Vectorize apply operators to present fields only.
 - `eq` and `isIn` on array-valued fields mean "contains" on Qdrant, pgvector, Supabase, and Redis, where each element of a string list is its own tag. Pinecone supports `$in` on list fields and rejects `$eq`. Upstash compares the array itself. Reach an element with the accessors it documents, such as `eq("tags[0]", "x")`. Vectorize indexes string, number, and boolean properties only, so an array-valued field is not filterable there.
+
+A metadata key that contains a `.` cannot be filtered on Qdrant, Upstash, or Vectorize, which read the dot as a step into a nested object. Keep dots out of keys you filter on.
 
 ## Testing
 

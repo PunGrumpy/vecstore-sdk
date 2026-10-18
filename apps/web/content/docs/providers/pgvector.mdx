@@ -39,6 +39,8 @@ CREATE TABLE "docs" (
 
 `CREATE EXTENSION` needs a role that can create extensions. If your application role cannot, create the extension yourself before you call `createIndex`.
 
+pgvector's HNSW index holds at most 2,000 dimensions. `createIndex` with a larger `dimension` returns `{ kind: "provider" }` with the message `column cannot have more than 2000 dimensions for hnsw index` and creates nothing. A 3,072-dimension model such as OpenAI's `text-embedding-3-large` needs its output shortened to 2,000 dimensions or fewer for this adapter.
+
 An index name can be at most 49 bytes, so that the `_embedding_idx` and `_metadata_idx` index names stay under the 63-byte Postgres identifier limit. `createIndex` returns `invalid_argument` for a longer name.
 
 When the database has a role named `anon`, as every Supabase project does, `createIndex` also turns on row level security for the new table and adds no policy. The role that ran `createIndex` owns the table and keeps full access. `anon` and `authenticated` see and change nothing through the Supabase REST API until you write a policy, the same as for a table the Supabase adapter creates. On a database without an `anon` role the table is created without row level security. Tables created by version 0.1.4 or earlier have it off; turn it on with `alter table "docs" enable row level security;`.
@@ -53,7 +55,7 @@ The store caches the metric per table after the first query and forgets it when 
 
 ## Filtered and large queries
 
-pgvector applies the namespace and the filter after it scans the HNSW index, and a scan stops at `hnsw.ef_search` candidates, 40 by default. Without an iterative scan, a query with a `topK` above 40, a selective filter, or a namespace that holds part of the table returns fewer than `topK` records. On pgvector 0.8.0 or later the adapter turns on an iterative scan for each query, so the scan continues until `topK` records pass. It sets `hnsw.iterative_scan` to `strict_order` for that one statement and keeps a value you set yourself, such as `relaxed_order` on the database.
+pgvector applies the namespace and the filter after it scans the HNSW index, and a scan stops at `hnsw.ef_search` candidates, 40 by default. Without an iterative scan, a query with a `topK` above 40, a selective filter, or a namespace that holds part of the table returns fewer than `topK` records. On pgvector 0.8.0 or later the adapter turns on an iterative scan for each query, so the scan continues until `topK` records pass. It sets `hnsw.iterative_scan` to `strict_order` for the current transaction, which under autocommit is the query's own statement, and keeps a value you set yourself, such as `relaxed_order` on the database. If you pass a client inside an explicit transaction, the setting stays on for the rest of that transaction.
 
 On an older pgvector there is no iterative scan and the adapter sends the plain statement. Upgrade the extension, or raise `hnsw.ef_search` for the role or the database. A filter that matches few records can still return fewer than `topK` records on any version, because pgvector stops an iterative scan after `hnsw.max_scan_tuples` tuples, 20,000 by default. The adapter also sends the plain statement to a table with an IVFFlat index, which the SDK never creates.
 

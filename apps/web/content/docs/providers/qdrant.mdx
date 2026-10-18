@@ -40,4 +40,6 @@ Namespaces live in the `_namespace` payload key. `createIndex` adds a tenant key
 | Metadata | Payload |
 | Metric | Set on the collection |
 
+A collection with the cosine metric stores each vector normalized to unit length, so `fetch` and `query` with `includeVector` return the normalized vector, not the one you wrote. Normalize before you compare vectors, or before you copy them into a dot or euclidean index elsewhere.
+
 If you read a collection with another tool, expect the `_id` and `_namespace` keys in the payload.

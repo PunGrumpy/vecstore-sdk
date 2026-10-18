@@ -71,9 +71,20 @@ Moving to Supabase needs a setup step the others do not: install `sql/supabase.s
 
 ## Copy the data
 
-The SDK does not move records for you. The SDK has no verb that lists records, so export ids with the provider's own scroll or list call through `store.raw` (Qdrant `scroll`, Pinecone `listPaginated`, Upstash `range`, a keyset `SELECT` on pgvector or Supabase, a paged `FT.SEARCH` on Redis, `listVectors` on Vectorize), then `fetch` them in pages of 1,000 and `upsert` into the new index. The adapter batches upserts, so pass as many records per call as fit in memory.
+The SDK does not move records for you. The SDK has no verb that lists records, so export ids with the provider's own scroll or list call through `store.raw` (Qdrant `scroll`, Pinecone `listPaginated`, Upstash `range`, a keyset `SELECT` on pgvector or Supabase, a paged `FT.SEARCH` on Redis, `listVectors` on Vectorize), then `fetch` them in pages of 1,000 with `{ includeVector: true }` and `upsert` into the new index. `fetch` leaves vectors out unless you ask for them, and an `upsert` of a record without one fails (on pgvector and Supabase with `invalid_argument`). The adapter batches upserts, so pass as many records per call as fit in memory.
 
-Record ids, vectors, and metadata round-trip unchanged. Every provider accepts only `string`, `number`, `boolean`, and `string[]` metadata values. Each adapter adds a few rules of its own. Qdrant, Vectorize, and Upstash in metadata mode reject metadata under `_id` or `_namespace` and a namespace that holds `/`. Redis rejects a value whose type contradicts the declared field type, and an index name that holds `:`.
+```ts
+const page = await source.fetch(ids, { includeVector: true });
+if (!page.ok) {
+  throw new Error(page.error.message);
+}
+const copied = await target.upsert(page.value);
+if (!copied.ok) {
+  throw new Error(copied.error.message);
+}
+```
+
+Record ids and metadata round-trip unchanged. Vectors can come back with less precision than you wrote, because vector databases generally store 32-bit floats: on pgvector and Supabase `0.123456789` returns as `0.12345679`. A Qdrant collection with the cosine metric also stores each vector normalized to unit length. Every provider accepts only `string`, `number`, `boolean`, and `string[]` metadata values. Each adapter adds a few rules of its own. Qdrant and Upstash in metadata mode reject metadata under `_id` or `_namespace`, and Vectorize rejects metadata under `_id`. All three reject a namespace that holds `/`, and Upstash in metadata mode also rejects one that holds a backslash or both quote characters. Redis rejects a value whose type contradicts the declared field type, and an index name that holds `:`.
 
 ## Check what each provider stores
 

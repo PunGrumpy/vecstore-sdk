@@ -1,3 +1,4 @@
+import { afterAll, beforeAll } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +13,39 @@ const SUPABASE_SQL = fileURLToPath(
 
 export const createPostgres = (): PGlite =>
   new PGlite({ extensions: { vector } });
+
+export const usePostgres = (
+  setup?: (db: PGlite) => Promise<void>
+): (() => PGlite) => {
+  let db: PGlite | undefined;
+
+  beforeAll(async () => {
+    db = createPostgres();
+    await setup?.(db);
+  });
+
+  afterAll(async () => {
+    await db?.close();
+  });
+
+  return () => {
+    if (db === undefined) {
+      throw new Error("postgres is not ready");
+    }
+    return db;
+  };
+};
+
+export const ensureRoles = async (
+  db: PGlite,
+  names: readonly string[]
+): Promise<void> => {
+  const statements = names.map(
+    (name) =>
+      `do $$ begin if not exists (select 1 from pg_roles where rolname = '${name}') then create role ${name} nologin; end if; end $$`
+  );
+  await db.exec(statements.join(";"));
+};
 
 export const installSupabaseSql = async (db: PGlite): Promise<void> => {
   await db.exec(readFileSync(SUPABASE_SQL, "utf-8"));

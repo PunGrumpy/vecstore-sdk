@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { and, eq, gt, isIn, not, notIn } from "../../src/filter/ast";
@@ -19,12 +19,15 @@ export type LiveCase = [string, (live: Live) => Promise<void>];
 
 export interface LiveOptions {
   readonly indexName?: () => string;
+  readonly isolated?: boolean;
 }
 
 const DIMENSION = 3;
 const READY_RETRIES = 20;
 const READY_DELAY_MS = 500;
 const NAMESPACE = "tenant-a";
+
+let indexSequence = 0;
 
 const vectors = {
   a: [1, 0, 0],
@@ -75,11 +78,16 @@ export const setupLive = (
   makeStore: () => LiveStore,
   options: LiveOptions = {}
 ): (() => Live) => {
-  let live: Live | undefined;
+  let live: Live | null = null;
+  const [before, after] = options.isolated
+    ? [beforeEach, afterEach]
+    : [beforeAll, afterAll];
 
-  beforeAll(async () => {
+  before(async () => {
     const store = makeStore();
-    const indexName = options.indexName?.() ?? `vecstore_live_${Date.now()}`;
+    indexSequence += 1;
+    const indexName =
+      options.indexName?.() ?? `vecstore_live_${Date.now()}_${indexSequence}`;
     unwrap(await store.createIndex({ dimension: DIMENSION, name: indexName }));
     const index = store.index(indexName, { namespace: NAMESPACE });
     unwrap(await index.upsert(records));
@@ -87,18 +95,22 @@ export const setupLive = (
     live = { index, indexName, store };
   });
 
-  afterAll(async () => {
-    if (live !== undefined) {
-      unwrap(await live.store.deleteIndex(live.indexName));
+  after(async () => {
+    if (live !== null) {
+      const { indexName, store } = live;
+      live = null;
+      unwrap(await store.deleteIndex(indexName));
     }
   });
 
-  return () => {
-    if (live === undefined) {
+  const current = (): Live => {
+    if (live === null) {
       throw new Error("live store is not ready");
     }
     return live;
   };
+
+  return current;
 };
 
 export const containsCases: LiveCase[] = [

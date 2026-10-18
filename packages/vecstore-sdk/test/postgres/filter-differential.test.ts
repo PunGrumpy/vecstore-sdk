@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import {
   and,
@@ -15,7 +15,7 @@ import {
 import type { Filter } from "../../src/filter/ast";
 import { compilePgvectorFilter } from "../../src/filter/pgvector";
 import { isString } from "../../src/internal/guards";
-import { createPostgres, installSupabaseSql } from "./pglite";
+import { installSupabaseSql, usePostgres } from "./pglite";
 
 const rows: [string, object][] = [
   ["a", { genre: "drama", tags: ["x", "y"], year: 1999 }],
@@ -47,28 +47,26 @@ const corpus: [string, Filter, string[] | undefined][] = [
 ];
 
 describe("the two pgvector filter compilers", () => {
-  const db = createPostgres();
-  beforeAll(async () => {
-    await installSupabaseSql(db);
-    await db.exec(
+  const db = usePostgres(async (client) => {
+    await installSupabaseSql(client);
+    await client.exec(
       `create table d (id text primary key, metadata jsonb not null)`
     );
     await Promise.all(
       rows.map(([id, metadata]) =>
-        db.query(`insert into d values ($1, $2::jsonb)`, [
+        client.query(`insert into d values ($1, $2::jsonb)`, [
           id,
           JSON.stringify(metadata),
         ])
       )
     );
   });
-  afterAll(() => db.close());
 
   const idsFor = async (
     where: string,
     params: string[] = []
   ): Promise<string[]> => {
-    const result = await db.query<{ id: string }>(
+    const result = await db().query<{ id: string }>(
       `select id from d where ${where} order by id`,
       params
     );
@@ -78,7 +76,7 @@ describe("the two pgvector filter compilers", () => {
   test.each(corpus)("%s", async (_name, filter, expected) => {
     const compiled = compilePgvectorFilter(filter);
     const fromTypescript = await idsFor(compiled.text, compiled.params);
-    const sql = await db.query<{ s: string }>(
+    const sql = await db().query<{ s: string }>(
       `select vecstore_filter_sql($1::jsonb, 'metadata') as s`,
       [JSON.stringify(filter)]
     );

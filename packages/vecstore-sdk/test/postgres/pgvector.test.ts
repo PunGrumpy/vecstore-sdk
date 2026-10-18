@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { eq, gte, ne } from "../../src/filter/ast";
 import { createPgvectorStore } from "../../src/pgvector";
@@ -6,16 +6,17 @@ import type { DeleteSelector } from "../../src/types";
 import { containsCases, liveCases, setupLive } from "../live/conformance";
 import { emptySelector, filterWithoutValue } from "../malformed";
 import {
-  createPostgres,
   FORCE_INDEX_SCAN,
   isDescending,
   spreadRecords,
+  usePostgres,
 } from "./pglite";
 
 describe("pgvector on PGlite", () => {
-  const db = createPostgres();
-  const live = setupLive(() => createPgvectorStore({ client: db }));
-  afterAll(() => db.close());
+  const db = usePostgres();
+  const live = setupLive(() => createPgvectorStore({ client: db() }), {
+    isolated: true,
+  });
 
   test.each([...containsCases, ...liveCases])("%s", async (_name, run) => {
     await expect(run(live())).resolves.toBeUndefined();
@@ -23,11 +24,10 @@ describe("pgvector on PGlite", () => {
 });
 
 describe("index lifecycle on PGlite", () => {
-  const db = createPostgres();
-  const store = createPgvectorStore({ client: db });
-  afterAll(() => db.close());
+  const db = usePostgres();
 
   test("recreating an index with a different metric changes ordering and scoring", async () => {
+    const store = createPgvectorStore({ client: db() });
     const created = await store.createIndex({
       dimension: 3,
       name: "docs_cosine",
@@ -59,9 +59,10 @@ describe("index lifecycle on PGlite", () => {
 
   test("createIndex rejects a name over 49 bytes and creates nothing", async () => {
     const name = "a".repeat(50);
+    const store = createPgvectorStore({ client: db() });
     const result = await store.createIndex({ dimension: 3, name });
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
-    const rows = await db.query<{ count: number }>(
+    const rows = await db().query<{ count: number }>(
       "select count(*) from pg_tables where tablename like 'aaaa%'"
     );
     expect(rows.rows[0]?.count).toBe(0);
@@ -69,28 +70,31 @@ describe("index lifecycle on PGlite", () => {
 });
 
 describe("queries through the HNSW index on PGlite", () => {
-  const db = createPostgres();
-  const store = createPgvectorStore({ client: db });
-  const index = store.index("filled", { namespace: "tenant-a" });
-  beforeAll(async () => {
+  const db = usePostgres(async (client) => {
+    const store = createPgvectorStore({ client });
     await store.createIndex({ dimension: 3, name: "filled" });
-    await index.upsert(spreadRecords("a"));
+    await store
+      .index("filled", { namespace: "tenant-a" })
+      .upsert(spreadRecords("a"));
     await store
       .index("filled", { namespace: "tenant-b" })
       .upsert(spreadRecords("b"));
-    await db.exec(FORCE_INDEX_SCAN);
+    await client.exec(FORCE_INDEX_SCAN);
   });
-  afterAll(() => db.close());
+  const index = () =>
+    createPgvectorStore({ client: db() }).index("filled", {
+      namespace: "tenant-a",
+    });
 
   test("a topK above the HNSW candidate list returns topK records, nearest first", async () => {
-    const result = await index.query({ topK: 100, vector: [1, 0, 0] });
+    const result = await index().query({ topK: 100, vector: [1, 0, 0] });
     const scores = result.ok ? result.value.map((match) => match.score) : [];
     expect(scores).toHaveLength(100);
     expect(isDescending(scores)).toBeTruthy();
   });
 
   test("a selective filter returns topK records", async () => {
-    const result = await index.query({
+    const result = await index().query({
       filter: eq("kind", "rare"),
       topK: 10,
       vector: [1, 0, 0],
@@ -99,16 +103,16 @@ describe("queries through the HNSW index on PGlite", () => {
   });
 
   test("the scan setting does not outlive the query", async () => {
-    await index.query({ topK: 100, vector: [1, 0, 0] });
-    const setting = await db.query("show hnsw.iterative_scan");
+    await index().query({ topK: 100, vector: [1, 0, 0] });
+    const setting = await db().query("show hnsw.iterative_scan");
     expect(setting.rows).toStrictEqual([{ "hnsw.iterative_scan": "off" }]);
   });
 
   test("a scan mode set on the session is kept", async () => {
-    await db.exec("set hnsw.iterative_scan = relaxed_order");
-    const result = await index.query({ topK: 100, vector: [1, 0, 0] });
-    const setting = await db.query("show hnsw.iterative_scan");
-    await db.exec("reset hnsw.iterative_scan");
+    await db().exec("set hnsw.iterative_scan = relaxed_order");
+    const result = await index().query({ topK: 100, vector: [1, 0, 0] });
+    const setting = await db().query("show hnsw.iterative_scan");
+    await db().exec("reset hnsw.iterative_scan");
     expect(result.ok && result.value).toHaveLength(100);
     expect(setting.rows).toStrictEqual([
       { "hnsw.iterative_scan": "relaxed_order" },
@@ -117,15 +121,14 @@ describe("queries through the HNSW index on PGlite", () => {
 });
 
 describe("a store that met a missing table on PGlite", () => {
-  const db = createPostgres();
-  afterAll(() => db.close());
+  const db = usePostgres();
 
   test("reads the metric again once another store creates the table", async () => {
-    const early = createPgvectorStore({ client: db });
+    const early = createPgvectorStore({ client: db() });
     const missing = await early
       .index("late")
       .query({ topK: 1, vector: [1, 0, 0] });
-    await createPgvectorStore({ client: db }).createIndex({
+    await createPgvectorStore({ client: db() }).createIndex({
       dimension: 3,
       metric: "euclidean",
       name: "late",
@@ -147,19 +150,23 @@ const refusedSelectors: [string, DeleteSelector][] = [
 ];
 
 describe("delete fails closed on PGlite", () => {
-  const db = createPostgres();
-  const store = createPgvectorStore({ client: db });
-  const index = store.index("guarded", { namespace: "tenant-a" });
-  beforeAll(async () => {
+  const db = usePostgres(async (client) => {
+    const store = createPgvectorStore({ client });
     await store.createIndex({ dimension: 3, name: "guarded" });
-    await index.upsert([
-      { id: "a", metadata: { genre: "drama", year: 2000 }, vector: [1, 0, 0] },
+    await store.index("guarded", { namespace: "tenant-a" }).upsert([
+      {
+        id: "a",
+        metadata: { genre: "drama", year: 2000 },
+        vector: [1, 0, 0],
+      },
       { id: "b", metadata: { genre: "comedy" }, vector: [0, 1, 0] },
     ]);
   });
-  afterAll(() => db.close());
 
   test.each(refusedSelectors)("%s deletes nothing", async (_name, selector) => {
+    const index = createPgvectorStore({ client: db() }).index("guarded", {
+      namespace: "tenant-a",
+    });
     const deleted = await index.delete(selector);
     const found = await index.fetch(["a", "b"]);
     expect(!deleted.ok && deleted.error.kind).toBe("invalid_argument");

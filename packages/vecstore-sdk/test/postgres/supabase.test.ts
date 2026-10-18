@@ -11,14 +11,22 @@ import {
   createSupabaseStore,
   normalizeSupabaseError,
 } from "../../src/supabase";
-import { containsCases, liveCases, setupLive } from "../live/conformance";
 import {
+  containsCases,
+  liveCases,
+  negatedRangeCases,
+  setupLive,
+} from "../live/conformance";
+import {
+  AVOID_INDEX_SCAN,
   ensureRoles,
   FORCE_INDEX_SCAN,
   installSupabaseSql,
   isDescending,
+  NEAREST_FIRST_ZERO_LAST,
   spreadRecords,
   usePostgres,
+  zeroVectorRecords,
 } from "./pglite";
 
 type ValueOf<T> = T extends object ? T[keyof T] : never;
@@ -87,9 +95,12 @@ describe("supabase on PGlite", () => {
     { isolated: true }
   );
 
-  test.each([...containsCases, ...liveCases])("%s", async (_name, run) => {
-    await expect(run(live())).resolves.toBeUndefined();
-  });
+  test.each([...containsCases, ...liveCases, ...negatedRangeCases])(
+    "%s",
+    async (_name, run) => {
+      await expect(run(live())).resolves.toBeUndefined();
+    }
+  );
 });
 
 describe("vecstore_create_index index lifecycle on PGlite", () => {
@@ -111,6 +122,52 @@ describe("vecstore_create_index index lifecycle on PGlite", () => {
       { fn: "vecstore_create_index", index: name }
     );
     expect(mapped.kind).toBe("invalid_argument");
+  });
+});
+
+describe("vecstore_metric on PGlite", () => {
+  const db = usePostgres(installSupabaseSql);
+
+  test("a euclidean index named after an opclass keeps its metric", async () => {
+    const store = createSupabaseStore({ client: rpcClient(db()) });
+    const name = "x_vector_cosine_ops";
+    const created = await store.createIndex({
+      dimension: 3,
+      metric: "euclidean",
+      name,
+    });
+    expect(created.ok).toBeTruthy();
+    const index = store.index(name);
+    await index.upsert([
+      { id: "same", vector: [1, 0, 0] },
+      { id: "far", vector: [-9, 0, 0] },
+    ]);
+    const result = await index.query({ topK: 2, vector: [1, 0, 0] });
+    expect(
+      result.ok && result.value.map((match) => [match.id, match.score])
+    ).toStrictEqual([
+      ["same", 0],
+      ["far", 10],
+    ]);
+  });
+});
+
+describe("a cosine vecstore_query that meets a zero vector on PGlite", () => {
+  const db = usePostgres(async (client) => {
+    await installSupabaseSql(client);
+    const store = createSupabaseStore({ client: rpcClient(client) });
+    await store.createIndex({ dimension: 2, name: "zeroed" });
+    await store.index("zeroed").upsert(zeroVectorRecords);
+    await client.exec(AVOID_INDEX_SCAN);
+  });
+
+  test("ranks the zero vector last", async () => {
+    const result = await createSupabaseStore({ client: rpcClient(db()) })
+      .index("zeroed")
+      .query({ topK: 4, vector: [1, 0] });
+    expect(result.ok && result.value.map((match) => match.id)).toStrictEqual(
+      NEAREST_FIRST_ZERO_LAST
+    );
   });
 });
 

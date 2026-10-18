@@ -159,6 +159,32 @@ export const containsCases: LiveCase[] = [
   ],
 ];
 
+export const negatedRangeCases: LiveCase[] = [
+  [
+    "not around a range keeps a record that lacks the field",
+    async ({ index }) => {
+      const matches = unwrap(
+        await index.query({
+          filter: not(gt("year", 2000)),
+          topK: 10,
+          vector: vectors.a,
+        })
+      );
+      expect(idsOf(matches).toSorted()).toStrictEqual(["doc-a", "doc-d"]);
+    },
+  ],
+  [
+    "delete by not around a range removes a record that lacks the field",
+    async ({ index }) => {
+      unwrap(await index.delete({ filter: not(gt("year", 2000)) }));
+      const found = unwrap(
+        await index.fetch(["doc-a", "doc-b", "doc-c", "doc-d"])
+      );
+      expect(idsOf(found)).toStrictEqual(["doc-b", "doc-c"]);
+    },
+  ],
+];
+
 export const liveCases: LiveCase[] = [
   [
     "listIndexes includes the new index",

@@ -74,12 +74,6 @@ const DISTANCE_OPERATORS: Record<Metric, string> = {
   euclidean: "<->",
 };
 
-const SCORE_ORDERS: Record<Metric, string> = {
-  cosine: "DESC",
-  dot: "DESC",
-  euclidean: "ASC",
-};
-
 const HNSW_METHOD = "USING hnsw";
 const ITERATIVE_SCAN_MINOR = 8;
 const ITERATIVE_SCAN_SETTING =
@@ -124,8 +118,11 @@ const OPCLASS_METRICS: readonly (readonly [string, Metric])[] = [
 const metricFromIndexDef = (definition: string): Metric | undefined =>
   OPCLASS_METRICS.find(([opclass]) => definition.includes(opclass))?.[1];
 
+const distanceExpression = (metric: Metric, vectorParam: string): string =>
+  `embedding ${DISTANCE_OPERATORS[metric]} ${vectorParam}::vector`;
+
 const scoreExpression = (metric: Metric, vectorParam: string): string => {
-  const distance = `embedding ${DISTANCE_OPERATORS[metric]} ${vectorParam}::vector`;
+  const distance = distanceExpression(metric, vectorParam);
   switch (metric) {
     case "cosine": {
       return `1 - (${distance})`;
@@ -187,8 +184,8 @@ const resolveProfile = async (
   return DEFAULT_PROFILE;
 };
 
-const withIterativeScan = (search: string, metric: Metric): string =>
-  `SELECT hits.* FROM (SELECT ${ITERATIVE_SCAN_SETTING} AS scan) AS tuning CROSS JOIN LATERAL (${search}) AS hits ORDER BY hits.score ${SCORE_ORDERS[metric]}`;
+const withIterativeScan = (search: string): string =>
+  `SELECT hits.* FROM (SELECT ${ITERATIVE_SCAN_SETTING} AS scan) AS tuning CROSS JOIN LATERAL (${search}) AS hits ORDER BY hits.distance`;
 
 const searchRows = async (
   context: TableContext,
@@ -313,10 +310,15 @@ const createIndex = (
         const vectorColumn = query.includeVector
           ? "embedding::text AS embedding,"
           : "";
-        const search = `SELECT id, metadata, ${vectorColumn} ${scoreExpression(metric, "$2")} AS score FROM ${table} WHERE ${where} ORDER BY embedding ${DISTANCE_OPERATORS[metric]} $2::vector LIMIT $${params.length}`;
+        const distance = distanceExpression(metric, "$2");
+        const score = `${scoreExpression(metric, "$2")} AS score`;
+        const columns = iterativeScan
+          ? `${score}, ${distance} AS distance`
+          : score;
+        const search = `SELECT id, metadata, ${vectorColumn} ${columns} FROM ${table} WHERE ${where} ORDER BY ${distance} LIMIT $${params.length}`;
         const rows = await searchRows(
           context,
-          iterativeScan ? withIterativeScan(search, metric) : search,
+          iterativeScan ? withIterativeScan(search) : search,
           params
         );
         const includeMetadata = query.includeMetadata ?? true;

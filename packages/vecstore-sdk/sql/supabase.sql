@@ -284,7 +284,6 @@ declare
     when 'dot' then '-(' || distance || ')'
     else '1 - (' || distance || ')'
   end;
-  score_order text := case metric when 'euclidean' then 'asc' else 'desc' end;
   where_sql text := 'namespace = ' || quote_literal(match_namespace);
 begin
   if match_filter is not null then
@@ -309,16 +308,16 @@ begin
 
   return query execute format(
     'select hits.id, hits.metadata, hits.embedding, hits.score from (
-       select id, metadata, %s as embedding, %s as score
+       select id, metadata, %s as embedding, %s as score, %s as distance
        from %s where %s order by %s limit %s
-     ) as hits order by hits.score %s',
+     ) as hits order by hits.distance',
     case when include_vector then 'embedding::text' else 'null::text' end,
     score_sql,
+    distance,
     vecstore_table(index_name, index_schema),
     where_sql,
     distance,
-    match_count,
-    score_order
+    match_count
   );
 end;
 $$;

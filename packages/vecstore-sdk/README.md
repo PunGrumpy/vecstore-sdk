@@ -226,7 +226,7 @@ The index name already uses the one namespace Upstash gives you, so `namespaceMo
 
 `"native"` gives each index and namespace pair its own Upstash namespace, named `{index}` or `{index}~{namespace}`. Ids and metadata are stored as you wrote them, queries carry no namespace filter, and `delete({ all: true })` resets the namespace in one call. Upstash caps namespaces at 100 on the free plan and 10,000 on the paid plans, so choose this mode when you can name your namespaces up front. Nothing migrates between the two modes.
 
-Upstash gives each query a filtering budget and can return fewer than `topK` records when the filter is selective. In metadata mode the adapter scopes every query by namespace, so this applies to every Upstash query. Ask for more than you need, or page with a second query.
+Upstash gives each query a filtering budget and can return fewer than `topK` records when the filter is selective. In metadata mode the adapter scopes every query by namespace, so this applies to every Upstash query. Ask for a larger `topK` than you need; `query` has no offset to page with.
 
 Upstash filters are a string rather than an object, so `compileUpstashFilter` validates what it writes. It rejects a field name that breaks Upstash's identifier rule, a string value holding a backslash or both quote characters, and a non-finite number, and the verb returns an `invalid_argument` error.
 

@@ -78,7 +78,7 @@ Because the whole name goes into the request path, an index name cannot contain 
 
 ## Every filtered query has a budget
 
-Upstash gives each query a filtering budget: a number of candidate vectors it can compare against the filter before it falls back to post-filtering. A query whose filter is highly selective can return fewer than `topK` records, so ask for more than you need, or page with a second query.
+Upstash gives each query a filtering budget: a number of candidate vectors it can compare against the filter before it falls back to post-filtering. A query whose filter is highly selective can return fewer than `topK` records, so ask for a larger `topK` than you need, or make the filter less selective. `query` has no offset or cursor, so a second identical query returns the same records.
 
 In metadata mode the adapter adds the `_namespace` clause to every query, which makes every query a filtered query. The default namespace compiles to `(HAS NOT FIELD _namespace OR _namespace = '')` so that records written by another tool still match, and an `OR` of two conditions spends more of the budget than a single equality does. Native mode spends none of it on the namespace.
 

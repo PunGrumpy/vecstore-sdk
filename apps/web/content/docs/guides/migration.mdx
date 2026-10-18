@@ -84,7 +84,7 @@ if (!copied.ok) {
 }
 ```
 
-Record ids and metadata round-trip unchanged. Vectors can come back with less precision than you wrote, because vector databases generally store 32-bit floats: on pgvector and Supabase `0.123456789` returns as `0.12345679`. A Qdrant collection with the cosine metric also stores each vector normalized to unit length. Every provider accepts only `string`, `number`, `boolean`, and `string[]` metadata values. Each adapter adds a few rules of its own. Qdrant, Vectorize, and Upstash in metadata mode reject metadata under `_id` or `_namespace` and a namespace that holds `/`. Redis rejects a value whose type contradicts the declared field type, and an index name that holds `:`.
+Record ids and metadata round-trip unchanged. Vectors can come back with less precision than you wrote, because vector databases generally store 32-bit floats: on pgvector and Supabase `0.123456789` returns as `0.12345679`. A Qdrant collection with the cosine metric also stores each vector normalized to unit length. Every provider accepts only `string`, `number`, `boolean`, and `string[]` metadata values. Each adapter adds a few rules of its own. Qdrant and Upstash in metadata mode reject metadata under `_id` or `_namespace`, and Vectorize rejects metadata under `_id`. All three reject a namespace that holds `/`, and Upstash in metadata mode also rejects one that holds a backslash or both quote characters. Redis rejects a value whose type contradicts the declared field type, and an index name that holds `:`.
 
 ## Check what each provider stores
 

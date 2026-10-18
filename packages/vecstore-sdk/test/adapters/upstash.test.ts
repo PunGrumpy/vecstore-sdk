@@ -19,6 +19,14 @@ import {
   scopeUpstashFilter,
 } from "../../src/upstash";
 import { emptySelector, filterWithoutValue } from "../malformed";
+import {
+  SAMPLE_CODES,
+  bunFetchFailure,
+  codeLess,
+  nonNetworkCause,
+  undiciFetchFailure,
+  unrelatedCode,
+} from "../network-failures";
 
 const upstashError = (message: string) =>
   Object.assign(new Error(message), { name: "UpstashError" });
@@ -627,6 +635,50 @@ describe(createUpstashStore, () => {
       normalizeUpstashError(new TypeError("fetch failed"), "docs").kind
     ).toBe("connection");
     expect(normalizeUpstashError("boom", "docs").kind).toBe("provider");
+  });
+
+  test.each(SAMPLE_CODES)(
+    "Bun's %s on the error itself is a connection error",
+    (code) => {
+      expect(normalizeUpstashError(bunFetchFailure(code), "docs").kind).toBe(
+        "connection"
+      );
+    }
+  );
+
+  test.each(SAMPLE_CODES)(
+    "undici's %s on the cause is a connection error",
+    (code) => {
+      expect(normalizeUpstashError(undiciFetchFailure(code), "docs").kind).toBe(
+        "connection"
+      );
+    }
+  );
+
+  test.each([
+    ["a plain Error with the message fetch failed", new Error("fetch failed")],
+    ["Exhausted all retries", new Error("Exhausted all retries")],
+    [
+      "an AbortError",
+      Object.assign(new Error("aborted"), { name: "AbortError" }),
+    ],
+  ])("%s is a connection error", (_name, cause) => {
+    expect(normalizeUpstashError(cause, "docs").kind).toBe("connection");
+  });
+
+  test.each([
+    ["a TypeError with an unrelated message", codeLess()],
+    ["a TypeError with an unrelated code", unrelatedCode()],
+    ["a TypeError whose cause has an unrelated code", nonNetworkCause()],
+  ])("%s is a provider error", (_name, cause) => {
+    expect(normalizeUpstashError(cause, "docs").kind).toBe("provider");
+  });
+
+  test("an UpstashError that carries a network code stays a provider error", () => {
+    const cause = Object.assign(upstashError("fetch failed"), {
+      code: "ECONNREFUSED",
+    });
+    expect(normalizeUpstashError(cause, "docs").kind).toBe("provider");
   });
 });
 

@@ -10,6 +10,14 @@ import {
   normalizePgvectorError,
 } from "../../src/pgvector";
 import { emptySelector, filterWithoutValue } from "../malformed";
+import {
+  SAMPLE_CODES,
+  bunFetchFailure,
+  codeLess,
+  nonNetworkCause,
+  undiciFetchFailure,
+  unrelatedCode,
+} from "../network-failures";
 
 interface Call {
   readonly text: string;
@@ -50,7 +58,18 @@ const codeKinds: [string, VecstoreError["kind"]][] = [
   ["28P01", "unauthorized"],
   ["ECONNREFUSED", "connection"],
   ["08006", "connection"],
+  ["57P01", "connection"],
+  ["57P02", "connection"],
+  ["57P03", "connection"],
+  ["53300", "connection"],
   ["XX000", "provider"],
+];
+
+const driverMessages: string[] = [
+  "Connection terminated unexpectedly",
+  "Connection terminated due to connection timeout",
+  "timeout exceeded when trying to connect",
+  "Query read timeout",
 ];
 
 describe(createPgvectorStore, () => {
@@ -426,5 +445,60 @@ describe(createPgvectorStore, () => {
     expect(normalizePgvectorError(new Error("plain"), "docs").kind).toBe(
       "provider"
     );
+  });
+
+  test.each(SAMPLE_CODES)(
+    "Bun's %s on the error itself is a connection error",
+    (code) => {
+      expect(normalizePgvectorError(bunFetchFailure(code), "docs").kind).toBe(
+        "connection"
+      );
+    }
+  );
+
+  test.each(SAMPLE_CODES)(
+    "the cause carrying %s is a connection error",
+    (code) => {
+      expect(
+        normalizePgvectorError(undiciFetchFailure(code), "docs").kind
+      ).toBe("connection");
+    }
+  );
+
+  test.each(driverMessages)(
+    "the code-less pg error %p is a connection error",
+    (message) => {
+      expect(normalizePgvectorError(new Error(message), "docs").kind).toBe(
+        "connection"
+      );
+    }
+  );
+
+  test("a pg-pool timeout that wraps its cause is a connection error", () => {
+    const cause = new Error("Connection terminated due to connection timeout", {
+      cause: new Error("socket hang up"),
+    });
+    expect(normalizePgvectorError(cause, "docs").kind).toBe("connection");
+  });
+
+  test.each([
+    [
+      "a message that only contains a pg message",
+      "Connection terminated by me",
+    ],
+    ["a message in another case", "connection terminated unexpectedly"],
+    ["a message with a prefix", "error: Query read timeout"],
+  ])("%s is a provider error", (_name, message) => {
+    expect(normalizePgvectorError(new Error(message), "docs").kind).toBe(
+      "provider"
+    );
+  });
+
+  test.each([
+    ["a TypeError with an unrelated message", codeLess()],
+    ["a TypeError with an unrelated code", unrelatedCode()],
+    ["a TypeError whose cause has an unrelated code", nonNetworkCause()],
+  ])("%s is a provider error", (_name, cause) => {
+    expect(normalizePgvectorError(cause, "docs").kind).toBe("provider");
   });
 });

@@ -306,6 +306,7 @@ interface UpstashLayout {
   readonly compileFilter: (namespace: string, filter: Filter) => string;
   readonly defaultFilter?: (namespace: string) => string;
   readonly emulatesNamespace: boolean;
+  readonly holds: (namespace: string, record: UpstashResultRecord) => boolean;
   readonly clear: (
     client: UpstashIndexLike,
     index: string,
@@ -369,6 +370,7 @@ const METADATA_LAYOUT: UpstashLayout = {
   defaultFilter: (namespace) => scopeUpstashFilter(namespace),
   deletableIds: metadataDeletableIds,
   emulatesNamespace: true,
+  holds: (namespace, record) => readStoredNamespace(record) === namespace,
   indexOf: (upstashNamespace) => upstashNamespace,
   owns: (index, upstashNamespace) => upstashNamespace === index,
   readId: readStoredId,
@@ -403,6 +405,7 @@ const NATIVE_LAYOUT: UpstashLayout = {
   deletableIds: (_client, _index, _namespace, storedIds) =>
     Promise.resolve([...storedIds]),
   emulatesNamespace: false,
+  holds: () => true,
   indexOf: (upstashNamespace) =>
     upstashNamespace.split(NAMESPACE_SEPARATOR)[0] ?? upstashNamespace,
   owns: (index, upstashNamespace) =>
@@ -537,7 +540,7 @@ const createIndex = (
         });
         const records: VectorRecord[] = [];
         for (const record of responses.flat()) {
-          if (record !== null) {
+          if (record !== null && layout.holds(namespace, record)) {
             records.push({
               id: layout.readId(record),
               metadata: layout.readMetadata(record),

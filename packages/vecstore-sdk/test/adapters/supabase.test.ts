@@ -14,6 +14,13 @@ import {
   normalizeSupabaseError,
 } from "../../src/supabase";
 import { emptySelector, filterWithoutValue } from "../malformed";
+import {
+  SAMPLE_CODES,
+  bunFetchFailure,
+  nonNetworkCause,
+  undiciFetchFailure,
+  unrelatedCode,
+} from "../network-failures";
 
 const UPSERT_BATCH = 100;
 
@@ -53,8 +60,26 @@ const codeKinds: [string, VecstoreError["kind"]][] = [
   ["PGRST301", "unauthorized"],
   ["PGRST202", "unsupported"],
   ["08006", "connection"],
+  ["57P02", "connection"],
+  ["57P03", "connection"],
+  ["53300", "connection"],
   ["XX000", "provider"],
 ];
+
+const statusZeroMessages = [
+  "TypeError: getaddrinfo ENOTFOUND x",
+  "TypeError: ECONNREFUSED: Unable to connect. Is the computer able to access the url?",
+  "TypeError: fetch failed",
+  "AbortError: This operation was aborted",
+];
+
+const statusClient = (
+  message: string,
+  status?: number
+): SupabaseClientLike => ({
+  rpc: () =>
+    Promise.resolve({ data: null, error: { code: "", message }, status }),
+});
 
 describe(createSupabaseStore, () => {
   test("a supabase-js client is accepted and returned as raw", () => {
@@ -384,6 +409,88 @@ describe(createSupabaseStore, () => {
       index: "docs",
     });
     expect(error.kind).toBe("connection");
+  });
+
+  test.each(statusZeroMessages)(
+    "an rpc that resolves with status 0 and %p is a connection error",
+    async (message) => {
+      const result = await createSupabaseStore({
+        client: statusClient(message, 0),
+      }).listIndexes();
+      expect(result).toMatchObject({
+        error: { kind: "connection", provider: "supabase" },
+        ok: false,
+      });
+    }
+  );
+
+  test.each([
+    ["an HTTP 500", 500],
+    ["an HTTP 404", 404],
+  ])(
+    "an rpc error with %s and a non-network message is a provider error",
+    async (_name, status) => {
+      const result = await createSupabaseStore({
+        client: statusClient("TypeError: x is not a function", status),
+      }).listIndexes();
+      expect(!result.ok && result.error.kind).toBe("provider");
+    }
+  );
+
+  test("an rpc error without a status and a non-network message is a provider error", async () => {
+    const result = await createSupabaseStore({
+      client: statusClient("TypeError: x is not a function"),
+    }).listIndexes();
+    expect(!result.ok && result.error.kind).toBe("provider");
+  });
+
+  test("an rpc error without a status still matches the fetch message", async () => {
+    const result = await createSupabaseStore({
+      client: statusClient("TypeError: Failed to fetch"),
+    }).listIndexes();
+    expect(!result.ok && result.error.kind).toBe("connection");
+  });
+
+  test("a status 0 error keeps the postgrest error as its cause", async () => {
+    const result = await createSupabaseStore({
+      client: statusClient("TypeError: getaddrinfo ENOTFOUND x", 0),
+    }).listIndexes();
+    expect(!result.ok && result.error.cause).toMatchObject({
+      cause: { message: "TypeError: getaddrinfo ENOTFOUND x" },
+    });
+  });
+
+  test.each(SAMPLE_CODES)(
+    "Bun's %s on the error itself is a connection error",
+    (code) => {
+      const error = normalizeSupabaseError(bunFetchFailure(code), {
+        fn: "vecstore_query",
+        index: "docs",
+      });
+      expect(error.kind).toBe("connection");
+    }
+  );
+
+  test.each(SAMPLE_CODES)(
+    "undici's %s on the cause is a connection error",
+    (code) => {
+      const error = normalizeSupabaseError(undiciFetchFailure(code), {
+        fn: "vecstore_query",
+        index: "docs",
+      });
+      expect(error.kind).toBe("connection");
+    }
+  );
+
+  test.each([
+    ["a TypeError with an unrelated code", unrelatedCode()],
+    ["a TypeError whose cause has an unrelated code", nonNetworkCause()],
+  ])("%s is a provider error", (_name, cause) => {
+    const error = normalizeSupabaseError(cause, {
+      fn: "vecstore_query",
+      index: "docs",
+    });
+    expect(error.kind).toBe("provider");
   });
 
   test("a TypeError that is not a fetch failure is a provider error", () => {

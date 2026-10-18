@@ -10,6 +10,7 @@ import type { Provider, VecstoreError } from "../errors";
 import type { Metadata, ScoredRecord, VectorRecord } from "../types";
 import { isNumberArray, isObjectLike, isString } from "./guards";
 import { isMetadataEntry, metadataFromEntries } from "./metadata";
+import { isNetworkCode, isNetworkFailure } from "./network";
 
 const UNDEFINED_TABLE = "42P01";
 const DUPLICATE_TABLE = "42P07";
@@ -21,21 +22,34 @@ const DATA_CLASS = "22";
 const INTEGRITY_CLASS = "23";
 const SYNTAX_CLASS = "42";
 
-const NODE_CONNECTION_CODES = new Set([
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "ENOTFOUND",
-  "ETIMEDOUT",
-  "EHOSTUNREACH",
+const CRASH_SHUTDOWN = "57P02";
+const CANNOT_CONNECT_NOW = "57P03";
+const TOO_MANY_CONNECTIONS = "53300";
+
+const DRIVER_CONNECTION_MESSAGES: ReadonlySet<string> = new Set([
+  "Connection terminated unexpectedly",
+  "Connection terminated due to connection timeout",
+  "timeout exceeded when trying to connect",
+  "Query read timeout",
 ]);
 
 export const hasCode = (cause: unknown): cause is Error & { code: string } =>
   cause instanceof Error && "code" in cause && typeof cause.code === "string";
 
+const SQLSTATE_CONNECTION_CODES: ReadonlySet<string> = new Set([
+  ADMIN_SHUTDOWN,
+  CRASH_SHUTDOWN,
+  CANNOT_CONNECT_NOW,
+  TOO_MANY_CONNECTIONS,
+]);
+
 const isConnectionCode = (code: string): boolean =>
-  NODE_CONNECTION_CODES.has(code) ||
-  code === ADMIN_SHUTDOWN ||
+  isNetworkCode(code) ||
+  SQLSTATE_CONNECTION_CODES.has(code) ||
   code.startsWith(CONNECTION_CLASS);
+
+const isDriverConnectionFailure = (cause: unknown): boolean =>
+  cause instanceof Error && DRIVER_CONNECTION_MESSAGES.has(cause.message);
 
 const isAuthCode = (code: string): boolean =>
   code === INSUFFICIENT_PRIVILEGE || code.startsWith(AUTH_CLASS);
@@ -50,6 +64,9 @@ export const normalizePostgresError = (
   cause: unknown,
   index: string
 ): VecstoreError => {
+  if (isNetworkFailure(cause) || isDriverConnectionFailure(cause)) {
+    return connection(provider, cause);
+  }
   if (!hasCode(cause)) {
     return providerError(provider, cause);
   }

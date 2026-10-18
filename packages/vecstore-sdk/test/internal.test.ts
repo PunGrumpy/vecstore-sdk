@@ -18,6 +18,7 @@ import {
   reservedKeyError,
 } from "../src/internal/metadata";
 import { namespaceError } from "../src/internal/namespace";
+import { isNetworkFailure } from "../src/internal/network";
 import { queryOptionsError } from "../src/internal/query-options";
 import {
   deterministicUuid,
@@ -26,6 +27,14 @@ import {
 } from "../src/internal/uuid";
 import type { DeleteSelector } from "../src/types";
 import { looseFilter, looseSelector } from "./malformed";
+import {
+  NETWORK_CODES,
+  bunFetchFailure,
+  codeLess,
+  nonNetworkCause,
+  undiciFetchFailure,
+  unrelatedCode,
+} from "./network-failures";
 
 const acceptedSelectors: [string, DeleteSelector][] = [
   ["ids", { ids: ["a"] }],
@@ -393,5 +402,40 @@ describe(deleteSelectorError, () => {
     expect(deleteSelectorError("pgvector", selector)?.kind).toBe(
       "invalid_argument"
     );
+  });
+});
+
+describe(isNetworkFailure, () => {
+  test.each(NETWORK_CODES)("an error with the own code %s", (code) => {
+    expect(isNetworkFailure(bunFetchFailure(code))).toBeTruthy();
+  });
+
+  test.each(NETWORK_CODES)("an error whose cause has the code %s", (code) => {
+    expect(isNetworkFailure(undiciFetchFailure(code))).toBeTruthy();
+  });
+
+  test("an error whose cause is a plain object with a network code", () => {
+    const cause = new Error("pool failed", { cause: { code: "ECONNRESET" } });
+    expect(isNetworkFailure(cause)).toBeTruthy();
+  });
+
+  test("a TypeError whose message is exactly fetch failed", () => {
+    expect(isNetworkFailure(new TypeError("fetch failed"))).toBeTruthy();
+  });
+
+  test.each([
+    ["a TypeError with an unrelated message", codeLess()],
+    ["a TypeError with an unrelated code", unrelatedCode()],
+    ["a TypeError whose cause has an unrelated code", nonNetworkCause()],
+    ["a plain Error with the message fetch failed", new Error("fetch failed")],
+    [
+      "a TypeError that only contains fetch failed",
+      new TypeError("fetch failed twice"),
+    ],
+    ["a string", "ECONNREFUSED"],
+    ["a plain object with a network code", { code: "ECONNREFUSED" }],
+    ["null", null],
+  ])("%s is not a network failure", (_name, cause) => {
+    expect(isNetworkFailure(cause)).toBeFalsy();
   });
 });

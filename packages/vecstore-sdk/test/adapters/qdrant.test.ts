@@ -19,6 +19,14 @@ import {
   scopeQdrantFilter,
 } from "../../src/qdrant";
 import { emptySelector, filterWithoutValue } from "../malformed";
+import {
+  SAMPLE_CODES,
+  bunFetchFailure,
+  codeLess,
+  nonNetworkCause,
+  undiciFetchFailure,
+  unrelatedCode,
+} from "../network-failures";
 
 const UUID = "0f8fad5b-d9cb-469f-a165-70867728950e";
 
@@ -452,6 +460,32 @@ describe(createQdrantStore, () => {
     expect(
       normalizeQdrantError(new TypeError("fetch failed"), "docs").kind
     ).toBe("connection");
+  });
+
+  test.each(SAMPLE_CODES)(
+    "Bun's %s on the error itself is a connection error",
+    (code) => {
+      expect(normalizeQdrantError(bunFetchFailure(code), "docs").kind).toBe(
+        "connection"
+      );
+    }
+  );
+
+  test.each(SAMPLE_CODES)(
+    "undici's %s on the cause is a connection error",
+    (code) => {
+      expect(normalizeQdrantError(undiciFetchFailure(code), "docs").kind).toBe(
+        "connection"
+      );
+    }
+  );
+
+  test.each([
+    ["a TypeError with an unrelated message", codeLess()],
+    ["a TypeError with an unrelated code", unrelatedCode()],
+    ["a TypeError whose cause has an unrelated code", nonNetworkCause()],
+  ])("%s is a provider error", (_name, cause) => {
+    expect(normalizeQdrantError(cause, "docs").kind).toBe("provider");
   });
 
   test("a failing call returns an error result instead of throwing", async () => {

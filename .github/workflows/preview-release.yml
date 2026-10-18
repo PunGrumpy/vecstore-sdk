@@ -17,6 +17,7 @@ jobs:
   publish:
     name: Publish Preview
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.repository_owner == 'PunGrumpy'
     steps:
       - name: Checkout

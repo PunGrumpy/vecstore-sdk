@@ -135,17 +135,17 @@ as $$
   select coalesce(
     (
       select case
-        when indexdef like '%vector_cosine_ops%' then 'cosine'
-        when indexdef like '%vector_ip_ops%' then 'dot'
-        when indexdef like '%vector_l2_ops%' then 'euclidean'
+        when strpos(indexdef, '(embedding vector_cosine_ops)') > 0 then 'cosine'
+        when strpos(indexdef, '(embedding vector_ip_ops)') > 0 then 'dot'
+        when strpos(indexdef, '(embedding vector_l2_ops)') > 0 then 'euclidean'
       end
       from pg_indexes
       where tablename = index_name
         and schemaname = coalesce(index_schema, current_schema())
         and (
-          indexdef like '%vector_cosine_ops%'
-          or indexdef like '%vector_ip_ops%'
-          or indexdef like '%vector_l2_ops%'
+          strpos(indexdef, '(embedding vector_cosine_ops)') > 0
+          or strpos(indexdef, '(embedding vector_ip_ops)') > 0
+          or strpos(indexdef, '(embedding vector_l2_ops)') > 0
         )
       limit 1
     ),

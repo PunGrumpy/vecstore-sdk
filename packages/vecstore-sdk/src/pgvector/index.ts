@@ -110,9 +110,9 @@ const extensionVersion = (row: IndexDefinitionRow): string =>
   "extversion" in row && isString(row.extversion) ? row.extversion : "";
 
 const OPCLASS_METRICS: readonly (readonly [string, Metric])[] = [
-  [OPCLASSES.cosine, "cosine"],
-  [OPCLASSES.dot, "dot"],
-  [OPCLASSES.euclidean, "euclidean"],
+  [`(embedding ${OPCLASSES.cosine})`, "cosine"],
+  [`(embedding ${OPCLASSES.dot})`, "dot"],
+  [`(embedding ${OPCLASSES.euclidean})`, "euclidean"],
 ];
 
 const metricFromIndexDef = (definition: string): Metric | undefined =>

@@ -4,6 +4,7 @@ import { Index } from "@upstash/vector";
 
 import type { VecstoreError } from "../../src/errors";
 import { eq } from "../../src/filter/ast";
+import type { VecResult, VectorIndex } from "../../src/types";
 import type {
   UpstashIndexLike,
   UpstashInfo,
@@ -142,6 +143,38 @@ const errorKinds: [string, VecstoreError["kind"]][] = [
   ["Vector dimension 2 does not match index dimension 3", "invalid_argument"],
   ["Something went wrong on our side", "provider"],
 ];
+
+type IndexCall = (index: VectorIndex) => VecResult<unknown>;
+
+const indexCalls: [string, IndexCall][] = [
+  ["upsert", (index) => index.upsert([{ id: "a", vector: [1, 0, 0] }])],
+  ["fetch", (index) => index.fetch(["a"])],
+  ["query", (index) => index.query({ topK: 1, vector: [1, 0, 0] })],
+  ["delete by ids", (index) => index.delete({ ids: ["a"] })],
+  ["delete by filter", (index) => index.delete({ filter: eq("genre", "x") })],
+  ["delete all", (index) => index.delete({ all: true })],
+];
+
+const callRows = (values: readonly string[]): [string, string, IndexCall][] =>
+  values.flatMap((value) =>
+    indexCalls.map(([verb, call]): [string, string, IndexCall] => [
+      verb,
+      value,
+      call,
+    ])
+  );
+
+const UNWRITABLE_NAMESPACES = ["C:\\a", `it's "x"`];
+const DOT_SEGMENTS = [".", ".."];
+
+const NO_CALLS: Recorded = {
+  deletedNamespaces: [],
+  deletes: [],
+  fetches: [],
+  queries: [],
+  resets: [],
+  upserts: [],
+};
 
 describe(createUpstashStore, () => {
   test("the real Upstash client is accepted and returned as raw", () => {
@@ -472,6 +505,97 @@ describe(createUpstashStore, () => {
     expect(recorded.upserts).toStrictEqual([]);
   });
 
+  test("a default namespace fetch ignores another namespace's stored id", async () => {
+    const { client } = fakeClient();
+    const store = createUpstashStore({ client });
+    await store
+      .index("docs", { namespace: "tenant-a" })
+      .upsert([{ id: "doc-1", vector: [1, 2, 3] }]);
+    await expect(
+      store.index("docs").fetch(["tenant-a/5/doc-1"])
+    ).resolves.toStrictEqual({ ok: true, value: [] });
+  });
+
+  test("a default namespace fetch returns its own record, not another namespace's", async () => {
+    const { client } = fakeClient();
+    const store = createUpstashStore({ client });
+    await store
+      .index("docs", { namespace: "tenant-a" })
+      .upsert([{ id: "doc-1", metadata: { owner: "a" }, vector: [1, 2, 3] }]);
+    await store
+      .index("docs")
+      .upsert([
+        { id: "doc-1", metadata: { owner: "default" }, vector: [4, 5, 6] },
+      ]);
+    await expect(
+      store.index("docs").fetch(["doc-1", "tenant-a/5/doc-1"])
+    ).resolves.toStrictEqual({
+      ok: true,
+      value: [{ id: "doc-1", metadata: { owner: "default" }, vector: [] }],
+    });
+  });
+
+  test("a named namespace fetch still returns its own records", async () => {
+    const { client } = fakeClient();
+    const store = createUpstashStore({ client });
+    const tenantA = store.index("docs", { namespace: "tenant-a" });
+    await tenantA.upsert([
+      { id: "doc-1", metadata: { n: 1 }, vector: [1, 2, 3] },
+    ]);
+    await store
+      .index("docs", { namespace: "tenant-b" })
+      .upsert([{ id: "doc-1", vector: [4, 5, 6] }]);
+    await store.index("docs").upsert([{ id: "doc-1", vector: [7, 8, 9] }]);
+    await expect(tenantA.fetch(["doc-1"])).resolves.toStrictEqual({
+      ok: true,
+      value: [{ id: "doc-1", metadata: { n: 1 }, vector: [] }],
+    });
+  });
+
+  test.each(callRows(UNWRITABLE_NAMESPACES))(
+    "metadata mode %s rejects the namespace %j before calling the provider",
+    async (_verb, namespace, call) => {
+      const { client, recorded } = fakeClient();
+      const result = await call(
+        createUpstashStore({ client }).index("docs", { namespace })
+      );
+      expect(result).toMatchObject({
+        error: { kind: "invalid_argument", provider: "upstash" },
+        ok: false,
+      });
+      expect(recorded).toStrictEqual(NO_CALLS);
+    }
+  );
+
+  test.each(["it's", 'say "x"', "plain", "C:", "tenant-a_1"])(
+    "metadata mode still accepts the namespace %j",
+    async (namespace) => {
+      const { client } = fakeClient();
+      const index = createUpstashStore({ client }).index("docs", { namespace });
+      await expect(
+        index.upsert([{ id: "a", vector: [1, 0, 0] }])
+      ).resolves.toMatchObject({ ok: true });
+      await expect(
+        index.query({ topK: 1, vector: [1, 0, 0] })
+      ).resolves.toMatchObject({
+        ok: true,
+      });
+    }
+  );
+
+  test.each(callRows(DOT_SEGMENTS))(
+    "metadata mode %s rejects the index name %j before calling the provider",
+    async (_verb, name, call) => {
+      const { client, recorded } = fakeClient();
+      const result = await call(createUpstashStore({ client }).index(name));
+      expect(result).toMatchObject({
+        error: { kind: "invalid_argument", provider: "upstash" },
+        ok: false,
+      });
+      expect(recorded).toStrictEqual(NO_CALLS);
+    }
+  );
+
   test("metadata mode rejects a record that sets a reserved metadata key", async () => {
     const { client, recorded } = fakeClient();
     const result = await createUpstashStore({ client })
@@ -661,4 +785,44 @@ describe("upstash native namespaces", () => {
       .upsert([{ id: "a", vector: [1, 0, 0] }]);
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
   });
+
+  test("native mode fetch returns a record whose metadata carries a _namespace field", async () => {
+    const { client } = fakeClient();
+    const index = nativeStore(client).index("docs");
+    await index.upsert([
+      { id: "x", metadata: { _namespace: "other" }, vector: [1, 0, 0] },
+    ]);
+    await expect(index.fetch(["x"])).resolves.toStrictEqual({
+      ok: true,
+      value: [{ id: "x", metadata: { _namespace: "other" }, vector: [] }],
+    });
+  });
+
+  test.each(callRows(UNWRITABLE_NAMESPACES))(
+    "native mode %s rejects the namespace %j before calling the provider",
+    async (_verb, namespace, call) => {
+      const { client, recorded } = fakeClient();
+      const result = await call(
+        nativeStore(client).index("docs", { namespace })
+      );
+      expect(result).toMatchObject({
+        error: { kind: "invalid_argument", provider: "upstash" },
+        ok: false,
+      });
+      expect(recorded).toStrictEqual(NO_CALLS);
+    }
+  );
+
+  test.each(callRows(DOT_SEGMENTS))(
+    "native mode %s rejects the index name %j before calling the provider",
+    async (_verb, name, call) => {
+      const { client, recorded } = fakeClient();
+      const result = await call(nativeStore(client).index(name));
+      expect(result).toMatchObject({
+        error: { kind: "invalid_argument", provider: "upstash" },
+        ok: false,
+      });
+      expect(recorded).toStrictEqual(NO_CALLS);
+    }
+  );
 });

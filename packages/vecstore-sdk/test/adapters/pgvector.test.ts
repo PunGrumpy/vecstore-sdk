@@ -251,7 +251,7 @@ describe(createPgvectorStore, () => {
         "2000",
         3,
       ],
-      text: `SELECT id, metadata, embedding::text AS embedding, -(embedding <#> $2::vector) AS score FROM "docs" WHERE namespace = $1 AND ((metadata @> $3::jsonb OR metadata @> $4::jsonb) AND (jsonb_typeof((metadata->$5::text)) = 'number' AND (metadata->$5::text) > $6::jsonb)) ORDER BY embedding <#> $2::vector LIMIT $7`,
+      text: `SELECT id, metadata, embedding::text AS embedding, -(embedding <#> $2::vector) AS score FROM "docs" WHERE namespace = $1 AND ((metadata @> $3::jsonb OR metadata @> $4::jsonb) AND ((metadata->$5::text) IS NOT NULL AND jsonb_typeof((metadata->$5::text)) = 'number' AND (metadata->$5::text) > $6::jsonb)) ORDER BY embedding <#> $2::vector LIMIT $7`,
     });
     await store.index("docs").query({ topK: 1, vector: [0, 0] });
     expect(calls).toHaveLength(3);
@@ -299,7 +299,7 @@ describe(createPgvectorStore, () => {
       .index("docs")
       .query({ topK: 3, vector: [1, 2] });
     expect(calls[1]?.text).toBe(
-      `SELECT hits.* FROM (SELECT set_config('hnsw.iterative_scan', CASE WHEN current_setting('hnsw.iterative_scan', true) IN ('strict_order', 'relaxed_order') THEN current_setting('hnsw.iterative_scan', true) ELSE 'strict_order' END, true) AS scan) AS tuning CROSS JOIN LATERAL (SELECT id, metadata,  embedding <-> $2::vector AS score FROM "docs" WHERE namespace = $1 AND tuning.scan IS NOT NULL ORDER BY embedding <-> $2::vector LIMIT $3) AS hits ORDER BY hits.score ASC`
+      `SELECT hits.* FROM (SELECT set_config('hnsw.iterative_scan', CASE WHEN current_setting('hnsw.iterative_scan', true) IN ('strict_order', 'relaxed_order') THEN current_setting('hnsw.iterative_scan', true) ELSE 'strict_order' END, true) AS scan) AS tuning CROSS JOIN LATERAL (SELECT id, metadata,  embedding <-> $2::vector AS score, embedding <-> $2::vector AS distance FROM "docs" WHERE namespace = $1 AND tuning.scan IS NOT NULL ORDER BY embedding <-> $2::vector LIMIT $3) AS hits ORDER BY hits.distance`
     );
   });
 

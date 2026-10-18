@@ -49,7 +49,7 @@ const compileNode = (filter: Filter, column: string, param: Param): string => {
       const path = fieldPath(filter.field);
       const operator = RANGE_OPERATORS[filter.kind];
       const value = `${param(JSON.stringify(filter.value))}::jsonb`;
-      return `(jsonb_typeof(${path}) = 'number' AND ${path} ${operator} ${value})`;
+      return `(${path} IS NOT NULL AND jsonb_typeof(${path}) = 'number' AND ${path} ${operator} ${value})`;
     }
     case "in": {
       return containsAny(column, filter.field, filter.values, param);

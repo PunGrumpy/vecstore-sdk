@@ -171,11 +171,13 @@ export const demoExamples: readonly DemoExample[] = [
     output: {
       pgvector: `((metadata @> $1::jsonb
   OR metadata @> $2::jsonb)
-  AND (jsonb_typeof(
-    (metadata->$3::text))
-    = 'number'
+  AND ((metadata->$3::text)
+    IS NOT NULL
+    AND jsonb_typeof(
+      (metadata->$3::text))
+      = 'number'
     AND (metadata->$3::text)
-    > $4::jsonb))
+      > $4::jsonb))
 
 $1 = '{"genre":"drama"}'
 $2 = '{"genre":["drama"]}'
@@ -203,7 +205,8 @@ $4 = '2000'`,
   @year:[(2000 +inf])`,
       supabase: `((metadata @> '{"genre": "drama"}'::jsonb
   OR metadata @> '{"genre": ["drama"]}'::jsonb)
-  AND (jsonb_typeof((metadata -> 'year'::text))
+  AND ((metadata -> 'year'::text) IS NOT NULL
+    AND jsonb_typeof((metadata -> 'year'::text))
         = 'number'
     AND (metadata -> 'year'::text) > '2000'::jsonb))`,
       upstash: `(genre = 'drama' AND year > 2000)`,
@@ -222,10 +225,12 @@ $4 = '2000'`,
     id: "range",
     label: "Range",
     output: {
-      pgvector: `((jsonb_typeof((metadata->$1::text))
+      pgvector: `(((metadata->$1::text) IS NOT NULL
+    AND jsonb_typeof((metadata->$1::text))
         = 'number'
     AND (metadata->$1::text) >= $2::jsonb)
-  AND (jsonb_typeof((metadata->$3::text))
+  AND ((metadata->$3::text) IS NOT NULL
+    AND jsonb_typeof((metadata->$3::text))
         = 'number'
     AND (metadata->$3::text) <= $4::jsonb))
 
@@ -251,12 +256,14 @@ $3 = 'price'   $4 = '100'`,
 }`,
       redis: `(@price:[10 +inf]
   @price:[-inf 100])`,
-      supabase: `((jsonb_typeof((metadata -> 'price'::text))
-      = 'number'
-  AND (metadata -> 'price'::text) >= '10'::jsonb)
-  AND (jsonb_typeof((metadata -> 'price'::text))
-      = 'number'
-  AND (metadata -> 'price'::text) <= '100'::jsonb))`,
+      supabase: `(((metadata -> 'price'::text) IS NOT NULL
+    AND jsonb_typeof((metadata -> 'price'::text))
+        = 'number'
+    AND (metadata -> 'price'::text) >= '10'::jsonb)
+  AND ((metadata -> 'price'::text) IS NOT NULL
+    AND jsonb_typeof((metadata -> 'price'::text))
+        = 'number'
+    AND (metadata -> 'price'::text) <= '100'::jsonb))`,
       upstash: `(price >= 10 AND price <= 100)`,
       vectorize: `{
   "price": { "$gte": 10, "$lte": 100 }

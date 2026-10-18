@@ -5,14 +5,22 @@ import type { PGlite } from "@electric-sql/pglite";
 import { eq, gte, ne } from "../../src/filter/ast";
 import { createPgvectorStore } from "../../src/pgvector";
 import type { DeleteSelector } from "../../src/types";
-import { containsCases, liveCases, setupLive } from "../live/conformance";
+import {
+  containsCases,
+  liveCases,
+  negatedRangeCases,
+  setupLive,
+} from "../live/conformance";
 import { emptySelector, filterWithoutValue } from "../malformed";
 import {
+  AVOID_INDEX_SCAN,
   ensureRoles,
   FORCE_INDEX_SCAN,
   isDescending,
+  NEAREST_FIRST_ZERO_LAST,
   spreadRecords,
   usePostgres,
+  zeroVectorRecords,
 } from "./pglite";
 
 describe("pgvector on PGlite", () => {
@@ -21,9 +29,12 @@ describe("pgvector on PGlite", () => {
     isolated: true,
   });
 
-  test.each([...containsCases, ...liveCases])("%s", async (_name, run) => {
-    await expect(run(live())).resolves.toBeUndefined();
-  });
+  test.each([...containsCases, ...liveCases, ...negatedRangeCases])(
+    "%s",
+    async (_name, run) => {
+      await expect(run(live())).resolves.toBeUndefined();
+    }
+  );
 });
 
 describe("index lifecycle on PGlite", () => {
@@ -58,6 +69,29 @@ describe("index lifecycle on PGlite", () => {
     if (result.ok) {
       expect(result.value[0]?.score).toBe(0);
     }
+  });
+
+  test("a euclidean index named after an opclass keeps its metric", async () => {
+    const store = createPgvectorStore({ client: db() });
+    const name = "x_vector_cosine_ops";
+    const created = await store.createIndex({
+      dimension: 3,
+      metric: "euclidean",
+      name,
+    });
+    expect(created.ok).toBeTruthy();
+    const index = store.index(name);
+    await index.upsert([
+      { id: "same", vector: [1, 0, 0] },
+      { id: "far", vector: [-9, 0, 0] },
+    ]);
+    const result = await index.query({ topK: 2, vector: [1, 0, 0] });
+    expect(
+      result.ok && result.value.map((match) => [match.id, match.score])
+    ).toStrictEqual([
+      ["same", 0],
+      ["far", 10],
+    ]);
   });
 
   test("createIndex rejects a name over 49 bytes and creates nothing", async () => {
@@ -121,6 +155,30 @@ describe("queries through the HNSW index on PGlite", () => {
       { "hnsw.iterative_scan": "relaxed_order" },
     ]);
   });
+});
+
+describe("a cosine query that meets a zero vector on PGlite", () => {
+  const db = usePostgres(async (client) => {
+    const store = createPgvectorStore({ client });
+    await store.createIndex({ dimension: 2, name: "wrapped" });
+    await store.index("wrapped").upsert(zeroVectorRecords);
+    await store.createIndex({ dimension: 2, name: "plain" });
+    await client.exec('drop index "plain_embedding_idx"');
+    await store.index("plain").upsert(zeroVectorRecords);
+    await client.exec(AVOID_INDEX_SCAN);
+  });
+
+  test.each([["wrapped"], ["plain"]])(
+    "ranks the zero vector last on the %s path",
+    async (name) => {
+      const result = await createPgvectorStore({ client: db() })
+        .index(name)
+        .query({ topK: 4, vector: [1, 0] });
+      expect(result.ok && result.value.map((match) => match.id)).toStrictEqual(
+        NEAREST_FIRST_ZERO_LAST
+      );
+    }
+  );
 });
 
 describe("a store that met a missing table on PGlite", () => {

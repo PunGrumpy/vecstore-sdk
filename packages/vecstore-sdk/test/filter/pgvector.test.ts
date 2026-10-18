@@ -31,10 +31,10 @@ describe(compilePgvectorFilter, () => {
     });
   });
 
-  test("range operators guard on the JSON type and compare as jsonb", () => {
+  test("range operators guard on a present JSON number and compare as jsonb", () => {
     expect(compilePgvectorFilter(gt("year", 2000))).toStrictEqual({
       params: ["year", "2000"],
-      text: "(jsonb_typeof((metadata->$1::text)) = 'number' AND (metadata->$1::text) > $2::jsonb)",
+      text: "((metadata->$1::text) IS NOT NULL AND jsonb_typeof((metadata->$1::text)) = 'number' AND (metadata->$1::text) > $2::jsonb)",
     });
     expect(compilePgvectorFilter(gte("year", 2000)).text).toContain(" >= ");
     expect(compilePgvectorFilter(lt("year", 2000)).text).toContain(" < ");
@@ -89,7 +89,7 @@ describe(compilePgvectorFilter, () => {
       })
     ).toStrictEqual({
       params: ['{"a":1}', '{"a":[1]}', "b", "2"],
-      text: "((t.meta @> $4::jsonb OR t.meta @> $5::jsonb) AND (jsonb_typeof((t.meta->$6::text)) = 'number' AND (t.meta->$6::text) > $7::jsonb))",
+      text: "((t.meta @> $4::jsonb OR t.meta @> $5::jsonb) AND ((t.meta->$6::text) IS NOT NULL AND jsonb_typeof((t.meta->$6::text)) = 'number' AND (t.meta->$6::text) > $7::jsonb))",
     });
   });
 });

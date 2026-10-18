@@ -54,6 +54,17 @@ export const installSupabaseSql = async (db: PGlite): Promise<void> => {
 export const FORCE_INDEX_SCAN =
   "set enable_seqscan = off; set enable_bitmapscan = off; set enable_sort = off";
 
+export const AVOID_INDEX_SCAN = "set enable_indexscan = off";
+
+export const zeroVectorRecords: VectorRecord[] = [
+  { id: "zero", vector: [0, 0] },
+  { id: "x", vector: [1, 0] },
+  { id: "y", vector: [0, 1] },
+  { id: "nx", vector: [-1, 0] },
+];
+
+export const NEAREST_FIRST_ZERO_LAST = ["x", "y", "nx", "zero"];
+
 const SPREAD = 7;
 const RARE_EVERY = 10;
 const RECORDS_PER_NAMESPACE = 200;

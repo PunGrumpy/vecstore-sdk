@@ -104,7 +104,7 @@ begin
       when 'lt' then '<'
       else '<='
     end;
-    return '(jsonb_typeof(' || path || ') = ''number'' AND ' || path || ' '
+    return '(' || path || ' IS NOT NULL AND jsonb_typeof(' || path || ') = ''number'' AND ' || path || ' '
       || operator || ' ' || quote_literal(match_filter -> 'value') || '::jsonb)';
   end if;
 
@@ -135,17 +135,17 @@ as $$
   select coalesce(
     (
       select case
-        when indexdef like '%vector_cosine_ops%' then 'cosine'
-        when indexdef like '%vector_ip_ops%' then 'dot'
-        when indexdef like '%vector_l2_ops%' then 'euclidean'
+        when strpos(indexdef, '(embedding vector_cosine_ops)') > 0 then 'cosine'
+        when strpos(indexdef, '(embedding vector_ip_ops)') > 0 then 'dot'
+        when strpos(indexdef, '(embedding vector_l2_ops)') > 0 then 'euclidean'
       end
       from pg_indexes
       where tablename = index_name
         and schemaname = coalesce(index_schema, current_schema())
         and (
-          indexdef like '%vector_cosine_ops%'
-          or indexdef like '%vector_ip_ops%'
-          or indexdef like '%vector_l2_ops%'
+          strpos(indexdef, '(embedding vector_cosine_ops)') > 0
+          or strpos(indexdef, '(embedding vector_ip_ops)') > 0
+          or strpos(indexdef, '(embedding vector_l2_ops)') > 0
         )
       limit 1
     ),
@@ -284,7 +284,6 @@ declare
     when 'dot' then '-(' || distance || ')'
     else '1 - (' || distance || ')'
   end;
-  score_order text := case metric when 'euclidean' then 'asc' else 'desc' end;
   where_sql text := 'namespace = ' || quote_literal(match_namespace);
 begin
   if match_filter is not null then
@@ -309,16 +308,16 @@ begin
 
   return query execute format(
     'select hits.id, hits.metadata, hits.embedding, hits.score from (
-       select id, metadata, %s as embedding, %s as score
+       select id, metadata, %s as embedding, %s as score, %s as distance
        from %s where %s order by %s limit %s
-     ) as hits order by hits.score %s',
+     ) as hits order by hits.distance',
     case when include_vector then 'embedding::text' else 'null::text' end,
     score_sql,
+    distance,
     vecstore_table(index_name, index_schema),
     where_sql,
     distance,
-    match_count,
-    score_order
+    match_count
   );
 end;
 $$;

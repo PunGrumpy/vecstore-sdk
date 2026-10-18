@@ -41,6 +41,13 @@ const corpus: [string, Filter, string[] | undefined][] = [
   ["nin on a list field", notIn("tags", ["y"]), ["c", "d"]],
   ["exists", exists("tags"), ["a", "b", "d"]],
   ["not exists", not(exists("tags")), ["c"]],
+  ["not gt matches a missing field", not(gt("year", 2000)), ["a", "c", "d"]],
+  ["not lte matches a missing field", not(lte("year", 1999)), ["b", "c"]],
+  [
+    "not around an or of a range matches a missing field",
+    not(or(gt("year", 2000), eq("genre", "comedy"))),
+    ["a", "c", "d"],
+  ],
   ["and", and(eq("genre", "drama"), gt("year", 1990)), ["a"]],
   ["or", or(eq("genre", "horror"), isIn("tags", ["y"])), ["a", "b", "c"]],
   ["not in", not(isIn("tags", ["x"])), ["b", "c", "d"]],

@@ -49,7 +49,8 @@ The filter `and(eq("genre", "drama"), gt("year", 2000))` compiles to:
 
 ```sql title="pgvector and Supabase"
 ((metadata @> $1::jsonb OR metadata @> $2::jsonb)
-  AND (jsonb_typeof((metadata->$3::text)) = 'number'
+  AND ((metadata->$3::text) IS NOT NULL
+    AND jsonb_typeof((metadata->$3::text)) = 'number'
     AND (metadata->$3::text) > $4::jsonb))
 -- $1 = '{"genre":"drama"}', $2 = '{"genre":["drama"]}', $3 = 'year', $4 = '2000'
 ```

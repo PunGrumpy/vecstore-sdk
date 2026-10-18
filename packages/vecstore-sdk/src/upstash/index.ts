@@ -23,6 +23,7 @@ import {
 } from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
+import { isNetworkFailure } from "../internal/network";
 import { queryOptionsError } from "../internal/query-options";
 import { err } from "../result";
 import type {
@@ -159,6 +160,7 @@ const isConnectionFailure = (cause: unknown): boolean => {
     return false;
   }
   return (
+    isNetworkFailure(cause) ||
     cause.message === "fetch failed" ||
     cause.message === "Exhausted all retries" ||
     cause.name === "AbortError"

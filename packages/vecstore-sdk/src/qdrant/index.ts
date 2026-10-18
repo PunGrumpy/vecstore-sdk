@@ -23,6 +23,7 @@ import {
 } from "../internal/metadata";
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
+import { isNetworkFailure } from "../internal/network";
 import { queryOptionsError } from "../internal/query-options";
 import { deterministicUuid, isSurrogateUuid, isUuid } from "../internal/uuid";
 import { err } from "../result";
@@ -254,7 +255,7 @@ const isConnectionFailure = (cause: unknown): boolean => {
   if (cause.name === "QdrantClientTimeoutError") {
     return true;
   }
-  return cause.name === "TypeError" && cause.message === "fetch failed";
+  return isNetworkFailure(cause);
 };
 
 export const normalizeQdrantError = (

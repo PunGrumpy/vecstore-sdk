@@ -28,7 +28,16 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          package_files="$(git diff --name-only "$BASE_SHA" HEAD -- 'packages/*/src/**' 'packages/*/package.json')"
+          package_files="$(
+            git diff --name-only "$BASE_SHA" HEAD -- 'packages/*/src/**' 'packages/*/package.json' |
+              while IFS= read -r file; do
+                if [ "${file##*/}" = package.json ] &&
+                  [ "$(git show "$BASE_SHA:$file" 2>/dev/null | jq -S 'del(.devDependencies)')" = "$(jq -S 'del(.devDependencies)' "$file" 2>/dev/null)" ]; then
+                  continue
+                fi
+                echo "$file"
+              done
+          )"
           changeset_files="$(git diff --diff-filter=A --name-only "$BASE_SHA" HEAD -- '.changeset/*.md')"
 
           if [ -n "$package_files" ] && [ -z "$changeset_files" ]; then

@@ -1,5 +1,7 @@
 // Rank check for the docs search. Fetches /api/search from one or more running
 // builds of apps/web and reports where the page that documents each query lands.
+// The search lists a page followed by its hits, so a page ranks by where its
+// first result appears among the distinct pages, not by its index in the list.
 //
 //   bun scripts/search-ranks.ts main=http://localhost:3000
 //   bun scripts/search-ranks.ts before=http://localhost:4061 after=http://localhost:4062
@@ -43,8 +45,12 @@ const search = async (base: string, query: string): Promise<SearchResult[]> => {
   return (await response.json()) as SearchResult[];
 };
 
-const rankOf = (results: readonly SearchResult[], page: string): string => {
-  const index = results.findIndex((result) => pagePath(result.url) === page);
+const pagesOf = (results: readonly SearchResult[]): string[] => [
+  ...new Set(results.map((result) => pagePath(result.url))),
+];
+
+const rankOf = (pages: readonly string[], page: string): string => {
+  const index = pages.indexOf(page);
   return index === -1 ? "-" : `#${index + 1}`;
 };
 
@@ -90,9 +96,10 @@ console.log(
 );
 console.log(`| --- | --- | ${targets.map(() => "---").join(" | ")} |`);
 for (const { found, page, query } of rows) {
-  const cells = found.map(
-    ({ results }) => `${rankOf(results, page)} of ${results.length}`
-  );
+  const cells = found.map(({ results }) => {
+    const pages = pagesOf(results);
+    return `${rankOf(pages, page)} of ${pages.length}`;
+  });
   console.log(`| \`${query}\` | \`${page}\` | ${cells.join(" | ")} |`);
 }
 
@@ -100,8 +107,8 @@ if (top > 0) {
   for (const { found, query } of rows) {
     for (const { label, results } of found) {
       console.log(`\n${label} · ${query}`);
-      for (const [index, result] of results.slice(0, top).entries()) {
-        console.log(`  ${index + 1}. ${result.url}`);
+      for (const [index, page] of pagesOf(results).slice(0, top).entries()) {
+        console.log(`  ${index + 1}. ${page}`);
       }
     }
   }

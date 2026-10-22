@@ -24,13 +24,28 @@ interface SearchResult {
   readonly url: string;
 }
 
+const STORE = "/docs/core/store";
+
 const PROBES: readonly Probe[] = [
+  // A concept or an API name, documented on one page.
   { page: "/docs/core/filters", query: "filter" },
-  { page: "/docs/core/store", query: "upsert" },
+  { page: STORE, query: "upsert" },
   { page: "/docs/core/filters", query: "eq" },
   { page: "/docs/guides/migration", query: "namespace" },
   { page: "/docs/providers/upstash", query: "namespace" },
+  // A provider name, which is also a column header in the comparison tables.
+  { page: "/docs/providers/pinecone", query: "pinecone" },
+  { page: "/docs/providers/redis", query: "redis" },
+  { page: "/docs/providers/vectorize", query: "vectorize" },
+  { page: "/docs/providers/upstash", query: "upstash" },
+  { page: "/docs/providers/supabase", query: "supabase" },
+  { page: "/docs/providers/pgvector", query: "pgvector" },
   { page: "/docs/providers/qdrant", query: "qdrant" },
+  // Queries that never regressed, to catch a change that makes them worse.
+  { page: STORE, query: "createIndex" },
+  { page: STORE, query: "topK" },
+  { page: "/docs/getting-started", query: "install" },
+  { page: STORE, query: "delete" },
 ];
 
 const pagePath = (url: string): string => url.split("#")[0] ?? url;

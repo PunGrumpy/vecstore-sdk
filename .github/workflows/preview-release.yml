@@ -7,8 +7,6 @@ on:
   pull_request:
 
 concurrency:
-  # Keyed by PR number rather than head_ref: two fork PRs can share a branch
-  # name, and a name-keyed group would let one push cancel an unrelated run.
   group: preview-release-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 

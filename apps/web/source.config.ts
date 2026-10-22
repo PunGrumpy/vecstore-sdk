@@ -35,5 +35,18 @@ export default defineConfig({
     rehypeCodeOptions: {
       themes: { dark: geistShikiTheme, light: geistShikiTheme },
     },
+    // fumadocs 16.17 indexes a table as one record per row, header row included.
+    // Those records are long, so a query for an API name that sits in a table
+    // cell scores below short headings elsewhere and the page that documents
+    // it drops down the results. Index each cell on its own, as 16.15 did.
+    remarkStructureOptions: {
+      types: [
+        "heading",
+        "paragraph",
+        "blockquote",
+        "tableCell",
+        "mdxJsxFlowElement",
+      ],
+    },
   },
 });

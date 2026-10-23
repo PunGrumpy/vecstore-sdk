@@ -447,17 +447,6 @@
 }
 
 @layer base {
-  * {
-    @apply border-gray-alpha-400 outline-gray-600/50;
-  }
-
-  body {
-    @apply bg-background-100 text-gray-1000;
-  }
-}
-
-/* This layer is by PunGrumpy */
-@layer base {
   *,
   ::after,
   ::before,

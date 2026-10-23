@@ -15,15 +15,19 @@ const MENU_GAP = 8;
 
 const serialize = (svg: SVGSVGElement): string => {
   const clone = svg.cloneNode(true);
+
   if (!(clone instanceof SVGSVGElement)) {
     return "";
   }
+
   const ink = document.documentElement.classList.contains("dark")
     ? "#ededed"
     : "#171717";
+
   clone.removeAttribute("class");
   clone.removeAttribute("aria-hidden");
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+
   return new XMLSerializer()
     .serializeToString(clone)
     .replaceAll("currentColor", ink);
@@ -44,7 +48,9 @@ const CopyTile = ({
     if (status === "idle") {
       return;
     }
+
     const timer = window.setTimeout(() => setStatus("idle"), COPIED_MS);
+
     return () => window.clearTimeout(timer);
   }, [status]);
 
@@ -53,9 +59,11 @@ const CopyTile = ({
       className="text-gray-1000 hover:bg-gray-alpha-100 flex min-w-0 flex-col gap-2 rounded-md p-2 text-left text-[14px] transition-colors"
       onClick={async (event) => {
         event.stopPropagation();
+
         if (!svgRef.current) {
           return;
         }
+
         try {
           await navigator.clipboard.writeText(serialize(svgRef.current));
           setStatus("copied");
@@ -98,18 +106,23 @@ export const BrandMenu = ({ children }: { readonly children: ReactNode }) => {
 
   useEffect(() => {
     const anchor = anchorRef.current?.closest("a") ?? anchorRef.current;
+
     if (!anchor) {
       return;
     }
+
     anchor.setAttribute("aria-haspopup", "menu");
     anchor.setAttribute("aria-controls", menuId);
+
     const handle = (event: Event) => {
       event.preventDefault();
       const rect = anchor.getBoundingClientRect();
       setPosition({ left: rect.left, top: rect.bottom + MENU_GAP });
       setOpen(true);
     };
+
     anchor.addEventListener("contextmenu", handle);
+
     return () => anchor.removeEventListener("contextmenu", handle);
   }, [menuId]);
 
@@ -122,11 +135,14 @@ export const BrandMenu = ({ children }: { readonly children: ReactNode }) => {
     if (!open) {
       return;
     }
+
     menuRef.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
+
     const close = (event: Event) => {
       if (event instanceof KeyboardEvent && event.key !== "Escape") {
         return;
       }
+
       if (
         event instanceof PointerEvent &&
         event.target instanceof Node &&
@@ -134,11 +150,14 @@ export const BrandMenu = ({ children }: { readonly children: ReactNode }) => {
       ) {
         return;
       }
+
       setOpen(false);
       (anchorRef.current?.closest("a") ?? anchorRef.current)?.focus();
     };
+
     document.addEventListener("keydown", close);
     document.addEventListener("pointerdown", close);
+
     return () => {
       document.removeEventListener("keydown", close);
       document.removeEventListener("pointerdown", close);
@@ -148,34 +167,44 @@ export const BrandMenu = ({ children }: { readonly children: ReactNode }) => {
   const moveFocus = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Tab") {
       setOpen(false);
+
       return;
     }
+
     const items = [
       ...(menuRef.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ??
         []),
     ];
+
     const active = document.activeElement;
     const index = active instanceof HTMLElement ? items.indexOf(active) : -1;
+
     const resolveTarget = (): HTMLElement | undefined => {
       switch (event.key) {
         case "ArrowDown": {
           return items.at((index + 1) % items.length);
         }
+
         case "ArrowUp": {
           return items.at((index - 1 + items.length) % items.length);
         }
+
         case "End": {
           return items.at(-1);
         }
+
         case "Home": {
           return items[0];
         }
+
         default: {
           return undefined;
         }
       }
     };
+
     const target = resolveTarget();
+
     if (target) {
       event.preventDefault();
       target.focus();

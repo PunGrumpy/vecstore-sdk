@@ -12,6 +12,7 @@ import type { StoreQuery } from "./query";
 const StoreCanvas = dynamic(
   async () => {
     const loaded = await import("./canvas");
+
     return loaded.StoreCanvas;
   },
   { ssr: false }
@@ -33,12 +34,14 @@ export const StoreStack = ({
 
   useEffect(() => {
     const scene = sceneRef.current;
+
     if (
       !scene ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
       return;
     }
+
     let frame = 0;
 
     const onMove = (event: PointerEvent) => {
@@ -53,6 +56,7 @@ export const StoreStack = ({
     };
 
     window.addEventListener("pointermove", onMove);
+
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", onMove);

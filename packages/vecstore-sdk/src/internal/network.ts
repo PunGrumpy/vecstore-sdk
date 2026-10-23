@@ -27,6 +27,7 @@ export const isNetworkFailure = (cause: unknown): boolean => {
   if (!(cause instanceof Error)) {
     return false;
   }
+
   return (
     carriesNetworkCode(cause) ||
     carriesNetworkCode(cause.cause) ||

@@ -30,6 +30,7 @@ import {
 } from "./pglite";
 
 type ValueOf<T> = T extends object ? T[keyof T] : never;
+
 type RpcArgValue = ValueOf<SupabaseCall["args"]>;
 
 type RpcParam = string | number | boolean | null;
@@ -43,15 +44,19 @@ const placeholder = (key: string, position: number): string => {
   if (JSONB_ARGS.has(key)) {
     return `$${position}::jsonb`;
   }
+
   if (INT_ARGS.has(key)) {
     return `$${position}::int`;
   }
+
   if (BOOLEAN_ARGS.has(key)) {
     return `$${position}::boolean`;
   }
+
   if (TEXT_ARRAY_ARGS.has(key)) {
     return `(select array(select jsonb_array_elements_text(v)) from (select $${position}::jsonb as v) t where v is not null)`;
   }
+
   return `$${position}::text`;
 };
 
@@ -59,30 +64,38 @@ const toParam = (key: string, value: RpcArgValue): RpcParam => {
   if (value === null || value === undefined) {
     return null;
   }
+
   if (JSONB_ARGS.has(key) || TEXT_ARRAY_ARGS.has(key)) {
     return JSON.stringify(value);
   }
+
   if (isString(value) || isNumber(value) || isBoolean(value)) {
     return value;
   }
+
   throw new Error(`unexpected rpc argument type for ${key}`);
 };
 
 export const rpcClient = (db: PGlite): SupabaseClientLike => ({
   rpc: async (fn, args) => {
     const entries = Object.entries(args);
+
     const named = entries
       .map(([key], index) => `${key} => ${placeholder(key, index + 1)}`)
       .join(", ");
+
     const params = entries.map(([key, value]) => toParam(key, value));
+
     try {
       const result = await db.query<object>(
         `select * from ${fn}(${named})`,
         params
       );
+
       return { data: result.rows, error: null };
     } catch (error) {
       const code = hasCode(error) ? error.code : undefined;
+
       return { data: null, error: { code, message: errorMessage(error) } };
     }
   },
@@ -90,6 +103,7 @@ export const rpcClient = (db: PGlite): SupabaseClientLike => ({
 
 describe("supabase on PGlite", () => {
   const db = usePostgres(installSupabaseSql);
+
   const live = setupLive(
     () => createSupabaseStore({ client: rpcClient(db()) }),
     { isolated: true }
@@ -108,19 +122,23 @@ describe("vecstore_create_index index lifecycle on PGlite", () => {
 
   test("rejects a name over 49 bytes with a 22023 error", async () => {
     const name = "a".repeat(50);
+
     const response = await rpcClient(db()).rpc("vecstore_create_index", {
       dimension: 3,
       index_name: name,
       index_schema: null,
       metric: "cosine",
     });
+
     expect(response.error?.code).toBe("22023");
+
     const mapped = normalizeSupabaseError(
       Object.assign(new Error(response.error?.message ?? ""), {
         code: response.error?.code,
       }),
       { fn: "vecstore_create_index", index: name }
     );
+
     expect(mapped.kind).toBe("invalid_argument");
   });
 });
@@ -131,11 +149,13 @@ describe("vecstore_metric on PGlite", () => {
   test("a euclidean index named after an opclass keeps its metric", async () => {
     const store = createSupabaseStore({ client: rpcClient(db()) });
     const name = "x_vector_cosine_ops";
+
     const created = await store.createIndex({
       dimension: 3,
       metric: "euclidean",
       name,
     });
+
     expect(created.ok).toBeTruthy();
     const index = store.index(name);
     await index.upsert([
@@ -165,6 +185,7 @@ describe("a cosine vecstore_query that meets a zero vector on PGlite", () => {
     const result = await createSupabaseStore({ client: rpcClient(db()) })
       .index("zeroed")
       .query({ topK: 4, vector: [1, 0] });
+
     expect(result.ok && result.value.map((match) => match.id)).toStrictEqual(
       NEAREST_FIRST_ZERO_LAST
     );
@@ -176,6 +197,7 @@ describe("supabase install script", () => {
 
   const asAnon = async <T>(fn: () => PromiseLike<T>): Promise<T> => {
     await db().exec("set role anon");
+
     try {
       return await fn();
     } finally {
@@ -193,6 +215,7 @@ describe("supabase install script", () => {
     const result = await db().query<{ count: number }>(
       `select count(*) from ${table}`
     );
+
     return result.rows[0]?.count ?? -1;
   };
 
@@ -202,15 +225,18 @@ describe("supabase install script", () => {
     const rows = await db().query<{ relrowsecurity: boolean }>(
       "select relrowsecurity from pg_class where relname = 'secured_rls'"
     );
+
     expect(rows.rows[0]?.relrowsecurity).toBe(true);
   });
 
   test("anon reads nothing from a secured table until a policy exists", async () => {
     await createSecured("secured_anon");
     const store = createSupabaseStore({ client: rpcClient(db()) });
+
     const upserted = await store
       .index("secured_anon")
       .upsert([{ id: "a", vector: [0, 0, 1] }]);
+
     expect(upserted.ok).toBe(true);
 
     await ensureRoles(db(), ["anon"]);
@@ -235,6 +261,7 @@ describe("supabase install script", () => {
         metric: "cosine",
       })
     );
+
     expect(response.error?.code).toBe("42501");
   });
 
@@ -250,6 +277,7 @@ describe("supabase install script", () => {
       `select vecstore_filter_sql('{"kind":"and","filters":[{"kind":"eq","field":"t","value":"a"},{"kind":"lt","field":"p"}]}'::jsonb, 'metadata')`,
       `select vecstore_filter_sql('{"kind":"in","field":"g","values":[]}'::jsonb, 'metadata')`,
     ];
+
     await Promise.all(
       malformedQueries.map((query) =>
         expect(db().query(query)).rejects.toMatchObject({ code: "22023" })
@@ -257,6 +285,7 @@ describe("supabase install script", () => {
     );
 
     let deleteError: unknown;
+
     try {
       await db().query(
         "select vecstore_delete($1::text, null::text, $2::text, null::text[], $3::jsonb)",
@@ -265,6 +294,7 @@ describe("supabase install script", () => {
     } catch (error) {
       deleteError = error;
     }
+
     expect(hasCode(deleteError) && deleteError.code).toBe("22023");
 
     expect(await countRows("secured_closed")).toBe(1);
@@ -284,6 +314,7 @@ describe("vecstore_query through the HNSW index on PGlite", () => {
       .upsert(spreadRecords("b"));
     await client.exec(FORCE_INDEX_SCAN);
   });
+
   const index = () =>
     createSupabaseStore({ client: rpcClient(db()) }).index("filled", {
       namespace: "tenant-a",
@@ -302,6 +333,7 @@ describe("vecstore_query through the HNSW index on PGlite", () => {
       topK: 10,
       vector: [1, 0, 0],
     });
+
     expect(result.ok && result.value).toHaveLength(10);
   });
 });

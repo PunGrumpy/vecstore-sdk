@@ -6,6 +6,7 @@ import { createPgvectorStore } from "../../src/pgvector";
 import { containsCases, liveCases, setupLive } from "./conformance";
 
 const connectionString = process.env.PGVECTOR_URL;
+
 const enabled =
   process.env.VECSTORE_LIVE === "1" && connectionString !== undefined;
 

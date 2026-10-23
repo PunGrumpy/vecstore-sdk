@@ -30,6 +30,7 @@ const HASH_Y = 78.233;
 const HASH_SCALE = 43_758.5453;
 
 const HEADLINE = "One API for vector stores";
+
 const SUBTITLE = [
   "vecstore-sdk is an open-source TypeScript library that compiles one",
   "filter to Qdrant, pgvector, Pinecone, Supabase, Upstash Vector,",
@@ -69,6 +70,7 @@ const THEMES: Theme[] = [
 
 const hash = (column: number, row: number): number => {
   const value = Math.sin(column * HASH_X + row * HASH_Y) * HASH_SCALE;
+
   return value - Math.floor(value);
 };
 
@@ -81,21 +83,27 @@ const halftone = (theme: Theme): string => {
   const top = FRAME_INSET;
   const bottom = HEIGHT - FRAME_INSET;
   const dots: string[] = [];
+
   for (let y = top + DOT_SPACING; y < bottom; y += DOT_SPACING) {
     for (let x = left + DOT_SPACING; x < right; x += DOT_SPACING) {
       const progress = (x - left) / (right - left);
+
       const density =
         DENSITY_START + (DENSITY_END - DENSITY_START) * progress ** 2;
+
       if (hash(x, y) > density) {
         continue;
       }
+
       const radius =
         DOT_MIN_RADIUS + (DOT_MAX_RADIUS - DOT_MIN_RADIUS) * progress;
+
       dots.push(
         `<circle cx="${x}" cy="${y}" r="${radius.toFixed(2)}" fill="${theme.dot}"/>`
       );
     }
   }
+
   return `<rect x="${left}" y="${top}" width="${right - left}" height="${bottom - top}" fill="${theme.panel}"/>${dots.join(
     ""
   )}`;
@@ -103,6 +111,7 @@ const halftone = (theme: Theme): string => {
 
 const loadFont = (file: string): Font => {
   const bytes = readFileSync(file);
+
   return parse(
     bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
   );
@@ -173,11 +182,13 @@ const run = (): void => {
       throw new Error(`missing ${file}`);
     }
   }
+
   for (const theme of THEMES) {
     const svg = heroSvg(theme);
     writeFileSync(`assets/hero-${theme.name}.svg`, `${svg}\n`);
     writeFileSync(`assets/hero-${theme.name}.png`, renderPng(svg));
   }
+
   process.stdout.write(`${THEMES.length} themes rendered\n`);
 };
 

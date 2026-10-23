@@ -9,6 +9,7 @@ export type {
   UnsupportedError,
   VecstoreError,
 } from "./errors";
+
 export type {
   AndFilter,
   EqFilter,
@@ -27,6 +28,7 @@ export type {
   RangeFilter,
   Scalar,
 } from "./filter/ast";
+
 export {
   and,
   eq,
@@ -41,8 +43,11 @@ export {
   notIn,
   or,
 } from "./filter/ast";
+
 export type { Err, Ok, Result } from "./result";
+
 export { err, ok } from "./result";
+
 export type {
   DeleteSelector,
   FetchOptions,

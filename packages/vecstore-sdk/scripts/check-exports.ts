@@ -16,8 +16,11 @@ const PROVIDER_PACKAGES = [
 
 type ExportTarget =
   (typeof packageJson.exports)[keyof typeof packageJson.exports];
+
 type ImportableTarget = Extract<ExportTarget, { import: string }>;
+
 type ExportEntry = readonly [string, ExportTarget];
+
 type ImportableEntry = readonly [string, ImportableTarget];
 
 const hasImportField = (entry: ExportEntry): entry is ImportableEntry =>
@@ -34,6 +37,7 @@ const checkEntryExports = async ([
 ]: ImportableEntry): Promise<void> => {
   const file = fileURLToPath(new URL(target.import, root));
   const loaded = await import(file);
+
   if (Object.keys(loaded).length === 0) {
     throw new Error(
       `${subpath} resolved to ${target.import} but exports nothing`
@@ -41,6 +45,7 @@ const checkEntryExports = async ([
   }
 
   const source = readFileSync(file, "utf-8");
+
   for (const name of PROVIDER_PACKAGES) {
     if (
       source.includes(`from "${name}"`) ||

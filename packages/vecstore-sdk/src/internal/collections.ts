@@ -1,8 +1,10 @@
 export const chunk = <T>(items: readonly T[], size: number): T[][] => {
   const chunks: T[][] = [];
+
   for (let start = 0; start < items.length; start += size) {
     chunks.push(items.slice(start, start + size));
   }
+
   return chunks;
 };
 
@@ -10,9 +12,11 @@ export const lastById = <T extends { readonly id: string }>(
   records: readonly T[]
 ): T[] => {
   const byId = new Map<string, T>();
+
   for (const record of records) {
     byId.set(record.id, record);
   }
+
   return [...byId.values()];
 };
 
@@ -22,12 +26,15 @@ export const sortByIds = <T extends { readonly id: string }>(
 ): T[] => {
   const byId = new Map(records.map((record) => [record.id, record]));
   const ordered: T[] = [];
+
   for (const id of ids) {
     const record = byId.get(id);
+
     if (record !== undefined) {
       ordered.push(record);
     }
   }
+
   return ordered;
 };
 
@@ -50,13 +57,17 @@ export const mapBatches = async <T, R>({
   const results: R[] = Array.from({ length: batches.length });
   let next = 0;
   let failed = false;
+
   const worker = async (): Promise<void> => {
     const position = next;
+
     if (failed || position >= batches.length) {
       return;
     }
+
     next += 1;
     const batch = batches[position];
+
     if (batch !== undefined) {
       try {
         results[position] = await action(batch);
@@ -65,17 +76,22 @@ export const mapBatches = async <T, R>({
         throw error;
       }
     }
+
     await worker();
   };
+
   const workers = Array.from(
     { length: Math.min(concurrency, batches.length) },
     () => worker()
   );
+
   const outcomes = await Promise.allSettled(workers);
+
   for (const outcome of outcomes) {
     if (outcome.status === "rejected") {
       throw outcome.reason;
     }
   }
+
   return results;
 };

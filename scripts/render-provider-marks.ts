@@ -15,6 +15,7 @@ const MAX_CHANNEL = 255;
 
 const root = path.join(import.meta.dir, "..");
 const assets = path.join(root, "assets", "providers");
+
 const output = path.join(
   root,
   "apps",
@@ -40,6 +41,7 @@ const inkAt = (pixels: Uint8Array, index: number): number => {
   const green = pixels[index + 1] ?? 0;
   const blue = pixels[index + 2] ?? 0;
   const luma = (LUMA.r * red + LUMA.g * green + LUMA.b * blue) / MAX_CHANNEL;
+
   return (alpha / MAX_CHANNEL) * (1 - luma);
 };
 
@@ -52,6 +54,7 @@ interface Bounds {
 
 const measure = (pixels: Uint8Array, width: number, height: number): Bounds => {
   let bounds: Bounds = { maxX: 0, maxY: 0, minX: width, minY: height };
+
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       if (inkAt(pixels, (y * width + x) * RGBA) > INK_THRESHOLD) {
@@ -64,6 +67,7 @@ const measure = (pixels: Uint8Array, width: number, height: number): Bounds => {
       }
     }
   }
+
   return bounds;
 };
 
@@ -72,6 +76,7 @@ const toGrid = (svg: string): boolean[][] => {
     background: "transparent",
     fitTo: { mode: "width", value: SAMPLE_WIDTH },
   }).render();
+
   const { height, pixels, width } = image;
   const bounds = measure(pixels, width, height);
   const boxWidth = bounds.maxX - bounds.minX + 1;
@@ -82,8 +87,10 @@ const toGrid = (svg: string): boolean[][] => {
   const step = side / CELLS;
   const coverage: number[][] = [];
   let peak = 0;
+
   for (let cy = 0; cy < CELLS; cy += 1) {
     const row: number[] = [];
+
     for (let cx = 0; cx < CELLS; cx += 1) {
       let sum = 0;
       let count = 0;
@@ -91,21 +98,26 @@ const toGrid = (svg: string): boolean[][] => {
       const endY = originY + (cy + 1) * step;
       const startX = Math.floor(originX + cx * step);
       const endX = originX + (cx + 1) * step;
+
       for (let y = startY; y < endY; y += 1) {
         for (let x = startX; x < endX; x += 1) {
           count += 1;
           const inside = x >= 0 && y >= 0 && x < width && y < height;
+
           if (inside) {
             sum += inkAt(pixels, (y * width + x) * RGBA);
           }
         }
       }
+
       const value = sum / count;
       row.push(value);
       peak = Math.max(peak, value);
     }
+
     coverage.push(row);
   }
+
   return coverage.map((row) =>
     row.map((value) => value >= RELATIVE_THRESHOLD * peak)
   );
@@ -113,6 +125,7 @@ const toGrid = (svg: string): boolean[][] => {
 
 const toPath = (grid: boolean[][]): string => {
   const dots: string[] = [];
+
   for (const [y, row] of grid.entries()) {
     for (const [x, filled] of row.entries()) {
       if (filled) {
@@ -124,6 +137,7 @@ const toPath = (grid: boolean[][]): string => {
       }
     }
   }
+
   return dots.join("");
 };
 

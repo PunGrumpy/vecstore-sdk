@@ -53,6 +53,7 @@ const unwrap = <T>(
   if (!result.ok) {
     throw new Error(JSON.stringify(result.error));
   }
+
   return result.value;
 };
 
@@ -64,12 +65,15 @@ const waitForRecords = async (
   attempt = 0
 ): Promise<void> => {
   const found = unwrap(await index.fetch(["doc-a", "doc-d"]));
+
   if (found.length === 2) {
     return;
   }
+
   if (attempt >= READY_RETRIES) {
     throw new Error("records did not become visible in time");
   }
+
   await sleep(READY_DELAY_MS);
   await waitForRecords(index, attempt + 1);
 };
@@ -79,6 +83,7 @@ export const setupLive = (
   options: LiveOptions = {}
 ): (() => Live) => {
   let live: Live | null = null;
+
   const [before, after] = options.isolated
     ? [beforeEach, afterEach]
     : [beforeAll, afterAll];
@@ -86,8 +91,10 @@ export const setupLive = (
   before(async () => {
     const store = makeStore();
     indexSequence += 1;
+
     const indexName =
       options.indexName?.() ?? `vecstore_live_${Date.now()}_${indexSequence}`;
+
     unwrap(await store.createIndex({ dimension: DIMENSION, name: indexName }));
     const index = store.index(indexName, { namespace: NAMESPACE });
     unwrap(await index.upsert(records));
@@ -103,14 +110,13 @@ export const setupLive = (
     }
   });
 
-  const current = (): Live => {
+  return function current(): Live {
     if (live === null) {
       throw new Error("live store is not ready");
     }
+
     return live;
   };
-
-  return current;
 };
 
 export const containsCases: LiveCase[] = [
@@ -124,6 +130,7 @@ export const containsCases: LiveCase[] = [
           vector: vectors.d,
         })
       );
+
       expect(idsOf(matches)).toStrictEqual(["doc-d"]);
     },
   ],
@@ -137,6 +144,7 @@ export const containsCases: LiveCase[] = [
           vector: vectors.d,
         })
       );
+
       expect(idsOf(matches)).toStrictEqual(["doc-d"]);
     },
   ],
@@ -150,6 +158,7 @@ export const containsCases: LiveCase[] = [
           vector: vectors.a,
         })
       );
+
       expect(idsOf(matches).toSorted()).toStrictEqual([
         "doc-a",
         "doc-b",
@@ -170,6 +179,7 @@ export const negatedRangeCases: LiveCase[] = [
           vector: vectors.a,
         })
       );
+
       expect(idsOf(matches).toSorted()).toStrictEqual(["doc-a", "doc-d"]);
     },
   ],
@@ -177,9 +187,11 @@ export const negatedRangeCases: LiveCase[] = [
     "delete by not around a range removes a record that lacks the field",
     async ({ index }) => {
       unwrap(await index.delete({ filter: not(gt("year", 2000)) }));
+
       const found = unwrap(
         await index.fetch(["doc-a", "doc-b", "doc-c", "doc-d"])
       );
+
       expect(idsOf(found)).toStrictEqual(["doc-b", "doc-c"]);
     },
   ],
@@ -209,6 +221,7 @@ export const liveCases: LiveCase[] = [
           vector: vectors.a,
         })
       );
+
       expect(idsOf(matches)).toStrictEqual(["doc-b"]);
     },
   ],
@@ -222,6 +235,7 @@ export const liveCases: LiveCase[] = [
           vector: vectors.d,
         })
       );
+
       expect(idsOf(matches)).toStrictEqual(["doc-d"]);
     },
   ],
@@ -236,6 +250,7 @@ export const liveCases: LiveCase[] = [
           vector: vectors.d,
         })
       );
+
       expect(match?.metadata).toStrictEqual({
         genre: "horror",
         tags: ["x", "y"],
@@ -254,9 +269,11 @@ export const liveCases: LiveCase[] = [
     "another namespace sees nothing",
     async ({ store, indexName }) => {
       const other = store.index(indexName, { namespace: "tenant-b" });
+
       const matches = unwrap(
         await other.query({ topK: 10, vector: vectors.a })
       );
+
       expect(matches).toStrictEqual([]);
     },
   ],
@@ -273,9 +290,11 @@ export const liveCases: LiveCase[] = [
     async ({ index }) => {
       unwrap(await index.delete({ all: true }));
       await sleep(READY_DELAY_MS);
+
       const matches = unwrap(
         await index.query({ topK: 10, vector: vectors.a })
       );
+
       expect(matches).toStrictEqual([]);
     },
   ],

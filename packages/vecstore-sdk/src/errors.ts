@@ -61,9 +61,11 @@ export const errorMessage = (cause: unknown): string => {
   if (cause instanceof Error) {
     return cause.message;
   }
+
   if (isString(cause)) {
     return cause;
   }
+
   return "Unknown error";
 };
 

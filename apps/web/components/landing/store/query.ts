@@ -2,6 +2,7 @@ export const CELLS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 export const LAYERS = [1, 0, -1];
 export const LAYER_FADE = [1, 0.62, 0.34];
 export const MARK = new Set([0, 4, 8]);
+
 export const SPECTRUM = [
   "--color-pink-700",
   "--color-purple-700",
@@ -42,6 +43,7 @@ export const queryFrom = (
   const queryX = 1 + x * SPREAD;
   const queryY = 1 + y * SPREAD;
   const lit: number[] = [];
+
   for (const [layer] of LAYERS.entries()) {
     for (const cell of CELLS) {
       const distance = Math.hypot(
@@ -49,11 +51,13 @@ export const queryFrom = (
         Math.floor(cell / 3) - queryY,
         layer * DEPTH_COST
       );
+
       if (distance < NEAR) {
         lit.push(layer * CELLS.length + cell);
       }
     }
   }
+
   return { lit, tiltX: REST_X - y * SWING_X, tiltY: REST_Y + x * SWING_Y };
 };
 

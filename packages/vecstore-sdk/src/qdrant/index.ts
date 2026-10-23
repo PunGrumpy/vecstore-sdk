@@ -129,6 +129,7 @@ const RESERVED_KEYS: ReadonlySet<string> = new Set([
   QDRANT_ID_KEY,
   QDRANT_NAMESPACE_KEY,
 ]);
+
 const ID_NAMESPACE = "vecstore-sdk/qdrant/point-id";
 const PROVIDER = "qdrant";
 const UPSERT_BATCH = 500;
@@ -156,6 +157,7 @@ const payloadEntries = (point: QdrantStoredPoint): MetadataEntry[] =>
 
 const fromPoint = (point: QdrantStoredPoint): string => {
   const stored = payloadEntries(point).find(([key]) => key === QDRANT_ID_KEY);
+
   return stored !== undefined && isString(stored[1])
     ? stored[1]
     : String(point.id);
@@ -168,7 +170,9 @@ const inNamespace = (namespace: string, point: QdrantStoredPoint): boolean => {
   const stored = payloadEntries(point).find(
     ([key]) => key === QDRANT_NAMESPACE_KEY
   );
+
   const reported = stored !== undefined && isString(stored[1]) ? stored[1] : "";
+
   return reported === namespace;
 };
 
@@ -181,12 +185,15 @@ const toPayload = (
   pointId: string
 ): Record<string, MetadataValue> => {
   const entries: MetadataEntry[] = Object.entries(record.metadata ?? {});
+
   if (pointId !== record.id) {
     entries.push([QDRANT_ID_KEY, record.id]);
   }
+
   if (namespace !== "") {
     entries.push([QDRANT_NAMESPACE_KEY, namespace]);
   }
+
   return Object.fromEntries(entries);
 };
 
@@ -205,6 +212,7 @@ export const scopeQdrantFilter = (
   filter?: Filter
 ): QdrantFilter => {
   const scope = namespaceCondition(namespace ?? "");
+
   return {
     must: filter === undefined ? [scope] : [scope, compileQdrantFilter(filter)],
   };
@@ -252,9 +260,11 @@ const isConnectionFailure = (cause: unknown): boolean => {
   if (!(cause instanceof Error)) {
     return false;
   }
+
   if (cause.name === "QdrantClientTimeoutError") {
     return true;
   }
+
   return isNetworkFailure(cause);
 };
 
@@ -265,30 +275,37 @@ export const normalizeQdrantError = (
   if (cause instanceof Error && cause.name === MISSING_COLLECTION_ERROR) {
     return notFound(PROVIDER, index, cause);
   }
+
   if (isHttpFailure(cause)) {
     switch (cause.status) {
       case HTTP_NOT_FOUND: {
         return notFound(PROVIDER, index, cause);
       }
+
       case HTTP_CONFLICT: {
         return alreadyExists(PROVIDER, index, cause);
       }
+
       case HTTP_BAD_REQUEST:
       case HTTP_UNPROCESSABLE: {
         return invalidArgument(PROVIDER, failureMessage(cause), cause);
       }
+
       case HTTP_UNAUTHORIZED:
       case HTTP_FORBIDDEN: {
         return unauthorized(PROVIDER, cause);
       }
+
       default: {
         return providerError(PROVIDER, cause);
       }
     }
   }
+
   if (isConnectionFailure(cause)) {
     return connection(PROVIDER, cause);
   }
+
   return providerError(PROVIDER, cause);
 };
 
@@ -302,12 +319,15 @@ const createIndex = (
 ): VectorIndex => {
   const namespace = options.namespace ?? "";
   const invalid = namespaceError(PROVIDER, namespace);
+
   return {
     delete: (selector: DeleteSelector): VecResult<void> => {
       const rejected = invalid ?? deleteSelectorError(PROVIDER, selector);
+
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));
       }
+
       return run(name, async () => {
         if ("ids" in selector) {
           const pointIds = selector.ids.map((id) => toPointId(namespace, id));
@@ -322,8 +342,10 @@ const createIndex = (
             items: pointIds,
             size: ID_BATCH,
           });
+
           return;
         }
+
         const filter = "filter" in selector ? selector.filter : undefined;
         await client.delete(name, {
           filter: scopeQdrantFilter(options.namespace, filter),
@@ -339,11 +361,14 @@ const createIndex = (
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       return run(name, async () => {
         if (ids.length === 0) {
           return [];
         }
+
         const pointIds = ids.map((id) => toPointId(namespace, id));
+
         const responses = await mapBatches({
           action: (batch) =>
             client.retrieve(name, {
@@ -354,7 +379,9 @@ const createIndex = (
           items: pointIds,
           size: ID_BATCH,
         });
+
         const records: VectorRecord[] = [];
+
         for (const point of responses.flat()) {
           if (inNamespace(namespace, point)) {
             records.push({
@@ -364,6 +391,7 @@ const createIndex = (
             });
           }
         }
+
         return sortByIds(ids, records);
       });
     },
@@ -376,12 +404,16 @@ const createIndex = (
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       const invalidQuery = queryOptionsError(PROVIDER, query);
+
       if (invalidQuery !== undefined) {
         return Promise.resolve(err(invalidQuery));
       }
+
       return run(name, async () => {
         const includeMetadata = query.includeMetadata ?? true;
+
         const response = await client.query(name, {
           filter: scopeQdrantFilter(options.namespace, query.filter),
           limit: query.topK,
@@ -389,6 +421,7 @@ const createIndex = (
           with_payload: true,
           with_vector: query.includeVector ?? false,
         });
+
         return response.points.map((point): ScoredRecord => ({
           id: fromPoint(point),
           metadata: includeMetadata ? readMetadata(point) : undefined,
@@ -401,21 +434,26 @@ const createIndex = (
     upsert: (records): VecResult<void> => {
       const rejected =
         invalid ?? reservedKeyError(PROVIDER, records, RESERVED_KEYS);
+
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));
       }
+
       return run(name, async () => {
         if (records.length === 0) {
           return;
         }
+
         const points = lastById(records).map((record): QdrantPoint => {
           const id = toPointId(namespace, record.id);
+
           return {
             id,
             payload: toPayload(namespace, record, id),
             vector: [...record.vector],
           };
         });
+
         await mapBatches({
           action: (batch) => client.upsert(name, { points: batch, wait: true }),
           items: points,
@@ -430,12 +468,15 @@ export const createQdrantStore = <Client extends QdrantClientLike>(
   options: QdrantStoreOptions<Client>
 ): VectorStore<Client> => {
   const { client } = options;
+
   return {
     createIndex: (spec: IndexSpec) => {
       const invalid = indexSpecError(PROVIDER, spec);
+
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       return run(spec.name, async () => {
         await client.createCollection(spec.name, {
           vectors: {
@@ -443,6 +484,7 @@ export const createQdrantStore = <Client extends QdrantClientLike>(
             size: spec.dimension,
           },
         });
+
         try {
           await client.createPayloadIndex(spec.name, {
             field_name: QDRANT_NAMESPACE_KEY,
@@ -462,6 +504,7 @@ export const createQdrantStore = <Client extends QdrantClientLike>(
     deleteIndex: (name) =>
       run(name, async () => {
         const deleted = await client.deleteCollection(name);
+
         if (!deleted) {
           throw missingCollection(name);
         }
@@ -472,6 +515,7 @@ export const createQdrantStore = <Client extends QdrantClientLike>(
     listIndexes: () =>
       run("", async () => {
         const response = await client.getCollections();
+
         return response.collections.map((collection) => collection.name);
       }),
 

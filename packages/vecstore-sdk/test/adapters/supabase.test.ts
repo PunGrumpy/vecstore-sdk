@@ -43,12 +43,15 @@ const fakeClient = (options: FakeOptions = {}) => {
   const calls: Call[] = [];
   const pending = [...(options.responses ?? [])];
   const error = options.error ?? null;
+
   const client: SupabaseClientLike = {
     rpc: (fn, args) => {
       calls.push({ args, fn });
+
       return Promise.resolve({ data: pending.shift() ?? [], error });
     },
   };
+
   return { calls, client };
 };
 
@@ -91,11 +94,13 @@ describe(createSupabaseStore, () => {
 
   test("createIndex passes the dimension and metric to the SQL function", async () => {
     const { client, calls } = fakeClient();
+
     const result = await createSupabaseStore({ client }).createIndex({
       dimension: 3,
       metric: "euclidean",
       name: "docs",
     });
+
     expect(result.ok).toBeTruthy();
     expect(calls).toStrictEqual([
       {
@@ -112,20 +117,24 @@ describe(createSupabaseStore, () => {
 
   test("createIndex rejects a non-integer dimension before calling the database", async () => {
     const { client, calls } = fakeClient();
+
     const result = await createSupabaseStore({ client }).createIndex({
       dimension: 1.5,
       name: "docs",
     });
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(calls).toHaveLength(0);
   });
 
   test("createIndex rejects a name longer than 49 bytes before calling the database", async () => {
     const { client, calls } = fakeClient();
+
     const result = await createSupabaseStore({ client }).createIndex({
       dimension: 3,
       name: "a".repeat(50),
     });
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(calls).toHaveLength(0);
   });
@@ -134,6 +143,7 @@ describe(createSupabaseStore, () => {
     const { client, calls } = fakeClient({
       responses: [[], [{ name: "docs" }]],
     });
+
     const store = createSupabaseStore({ client, schema: "vec" });
     await store.deleteIndex("docs");
     await expect(store.listIndexes()).resolves.toStrictEqual({
@@ -183,8 +193,10 @@ describe(createSupabaseStore, () => {
       ]);
     expect(calls).toHaveLength(1);
     const [call] = calls;
+
     const records =
       call !== undefined && "records" in call.args ? call.args.records : [];
+
     expect(records).toStrictEqual([
       { embedding: "[2]", id: "a", metadata: {} },
     ]);
@@ -225,10 +237,13 @@ describe(createSupabaseStore, () => {
         ],
       ],
     });
+
     const filter = and(eq("genre", "drama"), gt("year", 2000));
+
     const result = await createSupabaseStore({ client })
       .index("docs")
       .query({ filter, includeVector: true, topK: 3, vector: [1, 2] });
+
     expect(result).toStrictEqual({
       ok: true,
       value: [
@@ -256,9 +271,11 @@ describe(createSupabaseStore, () => {
 
   test("query rejects a non-positive topK before calling the provider", async () => {
     const { client, calls } = fakeClient();
+
     const result = await createSupabaseStore({ client })
       .index("docs")
       .query({ topK: 0, vector: [1] });
+
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(calls).toStrictEqual([]);
@@ -267,11 +284,13 @@ describe(createSupabaseStore, () => {
   test("query and delete reject a malformed filter or selector before calling the provider", async () => {
     const { client, calls } = fakeClient();
     const index = createSupabaseStore({ client }).index("docs");
+
     const queried = await index.query({
       filter: filterWithoutValue,
       topK: 1,
       vector: [1, 0, 0],
     });
+
     const filtered = await index.delete({ filter: filterWithoutValue });
     const emptied = await index.delete(emptySelector);
     expect([queried, filtered, emptied]).toMatchObject([
@@ -291,6 +310,7 @@ describe(createSupabaseStore, () => {
         ],
       ],
     });
+
     const index = createSupabaseStore({ client }).index("docs");
     await expect(index.fetch(["a", "b"])).resolves.toStrictEqual({
       ok: true,
@@ -319,14 +339,18 @@ describe(createSupabaseStore, () => {
 
   test("fetch splits ids into batches of 500", async () => {
     const { client, calls } = fakeClient();
+
     const ids = Array.from(
       { length: 1200 },
       (_, position) => `doc-${position}`
     );
+
     await createSupabaseStore({ client }).index("docs").fetch(ids);
+
     const sizes = calls.map((call) =>
       "ids" in call.args ? call.args.ids?.length : undefined
     );
+
     expect(calls.map((call) => call.fn)).toStrictEqual([
       "vecstore_fetch",
       "vecstore_fetch",
@@ -378,12 +402,14 @@ describe(createSupabaseStore, () => {
 
   test("an RPC error becomes a result rather than a throw", async () => {
     const { client } = fakeClient({ error: rpcError("42P01") });
+
     const result = await createSupabaseStore({ client })
       .index("docs")
       .query({
         topK: 1,
         vector: [1],
       });
+
     expect(!result.ok && result.error.kind).toBe("not_found");
     expect(!result.ok && result.error.provider).toBe("supabase");
   });
@@ -400,6 +426,7 @@ describe(createSupabaseStore, () => {
       fn: "vecstore_query",
       index: "docs",
     });
+
     expect(error.kind).toBe(kind);
   });
 
@@ -408,6 +435,7 @@ describe(createSupabaseStore, () => {
       fn: "vecstore_query",
       index: "docs",
     });
+
     expect(error.kind).toBe("connection");
   });
 
@@ -417,6 +445,7 @@ describe(createSupabaseStore, () => {
       const result = await createSupabaseStore({
         client: statusClient(message, 0),
       }).listIndexes();
+
       expect(result).toMatchObject({
         error: { kind: "connection", provider: "supabase" },
         ok: false,
@@ -433,6 +462,7 @@ describe(createSupabaseStore, () => {
       const result = await createSupabaseStore({
         client: statusClient("TypeError: x is not a function", status),
       }).listIndexes();
+
       expect(!result.ok && result.error.kind).toBe("provider");
     }
   );
@@ -441,6 +471,7 @@ describe(createSupabaseStore, () => {
     const result = await createSupabaseStore({
       client: statusClient("TypeError: x is not a function"),
     }).listIndexes();
+
     expect(!result.ok && result.error.kind).toBe("provider");
   });
 
@@ -448,6 +479,7 @@ describe(createSupabaseStore, () => {
     const result = await createSupabaseStore({
       client: statusClient("TypeError: Failed to fetch"),
     }).listIndexes();
+
     expect(!result.ok && result.error.kind).toBe("connection");
   });
 
@@ -455,6 +487,7 @@ describe(createSupabaseStore, () => {
     const result = await createSupabaseStore({
       client: statusClient("TypeError: getaddrinfo ENOTFOUND x", 0),
     }).listIndexes();
+
     expect(!result.ok && result.error.cause).toMatchObject({
       cause: { message: "TypeError: getaddrinfo ENOTFOUND x" },
     });
@@ -467,6 +500,7 @@ describe(createSupabaseStore, () => {
         fn: "vecstore_query",
         index: "docs",
       });
+
       expect(error.kind).toBe("connection");
     }
   );
@@ -478,6 +512,7 @@ describe(createSupabaseStore, () => {
         fn: "vecstore_query",
         index: "docs",
       });
+
       expect(error.kind).toBe("connection");
     }
   );
@@ -490,6 +525,7 @@ describe(createSupabaseStore, () => {
       fn: "vecstore_query",
       index: "docs",
     });
+
     expect(error.kind).toBe("provider");
   });
 
@@ -498,6 +534,7 @@ describe(createSupabaseStore, () => {
       fn: "vecstore_query",
       index: "docs",
     });
+
     expect(error.kind).toBe("provider");
   });
 
@@ -506,6 +543,7 @@ describe(createSupabaseStore, () => {
       fn: "vecstore_query",
       index: "docs",
     });
+
     expect(error.kind).toBe("provider");
   });
 });

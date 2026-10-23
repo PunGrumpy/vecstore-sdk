@@ -7,6 +7,7 @@ import { liveCases, setupLive } from "./conformance";
 
 const apiToken = process.env.CLOUDFLARE_API_TOKEN ?? "";
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
+
 const enabled =
   process.env.VECSTORE_LIVE === "1" && apiToken !== "" && accountId !== "";
 

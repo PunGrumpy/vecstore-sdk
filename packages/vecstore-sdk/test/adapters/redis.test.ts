@@ -47,6 +47,7 @@ const jsonEntry = (value: RedisJsonValue, key: string): RedisJsonValue => {
   if (!isObjectLike(value) || Array.isArray(value) || value instanceof Date) {
     return null;
   }
+
   return Object.entries(value).find(([name]) => name === key)?.[1] ?? null;
 };
 
@@ -58,14 +59,17 @@ const documentValue = (
   options?: RedisSearchOptions
 ): object => {
   const fields: [string, string][] = [];
+
   for (const field of options?.RETURN ?? []) {
     if (field === "vector_distance") {
       fields.push([field, "0.25"]);
       continue;
     }
+
     const key = field.replace("$.", "");
     fields.push([field, JSON.stringify(jsonEntry(stored, key))]);
   }
+
   return Object.fromEntries(fields);
 };
 
@@ -76,6 +80,7 @@ const createFakeClient = (): FakeClient => {
   const unlinked: string[][] = [];
   const mGetCalls: string[][] = [];
   const indexes = new Set<string>();
+
   const client: RedisClientLike = {
     ft: {
       _list: () => Promise.resolve([...indexes]),
@@ -83,26 +88,33 @@ const createFakeClient = (): FakeClient => {
         if (indexes.has(index)) {
           return Promise.reject(new Error("Index already exists"));
         }
+
         indexes.add(index);
         creates.push({ index, options, schema });
+
         return Promise.resolve("OK");
       },
       dropIndex: (index, options) => {
         if (!indexes.delete(index)) {
           return Promise.reject(new Error("Unknown index name"));
         }
+
         if (options?.DD === true) {
           documents.clear();
         }
+
         return Promise.resolve("OK");
       },
       search: (index, query, options): Promise<RedisSearchReply> => {
         searches.push({ index, options, query });
         const namespace = namespaceOf(query);
+
         const matched = [...documents].filter(
           ([, stored]) => jsonEntry(stored, "namespace") === namespace
         );
+
         const size = options?.LIMIT?.size ?? matched.length;
+
         return Promise.resolve({
           documents: matched.slice(0, size).map(([id, stored]) => ({
             id,
@@ -115,22 +127,27 @@ const createFakeClient = (): FakeClient => {
     json: {
       mGet: (keys) => {
         mGetCalls.push(keys);
+
         return Promise.resolve(keys.map((key) => documents.get(key) ?? null));
       },
       set: (key, _path, json) => {
         documents.set(key, json);
+
         return Promise.resolve("OK");
       },
     },
     unlink: (keys) => {
       unlinked.push(keys);
       let removed = 0;
+
       for (const key of keys) {
         removed += documents.delete(key) ? 1 : 0;
       }
+
       return Promise.resolve(removed);
     },
   };
+
   return { client, creates, documents, mGetCalls, searches, unlinked };
 };
 
@@ -146,13 +163,16 @@ const metadataFields = [
 
 const setup = async (namespace = NAMESPACE) => {
   const fake = createFakeClient();
+
   const store = createRedisStore({
     client: fake.client,
     metadataFields: [...metadataFields],
   });
+
   await store.createIndex({ dimension: DIMENSION, name: INDEX });
   const index = store.index(INDEX, { namespace });
   await index.upsert(records);
+
   return { fake, index, store };
 };
 
@@ -160,6 +180,7 @@ const unwrap = <T>(result: { ok: true; value: T } | { ok: false }): T => {
   if (!result.ok) {
     throw new Error("expected a value");
   }
+
   return result.value;
 };
 
@@ -216,24 +237,29 @@ describe(createRedisStore, () => {
 
   test("createIndex rejects a non-positive dimension before touching the client", async () => {
     const fake = createFakeClient();
+
     const result = await createRedisStore({ client: fake.client }).createIndex({
       dimension: 0,
       name: INDEX,
     });
+
     expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
     expect(fake.creates).toHaveLength(0);
   });
 
   test("createIndex refuses a metadata field the adapter keeps", async () => {
     const fake = createFakeClient();
+
     const store = createRedisStore({
       client: fake.client,
       metadataFields: [{ field: "vector", type: "tag" }],
     });
+
     const result = await store.createIndex({
       dimension: DIMENSION,
       name: INDEX,
     });
+
     expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
     expect(fake.creates).toHaveLength(0);
   });
@@ -254,9 +280,11 @@ describe(createRedisStore, () => {
   test("upsert refuses metadata the schema has no room for", async () => {
     const { fake, index } = await setup();
     const written = fake.documents.size;
+
     const result = await index.upsert([
       { id: "doc-c", metadata: { year: "1999" }, vector: [0, 0, 1] },
     ]);
+
     expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
     expect(fake.documents.size).toBe(written);
   });
@@ -288,11 +316,13 @@ describe(createRedisStore, () => {
 
   test("query and delete reject a malformed filter or selector before calling the provider", async () => {
     const { fake, index } = await setup();
+
     const queried = await index.query({
       filter: filterWithoutValue,
       topK: 1,
       vector: [1, 0, 0],
     });
+
     const filtered = await index.delete({ filter: filterWithoutValue });
     const emptied = await index.delete(emptySelector);
     expect([queried, filtered, emptied]).toMatchObject([
@@ -308,10 +338,12 @@ describe(createRedisStore, () => {
     const { fake, index } = await setup();
     await index.query({ topK: 1, vector: [1, 0.5, 0] });
     const blob = fake.searches[0]?.options?.PARAMS?.BLOB;
+
     const floats =
       blob instanceof Buffer
         ? new Float32Array(blob.buffer, blob.byteOffset, DIMENSION)
         : new Float32Array();
+
     expect([...floats]).toStrictEqual([1, 0.5, 0]);
   });
 
@@ -326,20 +358,24 @@ describe(createRedisStore, () => {
 
   test("query returns the vector when asked", async () => {
     const { fake, index } = await setup();
+
     const matches = unwrap(
       await index.query({ includeVector: true, topK: 1, vector: [1, 0, 0] })
     );
+
     expect(fake.searches[0]?.options?.RETURN).toContain("$.vector");
     expect(matches[0]?.vector).toStrictEqual([1, 0, 0]);
   });
 
   test("query rejects a filter Redis cannot run before it sends one", async () => {
     const { fake, index } = await setup();
+
     const result = await index.query({
       filter: eq("director", "lynch"),
       topK: 1,
       vector: [1, 0, 0],
     });
+
     expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
     expect(fake.searches).toHaveLength(0);
   });
@@ -368,10 +404,12 @@ describe(createRedisStore, () => {
 
   test("fetch splits JSON.MGET into batches of 500", async () => {
     const { fake, index } = await setup();
+
     const ids: NonEmpty<string> = [
       "r0",
       ...Array.from({ length: 500 }, (_, i) => `r${i + 1}`),
     ];
+
     await index.fetch(ids);
     expect(fake.mGetCalls).toHaveLength(2);
     expect(fake.mGetCalls[0]).toHaveLength(500);
@@ -389,22 +427,26 @@ describe(createRedisStore, () => {
 
   test("upsert writes in bounded batches", async () => {
     const { fake, index } = await setup();
+
     const result = await index.upsert(
       Array.from({ length: 1001 }, (_, i) => ({
         id: `r${i}`,
         vector: [i, 0, 0],
       }))
     );
+
     expect(result.ok).toBeTruthy();
     expect(fake.documents.size).toBe(1003);
   });
 
   test("delete by id unlinks in bounded batches", async () => {
     const { fake, index } = await setup();
+
     const ids: NonEmpty<string> = [
       "r0",
       ...Array.from({ length: 1000 }, (_, i) => `r${i + 1}`),
     ];
+
     await index.delete({ ids });
     expect(fake.unlinked).toHaveLength(3);
     expect(fake.unlinked[0]).toHaveLength(500);
@@ -430,6 +472,7 @@ describe(createRedisStore, () => {
     });
     await index.delete({ all: true });
     expect(fake.documents.has(foreign)).toBe(true);
+
     for (const keys of fake.unlinked) {
       expect(keys).not.toContain(foreign);
     }
@@ -438,6 +481,7 @@ describe(createRedisStore, () => {
   test("delete all stops paging when a full page unlinks nothing", async () => {
     const { fake, index } = await setup();
     await index.delete({ ids: ["doc-a", "doc-b"] });
+
     for (let i = 0; i < DELETE_PAGE; i += 1) {
       const foreign = `vecstore:docs:v2:tenant-a:x${i}`;
       fake.documents.set(foreign, {
@@ -446,6 +490,7 @@ describe(createRedisStore, () => {
         vector: [0, 0, 1],
       });
     }
+
     const startingSize = fake.documents.size;
     const result = await index.delete({ all: true });
     expect(result.ok).toBeTruthy();
@@ -456,15 +501,19 @@ describe(createRedisStore, () => {
   test("an index name with a colon is rejected before any request", async () => {
     const fake = createFakeClient();
     const store = createRedisStore({ client: fake.client });
+
     const created = await store.createIndex({
       dimension: DIMENSION,
       name: "docs:v2",
     });
+
     expect(created).toMatchObject({ error: { kind: "invalid_argument" } });
     expect(fake.creates).toHaveLength(0);
+
     const upserted = await store
       .index("docs:v2")
       .upsert([{ id: "a", vector: [0, 0, 1] }]);
+
     expect(upserted).toMatchObject({ error: { kind: "invalid_argument" } });
     expect(fake.documents.size).toBe(0);
   });

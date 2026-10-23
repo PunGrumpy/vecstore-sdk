@@ -25,6 +25,7 @@ import {
 
 describe("pgvector on PGlite", () => {
   const db = usePostgres();
+
   const live = setupLive(() => createPgvectorStore({ client: db() }), {
     isolated: true,
   });
@@ -42,10 +43,12 @@ describe("index lifecycle on PGlite", () => {
 
   test("recreating an index with a different metric changes ordering and scoring", async () => {
     const store = createPgvectorStore({ client: db() });
+
     const created = await store.createIndex({
       dimension: 3,
       name: "docs_cosine",
     });
+
     expect(created.ok).toBeTruthy();
     await store.index("docs_cosine").query({ topK: 1, vector: [1, 0, 0] });
 
@@ -57,6 +60,7 @@ describe("index lifecycle on PGlite", () => {
       metric: "euclidean",
       name: "docs_cosine",
     });
+
     expect(recreated.ok).toBeTruthy();
 
     const index = store.index("docs_cosine");
@@ -66,6 +70,7 @@ describe("index lifecycle on PGlite", () => {
     ]);
     const result = await index.query({ topK: 2, vector: [1, 0, 0] });
     expect(result.ok).toBeTruthy();
+
     if (result.ok) {
       expect(result.value[0]?.score).toBe(0);
     }
@@ -74,11 +79,13 @@ describe("index lifecycle on PGlite", () => {
   test("a euclidean index named after an opclass keeps its metric", async () => {
     const store = createPgvectorStore({ client: db() });
     const name = "x_vector_cosine_ops";
+
     const created = await store.createIndex({
       dimension: 3,
       metric: "euclidean",
       name,
     });
+
     expect(created.ok).toBeTruthy();
     const index = store.index(name);
     await index.upsert([
@@ -99,9 +106,11 @@ describe("index lifecycle on PGlite", () => {
     const store = createPgvectorStore({ client: db() });
     const result = await store.createIndex({ dimension: 3, name });
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
+
     const rows = await db().query<{ count: number }>(
       "select count(*) from pg_tables where tablename like 'aaaa%'"
     );
+
     expect(rows.rows[0]?.count).toBe(0);
   });
 });
@@ -118,6 +127,7 @@ describe("queries through the HNSW index on PGlite", () => {
       .upsert(spreadRecords("b"));
     await client.exec(FORCE_INDEX_SCAN);
   });
+
   const index = () =>
     createPgvectorStore({ client: db() }).index("filled", {
       namespace: "tenant-a",
@@ -136,6 +146,7 @@ describe("queries through the HNSW index on PGlite", () => {
       topK: 10,
       vector: [1, 0, 0],
     });
+
     expect(result.ok && result.value).toHaveLength(10);
   });
 
@@ -174,6 +185,7 @@ describe("a cosine query that meets a zero vector on PGlite", () => {
       const result = await createPgvectorStore({ client: db() })
         .index(name)
         .query({ topK: 4, vector: [1, 0] });
+
       expect(result.ok && result.value.map((match) => match.id)).toStrictEqual(
         NEAREST_FIRST_ZERO_LAST
       );
@@ -186,18 +198,22 @@ describe("a store that met a missing table on PGlite", () => {
 
   test("reads the metric again once another store creates the table", async () => {
     const early = createPgvectorStore({ client: db() });
+
     const missing = await early
       .index("late")
       .query({ topK: 1, vector: [1, 0, 0] });
+
     await createPgvectorStore({ client: db() }).createIndex({
       dimension: 3,
       metric: "euclidean",
       name: "late",
     });
     await early.index("late").upsert([{ id: "a", vector: [1, 0, 0] }]);
+
     const found = await early
       .index("late")
       .query({ topK: 1, vector: [1, 0, 0] });
+
     expect(!missing.ok && missing.error.kind).toBe("not_found");
     expect(found.ok && found.value[0]?.score).toBe(0);
   });
@@ -228,6 +244,7 @@ describe("delete fails closed on PGlite", () => {
     const index = createPgvectorStore({ client: db() }).index("guarded", {
       namespace: "tenant-a",
     });
+
     const deleted = await index.delete(selector);
     const found = await index.fetch(["a", "b"]);
     expect(!deleted.ok && deleted.error.kind).toBe("invalid_argument");
@@ -246,6 +263,7 @@ const rowSecurity = async (
     "select relrowsecurity from pg_class where relname = $1",
     [table]
   );
+
   return result.rows[0]?.relrowsecurity;
 };
 
@@ -275,6 +293,7 @@ describe("row level security with an anon role on PGlite", () => {
     await db().exec(
       "create extension if not exists vector; grant create on schema public to app_owner; set role app_owner"
     );
+
     try {
       const store = createPgvectorStore({ client: db() });
       const created = await store.createIndex({ dimension: 3, name: "owned" });
@@ -295,10 +314,12 @@ describe("row level security with an anon role on PGlite", () => {
     await store.createIndex({ dimension: 3, name: "hidden" });
     await store.index("hidden").upsert([{ id: "a", vector: [1, 0, 0] }]);
     await db().exec("grant select on hidden to anon; set role anon");
+
     try {
       const rows = await db().query<{ count: number }>(
         "select count(*) from hidden"
       );
+
       expect(rows.rows[0]?.count).toBe(0);
     } finally {
       await db().exec("reset role");

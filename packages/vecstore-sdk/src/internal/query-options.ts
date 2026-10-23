@@ -13,6 +13,7 @@ export const queryOptionsError = (
       `topK must be a positive integer, got ${String(query.topK)}`
     );
   }
+
   return query.filter === undefined
     ? undefined
     : filterError(provider, query.filter);

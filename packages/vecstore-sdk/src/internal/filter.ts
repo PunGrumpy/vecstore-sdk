@@ -27,6 +27,7 @@ const leafProblem = (filter: LeafFilter): string | undefined => {
         ? undefined
         : `"${filter.kind}" on "${filter.field}" needs ${VALUE_RULE}, received ${String(filter.value)}.`;
     }
+
     case "gt":
     case "gte":
     case "lt":
@@ -35,17 +36,21 @@ const leafProblem = (filter: LeafFilter): string | undefined => {
         ? undefined
         : `"${filter.kind}" on "${filter.field}" needs a finite number, received ${String(filter.value)}.`;
     }
+
     case "in":
     case "nin": {
       return isScalarList(filter.values)
         ? undefined
         : `"${filter.kind}" on "${filter.field}" needs a non-empty list where every value is ${VALUE_RULE}.`;
     }
+
     case "exists": {
       return undefined;
     }
+
     default: {
       const exhaustive: never = filter;
+
       return exhaustive;
     }
   }
@@ -55,23 +60,29 @@ const filterProblem = (filter: Filter): string | undefined => {
   if (!isObjectLike(filter)) {
     return "A filter must be an object built with the filter helpers.";
   }
+
   switch (filter.kind) {
     case "and":
     case "or": {
       if (!isNonEmptyList(filter.filters)) {
         return `"${filter.kind}" needs at least one filter.`;
       }
+
       for (const child of filter.filters) {
         const problem = filterProblem(child);
+
         if (problem !== undefined) {
           return problem;
         }
       }
+
       return undefined;
     }
+
     case "not": {
       return filterProblem(filter.filter);
     }
+
     case "eq":
     case "ne":
     case "gt":
@@ -85,8 +96,10 @@ const filterProblem = (filter: Filter): string | undefined => {
         ? leafProblem(filter)
         : `"${filter.kind}" needs a field name.`;
     }
+
     default: {
       const exhaustive: never = filter;
+
       return `Unknown filter ${JSON.stringify(exhaustive)}.`;
     }
   }
@@ -97,5 +110,6 @@ export const filterError = (
   filter: Filter
 ): VecstoreError | undefined => {
   const problem = filterProblem(filter);
+
   return problem === undefined ? undefined : invalidArgument(provider, problem);
 };

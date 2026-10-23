@@ -136,6 +136,7 @@ const leafClause = (filter: LeafFilter, negated: boolean): Clause => {
         filter.value
       );
     }
+
     case "ne": {
       return comparisonClause(
         filter.field,
@@ -143,6 +144,7 @@ const leafClause = (filter: LeafFilter, negated: boolean): Clause => {
         filter.value
       );
     }
+
     case "in": {
       return collectionClause(
         filter.field,
@@ -150,6 +152,7 @@ const leafClause = (filter: LeafFilter, negated: boolean): Clause => {
         filter.values
       );
     }
+
     case "nin": {
       return collectionClause(
         filter.field,
@@ -157,8 +160,10 @@ const leafClause = (filter: LeafFilter, negated: boolean): Clause => {
         filter.values
       );
     }
+
     default: {
       const [operator, negatedOperator] = COMPARISONS[filter.kind];
+
       return comparisonClause(
         filter.field,
         negated ? negatedOperator : operator,
@@ -183,29 +188,39 @@ const clausesOf = (
     case "nin": {
       return ok([leafClause(filter, negated)]);
     }
+
     case "exists": {
       return err(noExistsOperator);
     }
+
     case "and":
     case "or": {
       if ((filter.kind === "and") === negated) {
         return err(noOrOperator);
       }
+
       const clauses: Clause[] = [];
+
       for (const child of filter.filters) {
         const compiled = clausesOf(child, negated);
+
         if (!compiled.ok) {
           return compiled;
         }
+
         clauses.push(...compiled.value);
       }
+
       return ok(clauses);
     }
+
     case "not": {
       return clausesOf(filter.filter, !negated);
     }
+
     default: {
       const exhaustive: never = filter;
+
       return exhaustive;
     }
   }
@@ -218,11 +233,14 @@ const insert = <Operator, Value>(
   value: Value
 ): boolean => {
   const operators = groups.get(field) ?? new Map<Operator, Value>();
+
   if (operators.has(operator)) {
     return false;
   }
+
   operators.set(operator, value);
   groups.set(field, operators);
+
   return true;
 };
 
@@ -231,34 +249,44 @@ const merge = (clauses: readonly Clause[]): VectorizeFilterResult => {
     string,
     Map<VectorizeComparisonOperator, Scalar>
   >();
+
   const collections = new Map<
     string,
     Map<VectorizeCollectionOperator, Scalar[]>
   >();
+
   for (const clause of clauses) {
     if (clause.kind === "comparison") {
       if (collections.has(clause.field)) {
         return err(mixedOperators(clause.field));
       }
+
       if (!insert(comparisons, clause.field, clause.operator, clause.value)) {
         return err(repeatedOperator(clause.field, clause.operator));
       }
+
       continue;
     }
+
     if (comparisons.has(clause.field)) {
       return err(mixedOperators(clause.field));
     }
+
     if (!insert(collections, clause.field, clause.operator, clause.values)) {
       return err(repeatedOperator(clause.field, clause.operator));
     }
   }
+
   const conditions: [string, VectorizeCondition][] = [];
+
   for (const [field, operators] of comparisons) {
     conditions.push([field, Object.fromEntries(operators)]);
   }
+
   for (const [field, operators] of collections) {
     conditions.push([field, Object.fromEntries(operators)]);
   }
+
   return ok(Object.fromEntries(conditions));
 };
 
@@ -266,5 +294,6 @@ export const compileVectorizeFilter = (
   filter: Filter
 ): VectorizeFilterResult => {
   const clauses = clausesOf(filter, false);
+
   return clauses.ok ? merge(clauses.value) : clauses;
 };

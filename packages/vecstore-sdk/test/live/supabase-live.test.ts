@@ -7,6 +7,7 @@ import { containsCases, liveCases, setupLive } from "./conformance";
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 const enabled =
   process.env.VECSTORE_LIVE === "1" && url !== undefined && key !== undefined;
 

@@ -12,6 +12,7 @@ const escapeXml = (value: string): string =>
 
 const handler = () => {
   const entries = getChangelogEntries();
+
   const items = entries
     .map(
       (entry) => `    <item>
@@ -23,6 +24,7 @@ const handler = () => {
     </item>`
     )
     .join("\n");
+
   const lastBuildDate = entries[0]?.data.date.toUTCString() ?? "";
 
   const feed = `<?xml version="1.0" encoding="UTF-8"?>

@@ -25,12 +25,15 @@ const membership = (
   exclude: boolean
 ): PineconeFilter => {
   const list = values.filter(isStringOrNumber);
+
   if (list.length === values.length) {
     return { [field]: exclude ? { $nin: list } : { $in: list } };
   }
+
   const clauses = values.map((value): PineconeFilter => ({
     [field]: exclude ? { $ne: value } : { $eq: value },
   }));
+
   return exclude ? { $and: clauses } : { $or: clauses };
 };
 
@@ -48,6 +51,7 @@ const COMPARISONS: Record<
 
 const comparison = (filter: RangeFilter, negated: boolean): PineconeFilter => {
   const [operator, negatedOperator] = COMPARISONS[filter.kind];
+
   return {
     [filter.field]: (negated ? negatedOperator : operator)(filter.value),
   };
@@ -64,37 +68,49 @@ const compile = (filter: Filter, negated: boolean): PineconeFilter => {
     case "eq": {
       return equality(filter.field, filter.value, negated);
     }
+
     case "ne": {
       return equality(filter.field, filter.value, !negated);
     }
+
     case "gt":
     case "gte":
     case "lt":
     case "lte": {
       return comparison(filter, negated);
     }
+
     case "in": {
       return membership(filter.field, filter.values, negated);
     }
+
     case "nin": {
       return membership(filter.field, filter.values, !negated);
     }
+
     case "exists": {
       return { [filter.field]: { $exists: !negated } };
     }
+
     case "and": {
       const clauses = filter.filters.map((child) => compile(child, negated));
+
       return negated ? { $or: clauses } : { $and: clauses };
     }
+
     case "or": {
       const clauses = filter.filters.map((child) => compile(child, negated));
+
       return negated ? { $and: clauses } : { $or: clauses };
     }
+
     case "not": {
       return compile(filter.filter, !negated);
     }
+
     default: {
       const exhaustive: never = filter;
+
       return exhaustive;
     }
   }

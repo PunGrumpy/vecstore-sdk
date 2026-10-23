@@ -140,6 +140,7 @@ const SIMILARITIES: Record<Metric, UpstashSimilarity> = {
 const NOT_FOUND_PATTERN = /not found|does not exist|no such/iu;
 const ALREADY_EXISTS_PATTERN = /already exists/iu;
 const UNAUTHORIZED_PATTERN = /unauthorized|forbidden|invalid token/iu;
+
 const INVALID_ARGUMENT_PATTERN =
   /dimension|invalid|malformed|parse|must be|too large|exceed/iu;
 
@@ -159,6 +160,7 @@ const isConnectionFailure = (cause: unknown): boolean => {
   if (!(cause instanceof Error) || cause.name === "UpstashError") {
     return false;
   }
+
   return (
     isNetworkFailure(cause) ||
     cause.message === "fetch failed" ||
@@ -172,31 +174,41 @@ export const normalizeUpstashError = (
   index: string
 ): VecstoreError => {
   const name = cause instanceof Error ? cause.name : "";
+
   if (isUpstashFilterError(cause) || name === ARGUMENT_ERROR) {
     return invalidArgument(PROVIDER, errorMessage(cause), cause);
   }
+
   if (name === CONFLICT_ERROR) {
     return alreadyExists(PROVIDER, index, cause);
   }
+
   if (name === MISSING_ERROR) {
     return notFound(PROVIDER, index, cause);
   }
+
   if (isConnectionFailure(cause)) {
     return connection(PROVIDER, cause);
   }
+
   const message = errorMessage(cause);
+
   if (UNAUTHORIZED_PATTERN.test(message)) {
     return unauthorized(PROVIDER, cause);
   }
+
   if (NOT_FOUND_PATTERN.test(message)) {
     return notFound(PROVIDER, index, cause);
   }
+
   if (ALREADY_EXISTS_PATTERN.test(message)) {
     return alreadyExists(PROVIDER, index, cause);
   }
+
   if (INVALID_ARGUMENT_PATTERN.test(message)) {
     return invalidArgument(PROVIDER, message, cause);
   }
+
   return providerError(PROVIDER, cause);
 };
 
@@ -216,6 +228,7 @@ export const scopeUpstashFilter = (
   filter?: Filter
 ): string => {
   const scope = namespaceFilter(namespace ?? DEFAULT_NAMESPACE);
+
   return compileUpstashFilter(
     filter === undefined ? scope : and(scope, filter)
   );
@@ -230,6 +243,7 @@ const requireUrlSafe = (label: string, value: string): void => {
       `Upstash puts the ${label} straight into the request path, where "." and ".." are read as path segments instead of names. Received "${value}".`
     );
   }
+
   if (encodeURIComponent(value) !== value) {
     throw taggedError(
       ARGUMENT_ERROR,
@@ -245,9 +259,11 @@ const STORED_ID_PATTERN = /^[^/]+\/(?<length>\d+)\/(?<id>[\s\S]*)$/u;
 
 const looksLikeStoredId = (id: string): boolean => {
   const groups = STORED_ID_PATTERN.exec(id)?.groups;
+
   if (groups?.id === undefined || groups.length === undefined) {
     return false;
   }
+
   return groups.id.length === Number(groups.length);
 };
 
@@ -262,6 +278,7 @@ const collidingIdError = (
       );
     }
   }
+
   return undefined;
 };
 
@@ -270,12 +287,14 @@ const toStoredRecord = (
   record: VectorRecord
 ): UpstashRecordLike => {
   const entries: MetadataEntry[] = Object.entries(record.metadata ?? {});
+
   if (namespace !== DEFAULT_NAMESPACE) {
     entries.push(
       [UPSTASH_ID_KEY, record.id],
       [UPSTASH_NAMESPACE_KEY, namespace]
     );
   }
+
   return {
     id: toStoredId(namespace, record.id),
     metadata: Object.fromEntries(entries),
@@ -292,6 +311,7 @@ const readStoredId = (record: UpstashResultRecord): string => {
   const stored = metadataEntries(record).find(
     ([key]) => key === UPSTASH_ID_KEY
   );
+
   return stored !== undefined && isString(stored[1])
     ? stored[1]
     : String(record.id);
@@ -301,6 +321,7 @@ const readStoredNamespace = (record: UpstashResultRecord): string => {
   const stored = metadataEntries(record).find(
     ([key]) => key === UPSTASH_NAMESPACE_KEY
   );
+
   return stored !== undefined && isString(stored[1])
     ? stored[1]
     : DEFAULT_NAMESPACE;
@@ -341,6 +362,7 @@ const INDEX_LABEL = "index name";
 const scopeError = (namespace: string): VecstoreError | undefined => {
   try {
     scopeUpstashFilter(namespace);
+
     return undefined;
   } catch (error) {
     return invalidArgument(
@@ -353,6 +375,7 @@ const scopeError = (namespace: string): VecstoreError | undefined => {
 
 const metadataNamespace = (index: string): string => {
   requireUrlSafe(INDEX_LABEL, index);
+
   return index;
 };
 
@@ -365,6 +388,7 @@ const metadataDeletableIds = async (
   if (namespace !== DEFAULT_NAMESPACE) {
     return [...storedIds];
   }
+
   const responses = await mapBatches({
     action: (batch) =>
       client.fetch(batch, {
@@ -374,12 +398,15 @@ const metadataDeletableIds = async (
     items: storedIds,
     size: ID_BATCH,
   });
+
   const owned: string[] = [];
+
   for (const record of responses.flat()) {
     if (record !== null && readStoredNamespace(record) === DEFAULT_NAMESPACE) {
       owned.push(record.id);
     }
   }
+
   return owned;
 };
 
@@ -415,11 +442,15 @@ const nativeNamespace = (index: string, namespace: string): string => {
       `In native namespace mode the adapter joins the index name and the namespace with "${NAMESPACE_SEPARATOR}", so an index name cannot contain it. Received "${index}".`
     );
   }
+
   requireUrlSafe(INDEX_LABEL, index);
+
   if (namespace === DEFAULT_NAMESPACE) {
     return index;
   }
+
   requireUrlSafe("namespace", namespace);
+
   return `${index}${NAMESPACE_SEPARATOR}${namespace}`;
 };
 
@@ -461,12 +492,14 @@ const describeSpecMismatch = (
   if (info.dimension !== spec.dimension) {
     return `The Upstash index has dimension ${info.dimension}, but "${spec.name}" asked for ${spec.dimension}. Dimension is fixed when the Upstash index is created.`;
   }
+
   if (
     spec.metric !== undefined &&
     SIMILARITIES[spec.metric] !== info.similarityFunction
   ) {
     return `The Upstash index uses the ${info.similarityFunction} similarity function, but "${spec.name}" asked for ${spec.metric}. The similarity function is fixed when the Upstash index is created.`;
   }
+
   return undefined;
 };
 
@@ -483,60 +516,77 @@ const createIndex = (
   options: IndexOptions
 ): VectorIndex => {
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
+
   const scope = (): UpstashNamespaceOptions => ({
     namespace: layout.upstashNamespace(name, namespace),
   });
+
   const invalid = layout.namespaceError?.(namespace);
+
   const upsertRejection = (
     records: readonly VectorRecord[]
   ): VecstoreError | undefined => {
     if (invalid !== undefined) {
       return invalid;
     }
+
     const reserved = reservedKeyError(PROVIDER, records, layout.reservedKeys);
+
     if (reserved !== undefined) {
       return reserved;
     }
+
     if (layout.emulatesNamespace && namespace === DEFAULT_NAMESPACE) {
       return collidingIdError(records);
     }
+
     return undefined;
   };
+
   return {
     delete: (selector: DeleteSelector): VecResult<void> => {
       const rejected = invalid ?? deleteSelectorError(PROVIDER, selector);
+
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));
       }
+
       return run(name, async () => {
         if ("ids" in selector) {
           const stored = selector.ids.map((id) =>
             layout.storedId(namespace, id)
           );
+
           const ids = await layout.deletableIds(
             client,
             name,
             namespace,
             stored
           );
+
           if (ids.length === 0) {
             return;
           }
+
           const target = scope();
           await mapBatches({
             action: (batch) => client.delete({ ids: batch }, target),
             items: ids,
             size: ID_BATCH,
           });
+
           return;
         }
+
         if ("filter" in selector) {
           await client.delete(
             { filter: layout.compileFilter(namespace, selector.filter) },
             scope()
           );
+
           return;
         }
+
         await layout.clear(client, name, namespace);
       });
     },
@@ -548,10 +598,12 @@ const createIndex = (
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       return run(name, async () => {
         const includeVectors = fetchOptions.includeVector ?? false;
         const target = scope();
         const storedIds = ids.map((id) => layout.storedId(namespace, id));
+
         const responses = await mapBatches({
           action: (batch) =>
             client.fetch(batch, {
@@ -562,7 +614,9 @@ const createIndex = (
           items: storedIds,
           size: ID_BATCH,
         });
+
         const records: VectorRecord[] = [];
+
         for (const record of responses.flat()) {
           if (record !== null && layout.holds(namespace, record)) {
             records.push({
@@ -572,6 +626,7 @@ const createIndex = (
             });
           }
         }
+
         return sortByIds(ids, records);
       });
     },
@@ -584,12 +639,16 @@ const createIndex = (
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       const invalidQuery = queryOptionsError(PROVIDER, query);
+
       if (invalidQuery !== undefined) {
         return Promise.resolve(err(invalidQuery));
       }
+
       return run(name, async () => {
         const includeMetadata = query.includeMetadata ?? true;
+
         const matches = await client.query(
           {
             filter:
@@ -603,6 +662,7 @@ const createIndex = (
           },
           scope()
         );
+
         return matches.map((match): ScoredRecord => ({
           id: layout.readId(match),
           metadata: includeMetadata ? layout.readMetadata(match) : undefined,
@@ -614,14 +674,18 @@ const createIndex = (
 
     upsert: (records): VecResult<void> => {
       const rejected = upsertRejection(records);
+
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));
       }
+
       return run(name, async () => {
         const target = scope();
+
         const stored = lastById(records).map((record) =>
           layout.storedRecord(namespace, record)
         );
+
         await mapBatches({
           action: (batch) => client.upsert(batch, target),
           items: stored,
@@ -637,19 +701,25 @@ export const createUpstashStore = <Client extends UpstashIndexLike>(
 ): VectorStore<Client> => {
   const { client } = options;
   const layout = LAYOUTS[options.namespaceMode ?? "metadata"];
+
   return {
     createIndex: (spec: IndexSpec) => {
       const invalid = indexSpecError(PROVIDER, spec);
+
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       return run(spec.name, async () => {
         const info = await client.info();
         const mismatch = describeSpecMismatch(spec, info);
+
         if (mismatch !== undefined) {
           throw taggedError(ARGUMENT_ERROR, mismatch);
         }
+
         const existing = await client.listNamespaces();
+
         if (existing.some((found) => layout.owns(spec.name, found))) {
           throw taggedError(
             CONFLICT_ERROR,
@@ -663,12 +733,14 @@ export const createUpstashStore = <Client extends UpstashIndexLike>(
       run(name, async () => {
         const existing = await client.listNamespaces();
         const owned = existing.filter((found) => layout.owns(name, found));
+
         if (owned.length === 0) {
           throw taggedError(
             MISSING_ERROR,
             `The Upstash index has no namespace for "${name}".`
           );
         }
+
         await mapBatches({
           action: (batch) => dropNamespaces(client, batch),
           items: owned,
@@ -684,6 +756,7 @@ export const createUpstashStore = <Client extends UpstashIndexLike>(
         const existing = await client.listNamespaces();
         const names = new Set(existing.map((found) => layout.indexOf(found)));
         names.delete(DEFAULT_NAMESPACE);
+
         return [...names];
       }),
 

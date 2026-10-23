@@ -33,16 +33,21 @@ const fakeClient = (responses: object[][] = [], failures = 0) => {
   const calls: Call[] = [];
   const pending = [...responses];
   let remaining = failures;
+
   const client: PgQueryable = {
     query: (text, params) => {
       calls.push({ params, text });
+
       if (remaining > 0) {
         remaining -= 1;
+
         return Promise.reject(pgError("XX000"));
       }
+
       return Promise.resolve({ rows: pending.shift() ?? [] });
     },
   };
+
   return { calls, client };
 };
 
@@ -81,11 +86,13 @@ describe(createPgvectorStore, () => {
 
   test("createIndex creates the table, the HNSW index and a GIN index", async () => {
     const { client, calls } = fakeClient();
+
     const result = await createPgvectorStore({ client }).createIndex({
       dimension: 3,
       metric: "euclidean",
       name: "docs",
     });
+
     expect(result.ok).toBeTruthy();
     expect(calls).toHaveLength(1);
     const statement = calls[0]?.text ?? "";
@@ -107,10 +114,12 @@ describe(createPgvectorStore, () => {
 
   test("createIndex rejects a non-integer dimension before touching the database", async () => {
     const { client, calls } = fakeClient();
+
     const result = await createPgvectorStore({ client }).createIndex({
       dimension: 1.5,
       name: "docs",
     });
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(calls).toHaveLength(0);
   });
@@ -118,10 +127,12 @@ describe(createPgvectorStore, () => {
   test("createIndex rejects a name longer than 49 bytes before touching the database", async () => {
     const { client, calls } = fakeClient();
     const store = createPgvectorStore({ client });
+
     const tooLong = await store.createIndex({
       dimension: 2,
       name: "a".repeat(50),
     });
+
     expect(!tooLong.ok && tooLong.error.kind).toBe("invalid_argument");
     expect(calls).toHaveLength(0);
 
@@ -129,16 +140,19 @@ describe(createPgvectorStore, () => {
       dimension: 2,
       name: "a".repeat(49),
     });
+
     expect(atLimit.ok).toBeTruthy();
     expect(calls).toHaveLength(1);
   });
 
   test("createIndex rejects a name that holds the dollar tag", async () => {
     const { client, calls } = fakeClient();
+
     const result = await createPgvectorStore({ client }).createIndex({
       dimension: 2,
       name: "x$vecstore$y",
     });
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(calls).toHaveLength(0);
   });
@@ -223,13 +237,16 @@ describe(createPgvectorStore, () => {
         },
       ],
     ]);
+
     const store = createPgvectorStore({ client });
+
     const result = await store.index("docs").query({
       filter: and(eq("genre", "drama"), gt("year", 2000)),
       includeVector: true,
       topK: 3,
       vector: [1, 2],
     });
+
     expect(result).toStrictEqual({
       ok: true,
       value: [
@@ -259,9 +276,11 @@ describe(createPgvectorStore, () => {
 
   test("query rejects a non-positive topK before calling the provider", async () => {
     const { client, calls } = fakeClient();
+
     const result = await createPgvectorStore({ client })
       .index("docs")
       .query({ topK: 0, vector: [1] });
+
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(calls).toStrictEqual([]);
@@ -270,11 +289,13 @@ describe(createPgvectorStore, () => {
   test("query and delete reject a malformed filter or selector before calling the provider", async () => {
     const { client, calls } = fakeClient();
     const index = createPgvectorStore({ client }).index("docs");
+
     const queried = await index.query({
       filter: filterWithoutValue,
       topK: 1,
       vector: [1, 0, 0],
     });
+
     const filtered = await index.delete({ filter: filterWithoutValue });
     const emptied = await index.delete(emptySelector);
     expect([queried, filtered, emptied]).toMatchObject([
@@ -295,6 +316,7 @@ describe(createPgvectorStore, () => {
         },
       ],
     ]);
+
     await createPgvectorStore({ client })
       .index("docs")
       .query({ topK: 3, vector: [1, 2] });
@@ -317,6 +339,7 @@ describe(createPgvectorStore, () => {
           },
         ],
       ]);
+
       await createPgvectorStore({ client })
         .index("docs")
         .query({ topK: 3, vector: [1, 2] });
@@ -331,10 +354,12 @@ describe(createPgvectorStore, () => {
       indexdef:
         "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_ip_ops)",
     };
+
     const l2OpsRow = {
       indexdef:
         "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_l2_ops)",
     };
+
     const { client, calls } = fakeClient([
       [ipOpsRow],
       [],
@@ -343,6 +368,7 @@ describe(createPgvectorStore, () => {
       [l2OpsRow],
       [],
     ]);
+
     const store = createPgvectorStore({ client });
     await store.index("docs").query({ topK: 1, vector: [1, 2] });
     await store.deleteIndex("docs");
@@ -361,6 +387,7 @@ describe(createPgvectorStore, () => {
       indexdef:
         "CREATE INDEX docs_embedding_idx ON public.docs USING hnsw (embedding vector_l2_ops)",
     };
+
     const { client, calls } = fakeClient([[], [], [], [l2OpsRow], []]);
     const store = createPgvectorStore({ client });
     await store.index("docs").query({ topK: 1, vector: [1, 2] });
@@ -383,6 +410,7 @@ describe(createPgvectorStore, () => {
         },
       ],
     ]);
+
     const store = createPgvectorStore({ client });
     await Promise.all([
       store.index("docs").query({ topK: 1, vector: [1, 2] }),
@@ -409,6 +437,7 @@ describe(createPgvectorStore, () => {
         { id: "a", metadata: { n: 1 } },
       ],
     ]);
+
     const index = createPgvectorStore({ client }).index("docs");
     await expect(index.fetch(["a", "b"])).resolves.toStrictEqual({
       ok: true,
@@ -478,6 +507,7 @@ describe(createPgvectorStore, () => {
     const cause = new Error("Connection terminated due to connection timeout", {
       cause: new Error("socket hang up"),
     });
+
     expect(normalizePgvectorError(cause, "docs").kind).toBe("connection");
   });
 

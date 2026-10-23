@@ -147,6 +147,7 @@ export const normalizeSupabaseError = (
   if (hasNoResponse(cause) || isFetchFailure(cause)) {
     return connection(PROVIDER, cause);
   }
+
   if (hasCode(cause)) {
     if (cause.code === MISSING_FUNCTION) {
       return unsupported(
@@ -155,10 +156,12 @@ export const normalizeSupabaseError = (
         `${context.fn} is not installed. ${INSTALL_HINT}.`
       );
     }
+
     if (JWT_CODES.has(cause.code)) {
       return unauthorized(PROVIDER, cause);
     }
   }
+
   return normalizePostgresError(PROVIDER, cause, context.index);
 };
 
@@ -176,9 +179,11 @@ const invoke = async (
   call: SupabaseCall
 ): Promise<readonly object[]> => {
   const response = await client.rpc(call.fn, call.args);
+
   if (response.error !== null && response.error !== undefined) {
     throw rpcFailure(response.error, response.status);
   }
+
   return response.data ?? [];
 };
 
@@ -218,12 +223,14 @@ const deleteCall = (
       fn: "vecstore_delete",
     };
   }
+
   if ("filter" in selector) {
     return {
       args: { ...scope, ids: null, match_filter: selector.filter },
       fn: "vecstore_delete",
     };
   }
+
   return {
     args: { ...scope, ids: null, match_filter: null },
     fn: "vecstore_delete",
@@ -239,6 +246,7 @@ const createIndexHandle = (
     ...target,
     match_namespace: options.namespace ?? DEFAULT_NAMESPACE,
   };
+
   const context = (fn: SupabaseCall["fn"]): CallContext => ({
     fn,
     index: target.index_name,
@@ -247,9 +255,11 @@ const createIndexHandle = (
   return {
     delete: (selector: DeleteSelector) => {
       const rejected = deleteSelectorError(PROVIDER, selector);
+
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));
       }
+
       return run(context("vecstore_delete"), async () => {
         await invoke(client, deleteCall(scope, selector));
       });
@@ -270,6 +280,7 @@ const createIndexHandle = (
           items: ids,
           size: FETCH_BATCH,
         });
+
         return sortByIds(ids, readRecords(pages.flat()));
       }),
 
@@ -279,12 +290,15 @@ const createIndexHandle = (
 
     query: (query: QueryOptions) => {
       const invalid = queryOptionsError(PROVIDER, query);
+
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       return run(context("vecstore_query"), async () => {
         const includeVector = query.includeVector ?? false;
         const includeMetadata = query.includeMetadata ?? true;
+
         const rows = await invoke(client, {
           args: {
             ...scope,
@@ -295,6 +309,7 @@ const createIndexHandle = (
           },
           fn: "vecstore_query",
         });
+
         return readScored(rows, includeMetadata, includeVector);
       });
     },
@@ -319,6 +334,7 @@ export const createSupabaseStore = <Client extends SupabaseClientLike>(
 ): VectorStore<Client> => {
   const { client } = options;
   const schema = options.schema ?? null;
+
   const target = (name: string): SupabaseIndexTarget => ({
     index_name: name,
     index_schema: schema,
@@ -328,9 +344,11 @@ export const createSupabaseStore = <Client extends SupabaseClientLike>(
     createIndex: (spec: IndexSpec) => {
       const invalid =
         indexSpecError(PROVIDER, spec) ?? indexNameError(PROVIDER, spec.name);
+
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       return run(
         { fn: "vecstore_create_index", index: spec.name },
         async () => {
@@ -360,6 +378,7 @@ export const createSupabaseStore = <Client extends SupabaseClientLike>(
           args: { index_schema: schema },
           fn: "vecstore_list_indexes",
         });
+
         return readNames(rows);
       }),
 

@@ -13,10 +13,12 @@ const backgrounds = path.join(process.cwd(), "app", "og", "docs", "[...slug]");
 
 const readBackground = (slugs: readonly string[]) => {
   const [group, name] = slugs;
+
   const provider =
     group === "providers" && providerIds.some((id) => id === name)
       ? name
       : undefined;
+
   const file = provider ? `background-${provider}.png` : "background.png";
 
   return readFile(path.join(backgrounds, file));

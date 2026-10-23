@@ -1,11 +1,3 @@
--- vecstore-sdk: server side for the Supabase adapter.
--- Run once per project, with a role that can create functions.
---   psql "$SUPABASE_DB_URL" -f node_modules/vecstore-sdk/sql/supabase.sql
--- Every function runs with the privileges of the caller. Tables that
--- vecstore_create_index creates have row level security enabled and no
--- policies, so the anon and authenticated roles read and write nothing until
--- you add one. The service role bypasses row level security.
-
 create extension if not exists vector;
 
 create or replace function vecstore_table(index_name text, index_schema text)

@@ -48,6 +48,7 @@ interface Recorded {
 
 const fakeClient = () => {
   const stored: QdrantStoredPoint[] = [];
+
   const recorded: Recorded = {
     createCollections: [],
     deletedCollections: [],
@@ -57,21 +58,26 @@ const fakeClient = () => {
     retrieves: [],
     upserts: [],
   };
+
   const client: QdrantClientLike = {
     createCollection: (name, args) => {
       recorded.createCollections.push({ name, vectors: args.vectors });
+
       return Promise.resolve(true);
     },
     createPayloadIndex: (_name, args) => {
       recorded.payloadIndexes.push(args.field_name);
+
       return Promise.resolve({ status: "completed" });
     },
     delete: (_name, args) => {
       recorded.deletes.push(args);
+
       return Promise.resolve({ status: "completed" });
     },
     deleteCollection: (name) => {
       recorded.deletedCollections.push(name);
+
       return Promise.resolve(true);
     },
     getCollections: () =>
@@ -82,14 +88,17 @@ const fakeClient = () => {
         limit: args.limit,
         query: args.query,
       });
+
       const points: QdrantScoredPoint[] = stored.map((point) => ({
         ...point,
         score: 0.5,
       }));
+
       return Promise.resolve({ points });
     },
     retrieve: (_name, args) => {
       recorded.retrieves.push(args.ids.length);
+
       return Promise.resolve(
         stored.filter((point) => args.ids.includes(point.id))
       );
@@ -97,9 +106,11 @@ const fakeClient = () => {
     upsert: (_name, args) => {
       recorded.upserts.push(args.points);
       stored.push(...args.points);
+
       return Promise.resolve({ status: "completed" });
     },
   };
+
   return { client, recorded };
 };
 
@@ -132,11 +143,13 @@ describe(createQdrantStore, () => {
 
   test("createIndex creates the collection and a tenant index", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await createQdrantStore({ client }).createIndex({
       dimension: 3,
       metric: "dot",
       name: "docs",
     });
+
     expect(result.ok).toBeTruthy();
     expect(recorded.createCollections).toStrictEqual([
       { name: "docs", vectors: { distance: "Dot", size: 3 } },
@@ -146,14 +159,17 @@ describe(createQdrantStore, () => {
 
   test("createIndex drops the collection when the tenant index cannot be created", async () => {
     const { client, recorded } = fakeClient();
+
     const failing: QdrantClientLike = {
       ...client,
       createPayloadIndex: () => Promise.reject(httpFailure(400)),
     };
+
     const result = await createQdrantStore({ client: failing }).createIndex({
       dimension: 3,
       name: "docs",
     });
+
     expect(result).toMatchObject({
       error: { kind: "invalid_argument", provider: "qdrant" },
       ok: false,
@@ -163,10 +179,12 @@ describe(createQdrantStore, () => {
 
   test("createIndex rejects a non-positive dimension before touching the client", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await createQdrantStore({ client }).createIndex({
       dimension: 0,
       name: "docs",
     });
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(recorded.createCollections).toHaveLength(0);
   });
@@ -181,10 +199,12 @@ describe(createQdrantStore, () => {
 
   test("deleteIndex reports a collection the server does not hold", async () => {
     const { client } = fakeClient();
+
     const empty: QdrantClientLike = {
       ...client,
       deleteCollection: () => Promise.resolve(false),
     };
+
     await expect(
       createQdrantStore({ client: empty }).deleteIndex("missing")
     ).resolves.toMatchObject({
@@ -221,6 +241,7 @@ describe(createQdrantStore, () => {
       "vecstore-sdk/qdrant/point-id",
       "tenant-a/5/doc-1"
     );
+
     expect(foreign).toBe("73f328fb-a7ca-81f7-a86a-06f5a7282959");
     const { client, recorded } = fakeClient();
     await createQdrantStore({ client })
@@ -234,6 +255,7 @@ describe(createQdrantStore, () => {
   test("upsert never runs more than four batches at once", async () => {
     const { client } = fakeClient();
     const inFlight = { current: 0, max: 0 };
+
     const tracked: QdrantClientLike = {
       ...client,
       upsert: async (name, args) => {
@@ -241,14 +263,18 @@ describe(createQdrantStore, () => {
         inFlight.max = Math.max(inFlight.max, inFlight.current);
         await Promise.resolve();
         inFlight.current -= 1;
+
         return client.upsert(name, args);
       },
     };
+
     const index = createQdrantStore({ client: tracked }).index("docs");
+
     const records = Array.from({ length: 4001 }, (_, i) => ({
       id: `doc-${i}`,
       vector: [i, 0, 0],
     }));
+
     await index.upsert(records);
     expect(inFlight.max).toBe(4);
   });
@@ -271,6 +297,7 @@ describe(createQdrantStore, () => {
       "docs",
       { namespace: "tenant-a" }
     );
+
     await index.upsert([
       { id: "doc-1", metadata: { genre: "drama" }, vector: [1, 2, 3] },
     ]);
@@ -296,10 +323,12 @@ describe(createQdrantStore, () => {
   test("upsert, fetch, and delete split into batches", async () => {
     const { client, recorded } = fakeClient();
     const index = createQdrantStore({ client }).index("docs");
+
     const records = Array.from({ length: 501 }, (_, i) => ({
       id: `doc-${i}`,
       vector: [i, 0, 0],
     }));
+
     await index.upsert(records);
     expect(recorded.upserts).toHaveLength(2);
     expect(recorded.upserts[0]).toHaveLength(500);
@@ -309,6 +338,7 @@ describe(createQdrantStore, () => {
       "doc-0",
       ...Array.from({ length: 1000 }, (_, i) => `doc-${i + 1}`),
     ];
+
     await index.fetch(ids);
     expect(recorded.retrieves).toStrictEqual([1000, 1]);
 
@@ -337,9 +367,11 @@ describe(createQdrantStore, () => {
 
   test("query rejects a non-positive topK before calling the provider", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await createQdrantStore({ client })
       .index("docs")
       .query({ topK: 0, vector: [1] });
+
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(recorded.queries).toStrictEqual([]);
@@ -348,11 +380,13 @@ describe(createQdrantStore, () => {
   test("query and delete reject a malformed filter or selector before calling the provider", async () => {
     const { client, recorded } = fakeClient();
     const index = createQdrantStore({ client }).index("docs");
+
     const queried = await index.query({
       filter: filterWithoutValue,
       topK: 1,
       vector: [1, 0, 0],
     });
+
     const filtered = await index.delete({ filter: filterWithoutValue });
     const emptied = await index.delete(emptySelector);
     expect([queried, filtered, emptied]).toMatchObject([
@@ -417,9 +451,11 @@ describe(createQdrantStore, () => {
 
   test("a namespace containing a slash is rejected before the request", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await createQdrantStore({ client })
       .index("docs", { namespace: "a/3" })
       .upsert([{ id: "b", vector: [1] }]);
+
     expect(result).toMatchObject({
       error: { kind: "invalid_argument", provider: "qdrant" },
       ok: false,
@@ -429,9 +465,11 @@ describe(createQdrantStore, () => {
 
   test("upsert rejects a record that sets a reserved payload key", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await createQdrantStore({ client })
       .index("docs")
       .upsert([{ id: "x", metadata: { _id: "other" }, vector: [1] }]);
+
     expect(result).toMatchObject({
       error: { kind: "invalid_argument", provider: "qdrant" },
       ok: false,
@@ -448,6 +486,7 @@ describe(createQdrantStore, () => {
       data: { status: { error: "bad vector" } },
       status: 400,
     });
+
     expect(normalizeQdrantError(cause, "docs")).toStrictEqual({
       cause,
       kind: "invalid_argument",
@@ -490,13 +529,16 @@ describe(createQdrantStore, () => {
 
   test("a failing call returns an error result instead of throwing", async () => {
     const cause = httpFailure(404);
+
     const failing: QdrantClientLike = {
       ...fakeClient().client,
       upsert: () => Promise.reject(cause),
     };
+
     const result = await createQdrantStore({ client: failing })
       .index("missing")
       .upsert([{ id: "x", vector: [1] }]);
+
     expect(result).toStrictEqual({
       error: {
         cause,

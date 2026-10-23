@@ -72,14 +72,18 @@ const membership = (
   exclude: boolean
 ): QdrantCondition => {
   const list = [...values];
+
   if (isStringList(list) || isIntegerList(list)) {
     const condition: QdrantMatchCondition = {
       key: field,
       match: { any: list },
     };
+
     return exclude ? { must_not: [condition] } : condition;
   }
+
   const conditions = list.map((value) => equalsCondition(field, value));
+
   return exclude ? { must_not: conditions } : { should: conditions };
 };
 
@@ -88,41 +92,54 @@ const toCondition = (filter: Filter): QdrantCondition => {
     case "eq": {
       return equalsCondition(filter.field, filter.value);
     }
+
     case "ne": {
       return { must_not: [equalsCondition(filter.field, filter.value)] };
     }
+
     case "gt": {
       return { key: filter.field, range: { gt: filter.value } };
     }
+
     case "gte": {
       return { key: filter.field, range: { gte: filter.value } };
     }
+
     case "lt": {
       return { key: filter.field, range: { lt: filter.value } };
     }
+
     case "lte": {
       return { key: filter.field, range: { lte: filter.value } };
     }
+
     case "in": {
       return membership(filter.field, filter.values, false);
     }
+
     case "nin": {
       return membership(filter.field, filter.values, true);
     }
+
     case "exists": {
       return { must_not: [{ is_empty: { key: filter.field } }] };
     }
+
     case "and": {
       return { must: filter.filters.map(toCondition) };
     }
+
     case "or": {
       return { should: filter.filters.map(toCondition) };
     }
+
     case "not": {
       return { must_not: [toCondition(filter.filter)] };
     }
+
     default: {
       const exhaustive: never = filter;
+
       return exhaustive;
     }
   }
@@ -137,5 +154,6 @@ const isQdrantFilter = (
 
 export const compileQdrantFilter = (filter: Filter): QdrantFilter => {
   const condition = toCondition(filter);
+
   return isQdrantFilter(condition) ? condition : { must: [condition] };
 };

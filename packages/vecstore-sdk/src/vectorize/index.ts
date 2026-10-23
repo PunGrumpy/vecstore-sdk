@@ -150,9 +150,11 @@ const refineBadRequest = (
   if (ALREADY_EXISTS_PATTERN.test(message)) {
     return alreadyExists(PROVIDER, index, cause);
   }
+
   if (NOT_FOUND_PATTERN.test(message)) {
     return notFound(PROVIDER, index, cause);
   }
+
   return invalidArgument(PROVIDER, message, cause);
 };
 
@@ -161,24 +163,31 @@ export const normalizeVectorizeError = (
   index: string
 ): VecstoreError => {
   const message = errorMessage(cause);
+
   if (!isHttpFailure(cause)) {
     return CONNECTION_PATTERN.test(message)
       ? connection(PROVIDER, cause)
       : providerError(PROVIDER, cause);
   }
+
   const { status } = cause;
+
   if (status === HTTP_NOT_FOUND) {
     return notFound(PROVIDER, index, cause);
   }
+
   if (status === HTTP_CONFLICT) {
     return alreadyExists(PROVIDER, index, cause);
   }
+
   if (status === HTTP_UNAUTHORIZED || status === HTTP_FORBIDDEN) {
     return unauthorized(PROVIDER, cause);
   }
+
   if (status === HTTP_BAD_REQUEST || status === HTTP_UNPROCESSABLE) {
     return refineBadRequest(cause, index, message);
   }
+
   return providerError(PROVIDER, cause);
 };
 
@@ -194,6 +203,7 @@ const compileFilter = (
   filter: Filter
 ): Result<VectorizeFilter, VecstoreError> => {
   const compiled = compileVectorizeFilter(filter);
+
   return compiled.ok ? compiled : err(toVecstoreError(compiled.error));
 };
 
@@ -221,6 +231,7 @@ const readId = (record: VectorizeStoredVector): string => {
   const stored = metadataEntries(record).find(
     ([key]) => key === VECTORIZE_ID_KEY
   );
+
   return stored !== undefined && isString(stored[1]) ? stored[1] : record.id;
 };
 
@@ -237,6 +248,7 @@ const belongsToNamespace = (
   const reported = isString(record.namespace)
     ? record.namespace
     : DEFAULT_NAMESPACE;
+
   return reported === namespace;
 };
 
@@ -251,9 +263,11 @@ const nativeNamespace = (namespace: string): string | undefined =>
 const toLine = (namespace: string, record: VectorRecord): string => {
   const id = toVectorizeId(namespace, record.id);
   const entries: MetadataEntry[] = Object.entries(record.metadata ?? {});
+
   if (id !== record.id) {
     entries.push([VECTORIZE_ID_KEY, record.id]);
   }
+
   return JSON.stringify({
     id,
     metadata: Object.fromEntries(entries),
@@ -275,16 +289,20 @@ const deletableIds = async (
   if (namespace !== DEFAULT_NAMESPACE) {
     return [...ids];
   }
+
   const response = await indexes.getByIDs(name, {
     account_id: accountId,
     ids: [...ids],
   });
+
   const owned: string[] = [];
+
   for (const found of isUnknownArray(response) ? response : []) {
     if (isStoredVector(found) && belongsToNamespace(namespace, found)) {
       owned.push(found.id);
     }
   }
+
   return owned;
 };
 
@@ -296,12 +314,15 @@ const createIndex = (
 ): VectorIndex => {
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
   const invalid = namespaceError(PROVIDER, namespace);
+
   return {
     delete: (selector: DeleteSelector): VecResult<void> => {
       const rejected = invalid ?? deleteSelectorError(PROVIDER, selector);
+
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));
       }
+
       if ("ids" in selector) {
         return run(name, async () => {
           const stored = selector.ids.map((id) => toVectorizeId(namespace, id));
@@ -314,6 +335,7 @@ const createIndex = (
                 namespace,
                 batch
               );
+
               if (ids.length > 0) {
                 await indexes.deleteByIDs(name, { account_id: accountId, ids });
               }
@@ -323,11 +345,13 @@ const createIndex = (
           });
         });
       }
+
       if ("filter" in selector) {
         return Promise.resolve(
           err(unsupported(PROVIDER, "deleteByFilter", DELETE_BY_FILTER_MESSAGE))
         );
       }
+
       return Promise.resolve(
         err(unsupported(PROVIDER, "deleteAll", DELETE_ALL_MESSAGE))
       );
@@ -340,19 +364,24 @@ const createIndex = (
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       return run(name, async () => {
         if (ids.length === 0) {
           return [];
         }
+
         const includeVector = fetchOptions.includeVector ?? false;
         const stored = ids.map((id) => toVectorizeId(namespace, id));
+
         const responses = await mapBatches({
           action: (batch) =>
             indexes.getByIDs(name, { account_id: accountId, ids: batch }),
           items: stored,
           size: ID_BATCH,
         });
+
         const records: VectorRecord[] = [];
+
         for (const response of responses) {
           for (const found of isUnknownArray(response) ? response : []) {
             if (isStoredVector(found) && belongsToNamespace(namespace, found)) {
@@ -364,6 +393,7 @@ const createIndex = (
             }
           }
         }
+
         return sortByIds(ids, records);
       });
     },
@@ -376,15 +406,20 @@ const createIndex = (
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       const invalidQuery = queryOptionsError(PROVIDER, query);
+
       if (invalidQuery !== undefined) {
         return Promise.resolve(err(invalidQuery));
       }
+
       const compiled =
         query.filter === undefined ? undefined : compileFilter(query.filter);
+
       if (compiled?.ok === false) {
         return Promise.resolve(compiled);
       }
+
       const params: VectorizeQueryParams = {
         account_id: accountId,
         filter: compiled?.ok === true ? compiled.value : undefined,
@@ -394,11 +429,13 @@ const createIndex = (
         topK: query.topK,
         vector: [...query.vector],
       };
+
       return run(name, async () => {
         const includeMetadata = query.includeMetadata ?? true;
         const includeVector = query.includeVector === true;
         const response = await indexes.query(name, params);
         const records: ScoredRecord[] = [];
+
         for (const match of response?.matches ?? []) {
           if (
             isScoredVector(match) &&
@@ -412,6 +449,7 @@ const createIndex = (
             });
           }
         }
+
         return records;
       });
     },
@@ -419,16 +457,20 @@ const createIndex = (
     upsert: (records): VecResult<void> => {
       const rejected =
         invalid ?? reservedKeyError(PROVIDER, records, RESERVED_KEYS);
+
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));
       }
+
       return run(name, async () => {
         if (records.length === 0) {
           return;
         }
+
         const lines = lastById(records).map((record) =>
           toLine(namespace, record)
         );
+
         await mapBatches({
           action: (batch) =>
             indexes.upsert(name, {
@@ -450,12 +492,15 @@ export const createVectorizeStore = <Client extends VectorizeClient>(
   const { accountId, client } = options;
   const { indexes } = client.vectorize;
   const metadataIndexes = options.metadataIndexes ?? [];
+
   return {
     createIndex: (spec: IndexSpec) => {
       const invalid = indexSpecError(PROVIDER, spec);
+
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       return run(spec.name, async () => {
         await indexes.create({
           account_id: accountId,
@@ -465,6 +510,7 @@ export const createVectorizeStore = <Client extends VectorizeClient>(
           },
           name: spec.name,
         });
+
         try {
           await Promise.all(
             metadataIndexes.map((metadataIndex) =>
@@ -497,11 +543,13 @@ export const createVectorizeStore = <Client extends VectorizeClient>(
       run("", async () => {
         const page = await indexes.list({ account_id: accountId });
         const names: string[] = [];
+
         for (const index of page.result) {
           if (isString(index.name)) {
             names.push(index.name);
           }
         }
+
         return names;
       }),
 

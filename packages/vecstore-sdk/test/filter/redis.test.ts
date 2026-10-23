@@ -27,9 +27,11 @@ const fields: RedisMetadataField[] = [
 
 const compiled = (filter: Filter): string => {
   const result = compileRedisFilter(filter, fields);
+
   if (!result.ok) {
     throw new Error(result.error.message);
   }
+
   return result.value;
 };
 

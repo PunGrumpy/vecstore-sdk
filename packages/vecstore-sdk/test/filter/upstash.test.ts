@@ -93,6 +93,7 @@ describe(compileUpstashFilter, () => {
 
   test.each(rejected)("%s is rejected", (_name, filter) => {
     expect(() => compileUpstashFilter(filter)).toThrow();
+
     try {
       compileUpstashFilter(filter);
     } catch (error) {

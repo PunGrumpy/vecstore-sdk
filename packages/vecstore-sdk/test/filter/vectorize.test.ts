@@ -20,9 +20,11 @@ import { compileVectorizeFilter } from "../../src/filter/vectorize";
 
 const compiled = (filter: Filter): VectorizeFilter => {
   const result = compileVectorizeFilter(filter);
+
   if (!result.ok) {
     throw new Error(result.error.message);
   }
+
   return result.value;
 };
 

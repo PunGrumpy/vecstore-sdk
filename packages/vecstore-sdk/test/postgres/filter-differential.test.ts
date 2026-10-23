@@ -77,23 +77,29 @@ describe("the two pgvector filter compilers", () => {
       `select id from d where ${where} order by id`,
       params
     );
+
     return result.rows.map((row) => row.id);
   };
 
   test.each(corpus)("%s", async (_name, filter, expected) => {
     const compiled = compilePgvectorFilter(filter);
     const fromTypescript = await idsFor(compiled.text, compiled.params);
+
     const sql = await db().query<{ s: string }>(
       `select vecstore_filter_sql($1::jsonb, 'metadata') as s`,
       [JSON.stringify(filter)]
     );
+
     const predicate = sql.rows[0]?.s;
     expect(isString(predicate) && predicate.length > 0).toBe(true);
+
     if (!isString(predicate)) {
       throw new Error("vecstore_filter_sql returned no predicate");
     }
+
     const fromPlpgsql = await idsFor(predicate);
     expect(fromPlpgsql).toStrictEqual(fromTypescript);
+
     if (expected !== undefined) {
       expect(fromTypescript).toStrictEqual(expected);
     }

@@ -8,6 +8,7 @@ import { fonts } from "@/lib/fonts";
 import { url } from "@/lib/url";
 
 const siteName = "VecStore SDK";
+
 const siteDescription =
   "A unified vector store SDK for TypeScript. One filter language across Qdrant, pgvector, Pinecone, Supabase, Upstash Vector, Cloudflare Vectorize, and Redis, so you can switch providers without rewriting queries.";
 

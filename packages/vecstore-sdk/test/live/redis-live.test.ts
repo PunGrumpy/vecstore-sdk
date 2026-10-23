@@ -41,6 +41,7 @@ const unwrap = <T>(
   if (!result.ok) {
     throw new Error(JSON.stringify(result.error));
   }
+
   return result.value;
 };
 
@@ -82,6 +83,7 @@ describe.skipIf(!enabled)("redis live filters", () => {
     const present = unwrap(
       await index.query({ filter: exists("tags"), topK: 10, vector: [1, 0, 0] })
     );
+
     const missing = unwrap(
       await index.query({
         filter: not(exists("tags")),
@@ -89,6 +91,7 @@ describe.skipIf(!enabled)("redis live filters", () => {
         vector: [1, 0, 0],
       })
     );
+
     expect(idsOf(present)).toStrictEqual(["doc-a"]);
     expect(idsOf(missing)).toStrictEqual(["doc-b"]);
   });
@@ -101,6 +104,7 @@ describe.skipIf(!enabled)("redis live filters", () => {
         vector: [1, 0, 0],
       })
     );
+
     expect(idsOf(matches)).toStrictEqual(["doc-a"]);
   });
 
@@ -112,6 +116,7 @@ describe.skipIf(!enabled)("redis live filters", () => {
         vector: [1, 0, 0],
       })
     );
+
     expect(idsOf(matches)).toStrictEqual(["doc-a"]);
   });
 

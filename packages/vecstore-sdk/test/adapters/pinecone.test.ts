@@ -49,6 +49,7 @@ interface Recorded {
 
 const fakeClient = () => {
   const stored = new Map<string, PineconeRecordLike>();
+
   const recorded: Recorded = {
     createIndexes: [],
     deleteAlls: [],
@@ -56,27 +57,34 @@ const fakeClient = () => {
     queries: [],
     upserts: [],
   };
+
   const index: PineconeIndexLike = {
     deleteAll: (options) => {
       recorded.deleteAlls.push(options ?? {});
+
       return Promise.resolve();
     },
     deleteMany: (options) => {
       recorded.deleteManys.push(options);
+
       return Promise.resolve();
     },
     fetch: (options) => {
       const found: Record<string, PineconeRecordLike> = {};
+
       for (const id of options.ids) {
         const record = stored.get(id);
+
         if (record !== undefined) {
           found[id] = record;
         }
       }
+
       return Promise.resolve({ records: found });
     },
     query: (options) => {
       recorded.queries.push(options);
+
       return Promise.resolve({
         matches: [...stored.values()].map((record) => ({
           ...record,
@@ -86,21 +94,26 @@ const fakeClient = () => {
     },
     upsert: (options) => {
       recorded.upserts.push(options);
+
       for (const record of options.records) {
         stored.set(record.id, record);
       }
+
       return Promise.resolve();
     },
   };
+
   const client: PineconeClientLike = {
     createIndex: (options) => {
       recorded.createIndexes.push(options);
+
       return Promise.resolve();
     },
     deleteIndex: () => Promise.resolve(),
     index: () => index,
     listIndexes: () => Promise.resolve({ indexes: [{ name: "docs" }] }),
   };
+
   return { client, recorded };
 };
 
@@ -141,19 +154,23 @@ describe(createPineconeStore, () => {
 
   test("createIndex rejects a non-positive dimension before touching the client", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await createPineconeStore({ client }).createIndex({
       dimension: 0,
       name: "docs",
     });
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(recorded.createIndexes).toHaveLength(0);
   });
 
   test("namespaced verbs pass the namespace through", async () => {
     const { client, recorded } = fakeClient();
+
     const index = createPineconeStore({ client }).index("docs", {
       namespace: "tenant-a",
     });
+
     await index.upsert([
       { id: "doc-1", metadata: { genre: "drama" }, vector: [1, 2, 3] },
     ]);
@@ -225,10 +242,12 @@ describe(createPineconeStore, () => {
 
   test("delete by id splits into batches of 1000", async () => {
     const { client, recorded } = fakeClient();
+
     const ids: NonEmpty<string> = [
       "id-0",
       ...Array.from({ length: 1000 }, (_, i) => `id-${i + 1}`),
     ];
+
     await createPineconeStore({ client }).index("docs").delete({ ids });
     expect(recorded.deleteManys).toHaveLength(2);
     expect(recorded.deleteManys.map((call) => call.ids?.length)).toStrictEqual([
@@ -240,6 +259,7 @@ describe(createPineconeStore, () => {
     const index = createPineconeStore({ client: fakeClient().client }).index(
       "docs"
     );
+
     await index.upsert([
       { id: "b", vector: [2] },
       { id: "a", metadata: { n: 1 }, vector: [1] },
@@ -259,29 +279,36 @@ describe(createPineconeStore, () => {
     const index = createPineconeStore({ client: fakeClient().client }).index(
       "docs"
     );
+
     await index.upsert([{ id: "a", metadata: { n: 1 }, vector: [1] }]);
+
     const bare = await index.query({
       includeMetadata: false,
       topK: 1,
       vector: [1],
     });
+
     expect(bare.ok && bare.value[0]?.id).toBe("a");
     expect(bare.ok && bare.value[0]?.metadata).toBeUndefined();
     expect(bare.ok && bare.value[0]?.vector).toBeUndefined();
+
     const full = await index.query({
       includeVector: true,
       topK: 1,
       vector: [1],
     });
+
     expect(full.ok && full.value[0]?.metadata).toStrictEqual({ n: 1 });
     expect(full.ok && full.value[0]?.vector).toStrictEqual([1]);
   });
 
   test("query rejects a non-positive topK before calling the provider", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await createPineconeStore({ client })
       .index("docs")
       .query({ topK: 0, vector: [1] });
+
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(recorded.queries).toStrictEqual([]);
@@ -290,11 +317,13 @@ describe(createPineconeStore, () => {
   test("query and delete reject a malformed filter or selector before calling the provider", async () => {
     const { client, recorded } = fakeClient();
     const index = createPineconeStore({ client }).index("docs");
+
     const queried = await index.query({
       filter: filterWithoutValue,
       topK: 1,
       vector: [1, 0, 0],
     });
+
     const filtered = await index.delete({ filter: filterWithoutValue });
     const emptied = await index.delete(emptySelector);
     expect([queried, filtered, emptied]).toMatchObject([
@@ -309,8 +338,10 @@ describe(createPineconeStore, () => {
 
   test("delete by filter on an index that rejects it is unsupported", async () => {
     const { client } = fakeClient();
+
     const message =
       "Serverless indexes do not support deleting with metadata filtering";
+
     const rejecting: PineconeClientLike = {
       ...client,
       index: (options) => ({
@@ -319,9 +350,11 @@ describe(createPineconeStore, () => {
           Promise.reject(namedError("PineconeBadRequestError", message)),
       }),
     };
+
     const result = await createPineconeStore({ client: rejecting })
       .index("docs")
       .delete({ filter: eq("genre", "drama") });
+
     expect(result).toStrictEqual({
       error: {
         feature: "deleteByFilter",

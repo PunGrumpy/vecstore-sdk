@@ -68,6 +68,7 @@ describe(compilePgvectorFilter, () => {
     const sql = compilePgvectorFilter(
       and(eq("a", 1), or(eq("b", 2), not(eq("c", 3))))
     );
+
     expect(sql.text).toBe(
       "((metadata @> $1::jsonb OR metadata @> $2::jsonb) AND ((metadata @> $3::jsonb OR metadata @> $4::jsonb) OR NOT ((metadata @> $5::jsonb OR metadata @> $6::jsonb))))"
     );

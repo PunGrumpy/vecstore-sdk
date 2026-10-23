@@ -5,6 +5,7 @@ export const revalidate = false;
 
 const handler = async () => {
   const pages = await Promise.all(source.getPages().map(getLLMText));
+
   return new Response(pages.join("\n\n"), {
     headers: { "Content-Type": "text/plain" },
   });

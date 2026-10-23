@@ -60,6 +60,7 @@ interface Recorded {
 
 const fakeClient = (info: UpstashInfo = DEFAULT_INFO) => {
   const stored = new Map<string, Map<string, UpstashRecordLike>>();
+
   const recorded: Recorded = {
     deletedNamespaces: [],
     deletes: [],
@@ -68,43 +69,55 @@ const fakeClient = (info: UpstashInfo = DEFAULT_INFO) => {
     resets: [],
     upserts: [],
   };
+
   const bucket = (namespace = ""): Map<string, UpstashRecordLike> => {
     const found = stored.get(namespace);
+
     if (found !== undefined) {
       return found;
     }
+
     const created = new Map<string, UpstashRecordLike>();
     stored.set(namespace, created);
+
     return created;
   };
+
   const client: UpstashIndexLike = {
     delete: (args, options: UpstashNamespaceOptions = {}) => {
       recorded.deletes.push({ args, namespace: options.namespace });
+
       if ("ids" in args) {
         for (const id of args.ids) {
           bucket(options.namespace).delete(id);
         }
       }
+
       return Promise.resolve({ deleted: 0 });
     },
     deleteNamespace: (namespace: string) => {
       recorded.deletedNamespaces.push(namespace);
       stored.delete(namespace);
+
       return Promise.resolve("Success");
     },
     fetch: (ids, options = {}) => {
       recorded.fetches.push({ ids, namespace: options.namespace });
       const records = bucket(options.namespace);
+
       return Promise.resolve(
         ids.map((id): UpstashStoredRecord | null => {
           const record = records.get(id);
+
           if (record === undefined) {
             return null;
           }
+
           const found: UpstashStoredRecord = {
             id: record.id,
             metadata: record.metadata,
           };
+
           return options.includeVectors === true
             ? { ...found, vector: record.vector }
             : found;
@@ -115,6 +128,7 @@ const fakeClient = (info: UpstashInfo = DEFAULT_INFO) => {
     listNamespaces: () => Promise.resolve([...stored.keys()]),
     query: (args, options: UpstashNamespaceOptions = {}) => {
       recorded.queries.push({ ...args, namespace: options.namespace });
+
       return Promise.resolve(
         [...bucket(options.namespace).values()].map((record) => {
           const match: UpstashScoredRecord = {
@@ -122,6 +136,7 @@ const fakeClient = (info: UpstashInfo = DEFAULT_INFO) => {
             metadata: record.metadata,
             score: 0.9,
           };
+
           return args.includeVectors === true
             ? { ...match, vector: record.vector }
             : match;
@@ -131,16 +146,20 @@ const fakeClient = (info: UpstashInfo = DEFAULT_INFO) => {
     reset: (options: UpstashNamespaceOptions = {}) => {
       recorded.resets.push(options.namespace);
       bucket(options.namespace).clear();
+
       return Promise.resolve("Success");
     },
     upsert: (records, options: UpstashNamespaceOptions = {}) => {
       recorded.upserts.push({ namespace: options.namespace, records });
+
       for (const record of records) {
         bucket(options.namespace).set(record.id, record);
       }
+
       return Promise.resolve("Success");
     },
   };
+
   return { client, recorded };
 };
 
@@ -190,15 +209,18 @@ describe(createUpstashStore, () => {
       token: "test-token",
       url: "https://example.upstash.io",
     });
+
     const raw: Index = createUpstashStore({ client }).raw;
     expect(raw).toBe(client);
   });
 
   test("an index is an Upstash namespace and the namespace is metadata", async () => {
     const { client, recorded } = fakeClient();
+
     const index = createUpstashStore({ client }).index("docs", {
       namespace: "tenant-a",
     });
+
     await index.upsert([
       { id: "doc-1", metadata: { genre: "drama" }, vector: [1, 2, 3] },
     ]);
@@ -222,9 +244,11 @@ describe(createUpstashStore, () => {
 
   test("query rejects a non-positive topK before calling the provider", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await createUpstashStore({ client })
       .index("docs")
       .query({ topK: 0, vector: [1] });
+
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(recorded.queries).toStrictEqual([]);
@@ -233,11 +257,13 @@ describe(createUpstashStore, () => {
   test("query and delete reject a malformed filter or selector before calling the provider", async () => {
     const { client, recorded } = fakeClient();
     const index = createUpstashStore({ client }).index("docs");
+
     const queried = await index.query({
       filter: filterWithoutValue,
       topK: 1,
       vector: [1, 0, 0],
     });
+
     const filtered = await index.delete({ filter: filterWithoutValue });
     const emptied = await index.delete(emptySelector);
     expect([queried, filtered, emptied]).toMatchObject([
@@ -256,11 +282,13 @@ describe(createUpstashStore, () => {
     await index.upsert([
       { id: "doc-1", metadata: { genre: "drama" }, vector: [1, 2, 3] },
     ]);
+
     const result = await index.query({
       filter: eq("genre", "drama"),
       topK: 2,
       vector: [1, 2, 3],
     });
+
     expect(recorded.queries).toStrictEqual([
       {
         filter: "(_namespace = 'tenant-a' AND genre = 'drama')",
@@ -311,9 +339,11 @@ describe(createUpstashStore, () => {
 
   test("fetch and delete by id address the namespaced stored id", async () => {
     const { client, recorded } = fakeClient();
+
     const index = createUpstashStore({ client }).index("docs", {
       namespace: "tenant-a",
     });
+
     await index.upsert([
       { id: "b", vector: [2, 0, 0] },
       { id: "a", metadata: { n: 1 }, vector: [1, 0, 0] },
@@ -350,35 +380,45 @@ describe(createUpstashStore, () => {
   test("a default namespace upsert rejects an id shaped like a namespaced stored id", async () => {
     const { client, recorded } = fakeClient();
     const index = createUpstashStore({ client }).index("docs");
+
     const result = await index.upsert([
       { id: "tenant-a/5/doc-1", vector: [1, 2, 3] },
     ]);
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(recorded.upserts).toStrictEqual([]);
     const rejected = await index.upsert([{ id: "docs/3/abc", vector: [1] }]);
     expect(!rejected.ok && rejected.error.kind).toBe("invalid_argument");
+
     const lengthMismatch = await index.upsert([
       { id: "docs/4/abc", vector: [1] },
     ]);
+
     expect(lengthMismatch.ok).toBeTruthy();
+
     const noLengthSegment = await index.upsert([
       { id: "docs/abc", vector: [1] },
     ]);
+
     expect(noLengthSegment.ok).toBeTruthy();
+
     const emptyNamespace = await index.upsert([
       { id: "/5/doc-1", vector: [1] },
     ]);
+
     expect(emptyNamespace.ok).toBeTruthy();
   });
 
   test("a default namespace upsert in native mode accepts any id", async () => {
     const { client } = fakeClient();
+
     const result = await createUpstashStore({
       client,
       namespaceMode: "native",
     })
       .index("docs")
       .upsert([{ id: "tenant-a/5/doc-1", vector: [1, 2, 3] }]);
+
     expect(result.ok).toBeTruthy();
   });
 
@@ -408,9 +448,11 @@ describe(createUpstashStore, () => {
 
   test("delete by filter scopes the filter to the namespace", async () => {
     const { client, recorded } = fakeClient();
+
     const index = createUpstashStore({ client }).index("docs", {
       namespace: "tenant-a",
     });
+
     await index.delete({ filter: eq("genre", "drama") });
     expect(recorded.deletes).toStrictEqual([
       {
@@ -444,41 +486,49 @@ describe(createUpstashStore, () => {
 
   test("createIndex rejects a non-positive dimension before touching the client", async () => {
     const { client } = fakeClient();
+
     const result = await createUpstashStore({ client }).createIndex({
       dimension: 0,
       name: "docs",
     });
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
   });
 
   test("createIndex rejects a dimension the Upstash index cannot serve", async () => {
     const { client } = fakeClient();
+
     const result = await createUpstashStore({ client }).createIndex({
       dimension: 1536,
       name: "docs",
     });
+
     expect(result.ok).toBe(false);
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
   });
 
   test("createIndex rejects a metric the Upstash index cannot serve", async () => {
     const { client } = fakeClient();
+
     const result = await createUpstashStore({ client }).createIndex({
       dimension: 3,
       metric: "dot",
       name: "docs",
     });
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
   });
 
   test("createIndex accepts a matching spec and reports an existing namespace", async () => {
     const { client } = fakeClient();
     const store = createUpstashStore({ client });
+
     const created = await store.createIndex({
       dimension: 3,
       metric: "cosine",
       name: "docs",
     });
+
     expect(created.ok).toBe(true);
     await store.index("docs").upsert([{ id: "a", vector: [1, 0, 0] }]);
     const again = await store.createIndex({ dimension: 3, name: "docs" });
@@ -503,9 +553,11 @@ describe(createUpstashStore, () => {
 
   test("metadata mode rejects a namespace containing a slash", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await createUpstashStore({ client })
       .index("docs", { namespace: "a/3" })
       .upsert([{ id: "b", vector: [1] }]);
+
     expect(result).toMatchObject({
       error: { kind: "invalid_argument", provider: "upstash" },
       ok: false,
@@ -564,9 +616,11 @@ describe(createUpstashStore, () => {
     "metadata mode %s rejects the namespace %j before calling the provider",
     async (_verb, namespace, call) => {
       const { client, recorded } = fakeClient();
+
       const result = await call(
         createUpstashStore({ client }).index("docs", { namespace })
       );
+
       expect(result).toMatchObject({
         error: { kind: "invalid_argument", provider: "upstash" },
         ok: false,
@@ -606,9 +660,11 @@ describe(createUpstashStore, () => {
 
   test("metadata mode rejects a record that sets a reserved metadata key", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await createUpstashStore({ client })
       .index("docs")
       .upsert([{ id: "x", metadata: { _id: "other" }, vector: [1] }]);
+
     expect(result).toMatchObject({
       error: { kind: "invalid_argument", provider: "upstash" },
       ok: false,
@@ -618,9 +674,11 @@ describe(createUpstashStore, () => {
 
   test("a filter Upstash cannot express is an invalid argument", async () => {
     const { client } = fakeClient();
+
     const result = await createUpstashStore({ client })
       .index("docs")
       .query({ filter: eq("my field", 1), topK: 1, vector: [1, 0, 0] });
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
   });
 
@@ -678,6 +736,7 @@ describe(createUpstashStore, () => {
     const cause = Object.assign(upstashError("fetch failed"), {
       code: "ECONNREFUSED",
     });
+
     expect(normalizeUpstashError(cause, "docs").kind).toBe("provider");
   });
 });
@@ -796,21 +855,27 @@ describe("upstash native namespaces", () => {
 
   test("a name Upstash cannot put in a path is an invalid argument", async () => {
     const { client } = fakeClient();
+
     const separator = await nativeStore(client)
       .index("docs~v2")
       .upsert([{ id: "a", vector: [1, 0, 0] }]);
+
     expect(!separator.ok && separator.error.kind).toBe("invalid_argument");
+
     const escaped = await nativeStore(client)
       .index("docs", { namespace: "tenant a" })
       .upsert([{ id: "a", vector: [1, 0, 0] }]);
+
     expect(!escaped.ok && escaped.error.kind).toBe("invalid_argument");
   });
 
   test("native mode rejects a namespace containing a slash too", async () => {
     const { client, recorded } = fakeClient();
+
     const result = await nativeStore(client)
       .index("docs", { namespace: "a/3" })
       .upsert([{ id: "b", vector: [1] }]);
+
     expect(result).toMatchObject({
       error: { kind: "invalid_argument", provider: "upstash" },
       ok: false,
@@ -832,9 +897,11 @@ describe("upstash native namespaces", () => {
 
   test("metadata mode rejects an index name that needs URL escaping", async () => {
     const { client } = fakeClient();
+
     const result = await createUpstashStore({ client })
       .index("docs/v2")
       .upsert([{ id: "a", vector: [1, 0, 0] }]);
+
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
   });
 
@@ -854,9 +921,11 @@ describe("upstash native namespaces", () => {
     "native mode %s rejects the namespace %j before calling the provider",
     async (_verb, namespace, call) => {
       const { client, recorded } = fakeClient();
+
       const result = await call(
         nativeStore(client).index("docs", { namespace })
       );
+
       expect(result).toMatchObject({
         error: { kind: "invalid_argument", provider: "upstash" },
         ok: false,

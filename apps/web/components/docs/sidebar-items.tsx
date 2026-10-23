@@ -24,16 +24,19 @@ const containsPath = (
     if (node.type === "page") {
       return node.url === pathname;
     }
+
     if (node.type === "folder") {
       return (
         node.index?.url === pathname || containsPath(node.children, pathname)
       );
     }
+
     return false;
   });
 
 export const Item = ({ item }: { readonly item: PageTreeItem }) => {
   const pathname = usePathname();
+
   return (
     <SidebarItem
       active={pathname === item.url}

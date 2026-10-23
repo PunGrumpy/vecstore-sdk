@@ -25,6 +25,7 @@ export const deterministicUuid = (namespace: string, name: string): string => {
     .update(`${namespace}${SEPARATOR}${name}`, "utf-8")
     .digest()
     .subarray(0, UUID_BYTES);
+
   hash.writeUInt8(
     (hash.readUInt8(VERSION_BYTE) % LOW_NIBBLE) + VERSION_8,
     VERSION_BYTE
@@ -34,5 +35,6 @@ export const deterministicUuid = (namespace: string, name: string): string => {
     VARIANT_BYTE
   );
   const hex = hash.toString("hex");
+
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };

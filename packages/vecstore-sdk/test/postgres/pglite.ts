@@ -32,6 +32,7 @@ export const usePostgres = (
     if (db === undefined) {
       throw new Error("postgres is not ready");
     }
+
     return db;
   };
 };
@@ -44,6 +45,7 @@ export const ensureRoles = async (
     (name) =>
       `do $$ begin if not exists (select 1 from pg_roles where rolname = '${name}') then create role ${name} nologin; end if; end $$`
   );
+
   await db.exec(statements.join(";"));
 };
 

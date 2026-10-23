@@ -59,6 +59,7 @@ interface StoreCanvasProps {
 
 const originOf = (slot: number) => {
   const cell = slot % CELLS.length;
+
   return [
     ((cell % 3) - 1) * PITCH,
     (1 - Math.floor(cell / 3)) * PITCH,
@@ -68,6 +69,7 @@ const originOf = (slot: number) => {
 
 const depthOf = (slot: number, query: StoreQuery) => {
   const [x, y, z] = originOf(slot);
+
   return modelDepth(x, y, z, query.tiltX, query.tiltY);
 };
 
@@ -90,12 +92,15 @@ const themeOf = (dark: boolean) => ({
 
 const readPalette = (probe: CanvasRenderingContext2D) => {
   const styles = getComputedStyle(document.documentElement);
+
   const parse = (token: string) => {
     probe.fillStyle = styles.getPropertyValue(token).trim() || "#888888";
     probe.fillRect(0, 0, 1, 1);
     const [red, green, blue] = probe.getImageData(0, 0, 1, 1).data;
+
     return [red / 255, green / 255, blue / 255];
   };
+
   return {
     core: parse(CORE_TOKEN),
     dark: document.documentElement.classList.contains("dark"),
@@ -114,45 +119,59 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
 
   useEffect(() => {
     const canvas = canvasRef.current;
+
     const probe = document
       .createElement("canvas")
       .getContext("2d", { willReadFrequently: true });
+
     if (!(canvas && probe && "gpu" in navigator)) {
       return;
     }
+
     let disposed = false;
     let stop: (() => void) | undefined;
     let palette = readPalette(probe);
+
     const observer = new MutationObserver(() => {
       palette = readPalette(probe);
     });
+
     observer.observe(document.documentElement, { attributeFilter: ["class"] });
 
     const run = async () => {
       const gpu = await init();
+
       if (disposed) {
         gpu.dispose();
+
         return;
       }
+
       const view = surface(gpu, canvas, {
         alphaMode: "premultiplied",
         clearColor: [0, 0, 0, 0],
         dpr: [1, 2],
       });
+
       const stage = target(gpu, {
         format: "rgba16float",
         msaa: true,
         size: view.size,
       });
+
       const mesh = cellMesh();
       const instances = new Float32Array(SLOTS * INSTANCE_FLOATS);
+
       const modelLights = Array.from({ length: MAX_LIGHTS }, () => [
         0, 0, 0, 0,
       ]);
+
       const screenLights = Array.from({ length: MAX_LIGHTS }, () => [
         0, 0, 0, 0,
       ]);
+
       const colors = Array.from({ length: MAX_LIGHTS }, () => [0, 0, 0, 0]);
+
       const cellGeometry = geometry(gpu, {
         buffers: [
           {
@@ -175,6 +194,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
         ],
         indices: mesh.indices,
       });
+
       const pool = effect(gpu, glowShader, {
         blend: "premultiplied",
         set: {
@@ -187,6 +207,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
           },
         },
       });
+
       const cubes = draw(gpu, {
         blend: "premultiplied",
         cull: "back",
@@ -204,6 +225,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
         },
         shader: sceneShader,
       });
+
       const composite = effect(gpu, bloomShader, {
         blend: "premultiplied",
         set: {
@@ -230,12 +252,15 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
       const order = [...Array.from({ length: SLOTS }).keys()];
       let frameIndex = 0;
       const stage3d = stageBody(pool, cubes);
+
       const loop = frameLoop(gpu, (frame) => {
         const query = queryRef.current;
         const [width, height] = view.size;
+
         if (stage.size[0] !== width || stage.size[1] !== height) {
           stage.resize([width, height]);
         }
+
         const aspect = width / Math.max(height, 1);
         const matrix = viewProjection(aspect, query.tiltX, query.tiltY);
         const hues = spectrumRef.current ? palette.hues : undefined;
@@ -245,15 +270,19 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
         let count = 0;
         let centreU = 0;
         let centreV = 0;
+
         for (const slot of modelLights) {
           slot.fill(0);
         }
+
         for (const slot of screenLights) {
           slot.fill(0);
         }
+
         for (const slot of colors) {
           slot.fill(0);
         }
+
         for (const [position, slot] of order.entries()) {
           const layer = Math.floor(slot / CELLS.length);
           const cell = slot % CELLS.length;
@@ -270,6 +299,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
           instances[base + 5] = green;
           instances[base + 6] = blue;
           instances[base + 7] = lit ? 1 : 0;
+
           if (lit && count < MAX_LIGHTS) {
             const screen = project(matrix, x, y, z);
             screenLights[count][0] = screen.x * 0.5 * aspect;
@@ -288,6 +318,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
             count += 1;
           }
         }
+
         cellGeometry.buffers[1].write(instances);
         frameIndex = (frameIndex + 1) % 64;
         const lightU = count > 0 ? centreU / count : 0.5;
@@ -344,6 +375,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
         stop?.();
       }
     };
+
     start();
 
     return () => {

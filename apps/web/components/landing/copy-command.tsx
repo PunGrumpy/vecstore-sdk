@@ -19,6 +19,7 @@ export const CopyCommand = ({
   const [copied, onCopy] = useCopyButton(() =>
     navigator.clipboard.writeText(command)
   );
+
   const Icon = copied ? CheckIcon : CopyIcon;
 
   return (

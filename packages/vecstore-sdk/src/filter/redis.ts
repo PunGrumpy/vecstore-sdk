@@ -29,7 +29,7 @@ export interface RedisFilterProblem {
 
 export type RedisFilterResult = Result<string, RedisFilterProblem>;
 
-export const REDIS_FIELD_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+export const REDIS_FIELD_PATTERN = /^[A-Za-z_]\w*$/u;
 
 export const REDIS_RESERVED_FIELDS: ReadonlySet<string> = new Set([
   "namespace",
@@ -117,10 +117,13 @@ const typeOfField = (
   if (REDIS_RESERVED_FIELDS.has(field)) {
     return err(reservedField(field));
   }
+
   if (!REDIS_FIELD_PATTERN.test(field)) {
     return err(malformedField(field));
   }
+
   const type = types.get(field);
+
   return type === undefined ? err(unknownField(field)) : ok(type);
 };
 
@@ -128,6 +131,7 @@ const tagValue = (field: string, value: Scalar): RedisFilterResult => {
   if (isNumber(value)) {
     return err(tagHoldsNoNumber(field));
   }
+
   return ok(isString(value) ? value : String(value));
 };
 
@@ -135,6 +139,7 @@ const numericValue = (field: string, value: Scalar): RedisFilterResult => {
   if (!isNumber(value)) {
     return err(numericHoldsOnlyNumbers(field));
   }
+
   return Number.isFinite(value)
     ? ok(String(value))
     : err(finiteNumbersOnly(field, value));
@@ -150,9 +155,12 @@ const equality = (
 ): RedisFilterResult => {
   if (type === "numeric") {
     const number = numericValue(field, value);
+
     return number.ok ? ok(numericMatch(field, number.value)) : number;
   }
+
   const tag = tagValue(field, value);
+
   return tag.ok ? ok(redisTagClause(field, tag.value)) : tag;
 };
 
@@ -164,11 +172,15 @@ const comparison = (
   if (type === "tag") {
     return err(rangeNeedsNumeric(field));
   }
+
   const number = numericValue(field, filter.value);
+
   if (!number.ok) {
     return number;
   }
+
   const [start, end] = RANGE_BOUNDS[filter.kind](number.value);
+
   return ok(`@${field}:[${start} ${end}]`);
 };
 
@@ -177,13 +189,17 @@ const tagMembership = (
   values: NonEmpty<Scalar>
 ): RedisFilterResult => {
   const tags: string[] = [];
+
   for (const value of values) {
     const tag = tagValue(field, value);
+
     if (!tag.ok) {
       return tag;
     }
+
     tags.push(escapeRedisTag(tag.value));
   }
+
   return ok(`@${field}:{${tags.join(" | ")}}`);
 };
 
@@ -192,13 +208,17 @@ const numericMembership = (
   values: NonEmpty<Scalar>
 ): RedisFilterResult => {
   const matches: string[] = [];
+
   for (const value of values) {
     const number = numericValue(field, value);
+
     if (!number.ok) {
       return number;
     }
+
     matches.push(numericMatch(field, number.value));
   }
+
   return ok(`(${matches.join(" | ")})`);
 };
 
@@ -213,12 +233,14 @@ const leafClause = (
     case "ne": {
       return equality(filter.field, type, filter.value);
     }
+
     case "in":
     case "nin": {
       return type === "tag"
         ? tagMembership(filter.field, filter.values)
         : numericMembership(filter.field, filter.values);
     }
+
     default: {
       return comparison(filter.field, type, filter);
     }
@@ -236,13 +258,17 @@ const compileLeaf = (
   negated: boolean
 ): RedisFilterResult => {
   const type = typeOfField(filter.field, types);
+
   if (!type.ok) {
     return type;
   }
+
   const clause = leafClause(filter, type.value);
+
   if (!clause.ok) {
     return clause;
   }
+
   return ok(
     isNegatedLeaf(filter) === negated ? clause.value : negate(clause.value)
   );
@@ -260,14 +286,19 @@ const compileGroup = (
   compile: CompileNode
 ): RedisFilterResult => {
   const clauses: string[] = [];
+
   for (const child of filter.filters) {
     const compiled = compile(child, types, false);
+
     if (!compiled.ok) {
       return compiled;
     }
+
     clauses.push(compiled.value);
   }
+
   const separator = filter.kind === "and" ? " " : " | ";
+
   return ok(`(${clauses.join(separator)})`);
 };
 
@@ -277,10 +308,13 @@ const compileExists = (
   negated: boolean
 ): RedisFilterResult => {
   const type = typeOfField(field, types);
+
   if (!type.ok) {
     return type;
   }
+
   const clause = `ismissing(@${field})`;
+
   return ok(negated ? clause : `-${clause}`);
 };
 
@@ -296,22 +330,29 @@ const compileNode: CompileNode = (filter, types, negated) => {
     case "nin": {
       return compileLeaf(filter, types, negated);
     }
+
     case "exists": {
       return compileExists(filter.field, types, negated);
     }
+
     case "and":
     case "or": {
       const group = compileGroup(filter, types, compileNode);
+
       if (!group.ok) {
         return group;
       }
+
       return ok(negated ? negate(group.value) : group.value);
     }
+
     case "not": {
       return compileNode(filter.filter, types, !negated);
     }
+
     default: {
       const exhaustive: never = filter;
+
       return exhaustive;
     }
   }

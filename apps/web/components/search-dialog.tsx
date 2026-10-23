@@ -63,6 +63,7 @@ export const SiteSearchDialog = (props: SharedProps) => {
   const { search, setSearch, query } = useDocsSearch({
     client: fetchClient({ api: "/api/search" }),
   });
+
   const results = query.data === "empty" ? null : query.data;
 
   return (

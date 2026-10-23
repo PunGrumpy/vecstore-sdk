@@ -49,6 +49,7 @@ interface Box {
 
 const loadFont = (file: string): Font => {
   const bytes = readFileSync(file);
+
   return parse(
     bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
   );
@@ -63,6 +64,7 @@ const textPath = (text: string, size: number, tracking: number): Path =>
 
 const bounds = (path: Path): Box => {
   const box = path.getBoundingBox();
+
   return {
     height: box.y2 - box.y1,
     width: box.x2 - box.x1,
@@ -98,6 +100,7 @@ const wordmark = (ink: string): Piece => {
   const suffixX = pillX + (pillWidth - suffixBox.width) / 2 - suffixBox.x;
   const suffixY = pillY + (pillHeight - suffixBox.height) / 2 - suffixBox.y;
   const radius = (pillHeight - stroke) / 2;
+
   const svg = [
     translate(
       -nameBox.x,
@@ -111,6 +114,7 @@ const wordmark = (ink: string): Piece => {
       `<path fill="${ink}" d="${cubicPathData(suffix, PATH_PRECISION)}"/>`
     ),
   ].join("");
+
   return { height, svg, width: pillX + pillWidth };
 };
 
@@ -125,22 +129,28 @@ const cell = (
   const radius = unit * CELL_RADIUS;
   const x = column * unit + (unit - size) / 2;
   const y = row * unit + (unit - size) / 2;
+
   if (filled) {
     return `<rect x="${format(x)}" y="${format(y)}" width="${format(size)}" height="${format(size)}" rx="${format(radius)}" fill="${ink}"/>`;
   }
+
   const inset = unit * HOLLOW_INSET;
   const stroke = unit * HOLLOW_STROKE;
+
   return `<rect x="${format(x + inset)}" y="${format(y + inset)}" width="${format(size - inset * 2)}" height="${format(size - inset * 2)}" rx="${format(radius)}" fill="none" stroke="${ink}" stroke-width="${format(stroke)}"/>`;
 };
 
 const mark = (ink: string, unit: number): Piece => {
   const cells: string[] = [];
+
   for (let row = 0; row < GRID; row += 1) {
     for (let column = 0; column < GRID; column += 1) {
       cells.push(cell(column, row, unit, ink, column === row));
     }
   }
+
   const side = unit * GRID;
+
   return { height: side, svg: cells.join(""), width: side };
 };
 
@@ -148,6 +158,7 @@ const document = (piece: Piece): string => {
   const pad = NAME_SIZE * PADDING;
   const width = piece.width + pad * 2;
   const height = piece.height + pad * 2;
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${format(width)}" height="${format(height)}" viewBox="0 0 ${format(width)} ${format(height)}">${translate(pad, pad, piece.svg)}</svg>`;
 };
 
@@ -156,6 +167,7 @@ const lockup = (ink: string): Piece => {
   const icon = mark(ink, NAME_SIZE * CELL_UNIT);
   const gap = NAME_SIZE * MARK_GAP;
   const height = Math.max(word.height, icon.height);
+
   return {
     height,
     svg:
@@ -182,6 +194,7 @@ const run = (): void => {
   if (!existsSync(SEMIBOLD_FILE)) {
     throw new Error(`missing ${SEMIBOLD_FILE}`);
   }
+
   for (const theme of THEMES) {
     write(
       `mark-${theme.name}`,
@@ -189,6 +202,7 @@ const run = (): void => {
     );
     write(`logo-${theme.name}`, document(lockup(theme.ink)));
   }
+
   process.stdout.write(`${THEMES.length} themes rendered\n`);
 };
 

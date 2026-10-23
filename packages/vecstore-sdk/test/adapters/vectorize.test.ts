@@ -64,9 +64,11 @@ const statusError = (status: number, message: string) =>
 
 const bodyOf = async (init: RequestInit): Promise<string> => {
   const { body } = init;
+
   if (body === undefined || body === null) {
     return "";
   }
+
   return await new Response(body).text();
 };
 
@@ -80,17 +82,21 @@ const upsertAction = (body: string, stored: Store): Response => {
     const vector = parse<StoredVector>(line);
     stored.set(vector.id, vector);
   }
+
   return envelope({ mutationId: "mutation" });
 };
 
 const getByIdsAction = (body: string, stored: Store): Response => {
   const found: StoredVector[] = [];
+
   for (const id of parse<IdsBody>(body).ids) {
     const vector = stored.get(id);
+
     if (vector !== undefined) {
       found.push(vector);
     }
   }
+
   return envelope(found);
 };
 
@@ -98,12 +104,14 @@ const deleteByIdsAction = (body: string, stored: Store): Response => {
   for (const id of parse<IdsBody>(body).ids) {
     stored.delete(id);
   }
+
   return envelope({ mutationId: "mutation" });
 };
 
 const queryAction = (body: string, stored: Store): Response => {
   const request = parse<QueryBody>(body);
   const matches = [];
+
   for (const vector of stored.values()) {
     if (
       request.namespace === undefined ||
@@ -118,6 +126,7 @@ const queryAction = (body: string, stored: Store): Response => {
       });
     }
   }
+
   return envelope({ count: matches.length, matches });
 };
 
@@ -126,15 +135,19 @@ const runAction = (action: string, body: string, stored: Store): Response => {
     case "upsert": {
       return upsertAction(body, stored);
     }
+
     case "get_by_ids": {
       return getByIdsAction(body, stored);
     }
+
     case "delete_by_ids": {
       return deleteByIdsAction(body, stored);
     }
+
     case "query": {
       return queryAction(body, stored);
     }
+
     default: {
       return envelope({ mutationId: "mutation" });
     }
@@ -153,14 +166,17 @@ const fakeCloudflare = (failing: ReadonlySet<string> = new Set()) => {
     const segments = tail.split("/").filter((part) => part !== "");
     calls.push({ body, method, path: tail, search });
     const [indexName, action] = segments;
+
     if (indexName === undefined) {
       return method === "GET"
         ? envelope([{ name: "docs" }, { name: "logs" }])
         : envelope({ name: parse<CreateBody>(body).name });
     }
+
     if (action === undefined) {
       return envelope(null);
     }
+
     if (failing.has(action)) {
       return Response.json(
         {
@@ -172,6 +188,7 @@ const fakeCloudflare = (failing: ReadonlySet<string> = new Set()) => {
         { status: 400 }
       );
     }
+
     return runAction(action, body, stored);
   };
 
@@ -179,16 +196,19 @@ const fakeCloudflare = (failing: ReadonlySet<string> = new Set()) => {
     apiToken: "test-token",
     fetch: (input, init) => handle(String(input), init ?? {}),
   });
+
   return { calls, client, stored };
 };
 
 const bodiesFor = (calls: readonly Call[], suffix: string): string[] => {
   const bodies: string[] = [];
+
   for (const call of calls) {
     if (call.path.endsWith(suffix)) {
       bodies.push(call.body);
     }
   }
+
   return bodies;
 };
 
@@ -225,10 +245,12 @@ describe(toVectorizeId, () => {
 describe(createVectorizeStore, () => {
   test("the Cloudflare client comes back as raw", () => {
     const { client } = fakeCloudflare();
+
     const raw: Cloudflare = createVectorizeStore({
       accountId: ACCOUNT_ID,
       client,
     }).raw;
+
     expect(raw).toBe(client);
   });
 
@@ -253,10 +275,12 @@ describe(createVectorizeStore, () => {
 
   test("createIndex rejects a non-positive dimension before touching the client", async () => {
     const { calls, client } = fakeCloudflare();
+
     const result = await createVectorizeStore({
       accountId: ACCOUNT_ID,
       client,
     }).createIndex({ dimension: 0, name: "docs" });
+
     expect(result).toMatchObject({
       error: { kind: "invalid_argument", provider: "vectorize" },
       ok: false,
@@ -266,21 +290,26 @@ describe(createVectorizeStore, () => {
 
   test("createIndex deletes the index when a metadata index cannot be created", async () => {
     const { calls, client } = fakeCloudflare(new Set(["metadata_index"]));
+
     const result = await createVectorizeStore({
       accountId: ACCOUNT_ID,
       client,
       metadataIndexes: [{ property: "genre", type: "string" }],
     }).createIndex({ dimension: 3, name: "docs" });
+
     expect(result).toMatchObject({
       error: { kind: "invalid_argument", provider: "vectorize" },
       ok: false,
     });
+
     const metadataIndexCall = calls.findIndex((call) =>
       call.path.endsWith("/metadata_index/create")
     );
+
     const deleteCall = calls.findIndex(
       (call) => call.method === "DELETE" && call.path === "/docs"
     );
+
     expect(metadataIndexCall).toBeGreaterThanOrEqual(0);
     expect(deleteCall).toBeGreaterThan(metadataIndexCall);
   });
@@ -391,18 +420,22 @@ describe(createVectorizeStore, () => {
 
   test("query scopes by namespace and returns the original id", async () => {
     const { calls, client } = fakeCloudflare();
+
     const docs = createVectorizeStore({ accountId: ACCOUNT_ID, client }).index(
       "docs",
       { namespace: "tenant-a" }
     );
+
     await docs.upsert([
       { id: "doc-1", metadata: { genre: "drama" }, vector: [1, 2, 3] },
     ]);
+
     const result = await docs.query({
       filter: eq("genre", "drama"),
       topK: 5,
       vector: [1, 2, 3],
     });
+
     const [sent] = bodiesFor(calls, "/query");
     expect(parse<QueryBody>(sent ?? "{}")).toStrictEqual({
       filter: { genre: { $eq: "drama" } },
@@ -425,9 +458,11 @@ describe(createVectorizeStore, () => {
       .index("docs", { namespace: "tenant-a" })
       .upsert([{ id: "doc-a", vector: [1, 2, 3] }]);
     await store.index("docs").upsert([{ id: "doc-root", vector: [1, 2, 3] }]);
+
     const result = await store
       .index("docs")
       .query({ topK: 5, vector: [1, 2, 3] });
+
     expect(result.ok && result.value.map((match) => match.id)).toStrictEqual([
       "doc-root",
     ]);
@@ -435,9 +470,11 @@ describe(createVectorizeStore, () => {
 
   test("query rejects a non-positive topK before calling the provider", async () => {
     const { calls, client } = fakeCloudflare();
+
     const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
       .index("docs")
       .query({ topK: 0, vector: [1] });
+
     expect(result.ok).toBeFalsy();
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
     expect(bodiesFor(calls, "/query")).toStrictEqual([]);
@@ -445,14 +482,17 @@ describe(createVectorizeStore, () => {
 
   test("query and delete reject a malformed filter or selector before calling the provider", async () => {
     const { calls, client } = fakeCloudflare();
+
     const index = createVectorizeStore({ accountId: ACCOUNT_ID, client }).index(
       "docs"
     );
+
     const queried = await index.query({
       filter: filterWithoutValue,
       topK: 1,
       vector: [1, 0, 0],
     });
+
     const filtered = await index.delete({ filter: filterWithoutValue });
     const emptied = await index.delete(emptySelector);
     expect([queried, filtered, emptied]).toMatchObject([
@@ -465,9 +505,11 @@ describe(createVectorizeStore, () => {
 
   test("a filter Vectorize cannot express is reported before the request", async () => {
     const { calls, client } = fakeCloudflare();
+
     const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
       .index("docs")
       .query({ filter: or(eq("a", 1), eq("b", 2)), topK: 5, vector: [1] });
+
     expect(result).toMatchObject({
       error: {
         feature: "orFilter",
@@ -481,10 +523,12 @@ describe(createVectorizeStore, () => {
 
   test("fetch preserves request order and drops the vector unless asked", async () => {
     const { client } = fakeCloudflare();
+
     const docs = createVectorizeStore({ accountId: ACCOUNT_ID, client }).index(
       "docs",
       { namespace: "tenant-a" }
     );
+
     await docs.upsert([
       { id: "doc-b", vector: [2] },
       { id: "doc-a", metadata: { n: 1 }, vector: [1] },
@@ -546,9 +590,11 @@ describe(createVectorizeStore, () => {
 
   test("delete by filter and delete all are unsupported", async () => {
     const { client } = fakeCloudflare();
+
     const docs = createVectorizeStore({ accountId: ACCOUNT_ID, client }).index(
       "docs"
     );
+
     await expect(docs.delete({ filter: eq("a", 1) })).resolves.toMatchObject({
       error: { feature: "deleteByFilter", kind: "unsupported" },
       ok: false,
@@ -561,9 +607,11 @@ describe(createVectorizeStore, () => {
 
   test("a namespace containing a slash is rejected before the request", async () => {
     const { calls, client } = fakeCloudflare();
+
     const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
       .index("docs", { namespace: "a/3" })
       .upsert([{ id: "b", vector: [1] }]);
+
     expect(result).toMatchObject({
       error: { kind: "invalid_argument", provider: "vectorize" },
       ok: false,
@@ -573,9 +621,11 @@ describe(createVectorizeStore, () => {
 
   test("upsert rejects a record that sets a reserved metadata key", async () => {
     const { calls, client } = fakeCloudflare();
+
     const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
       .index("docs")
       .upsert([{ id: "x", metadata: { _id: "other" }, vector: [1] }]);
+
     expect(result).toMatchObject({
       error: { kind: "invalid_argument", provider: "vectorize" },
       ok: false,

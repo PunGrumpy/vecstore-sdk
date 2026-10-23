@@ -12,5 +12,11 @@ export default defineConfig({
   extends: [core, react, next, nextJsPlugins, antiSlop, jsPlugins],
   ignorePatterns: core.ignorePatterns,
   jsPlugins: jsPlugins.jsPlugins,
+  rules: {
+    // React effects bail out early with a bare `return;` and otherwise return
+    // a cleanup. unicorn/no-useless-undefined forbids the explicit
+    // `return undefined;` that this rule would need instead.
+    "sonarjs/no-inconsistent-returns": "off",
+  },
   settings: jsPluginSettings,
 });

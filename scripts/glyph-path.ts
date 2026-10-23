@@ -7,11 +7,13 @@ export const cubicPathData = (glyphs: Path, precision: number): string => {
   let previousX = 0;
   let previousY = 0;
   const segments: string[] = [];
+
   for (const command of glyphs.commands) {
     if (command.type === "Z") {
       segments.push("Z");
       continue;
     }
+
     if (command.type === "Q") {
       const control1X = previousX + TWO_THIRDS * (command.x1 - previousX);
       const control1Y = previousY + TWO_THIRDS * (command.y1 - previousY);
@@ -27,8 +29,10 @@ export const cubicPathData = (glyphs: Path, precision: number): string => {
     } else {
       segments.push(`${command.type}${format(command.x)} ${format(command.y)}`);
     }
+
     previousX = command.x;
     previousY = command.y;
   }
+
   return segments.join("");
 };

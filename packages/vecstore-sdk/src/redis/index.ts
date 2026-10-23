@@ -196,8 +196,10 @@ const NOT_FOUND_PATTERN = /unknown index name|no such index/iu;
 const ALREADY_EXISTS_PATTERN = /index already exists/iu;
 const UNAUTHORIZED_PATTERN = /noauth|wrongpass|noperm|unauthenticated/iu;
 const UNKNOWN_COMMAND_PATTERN = /unknown command/iu;
+
 const INVALID_ARGUMENT_PATTERN =
   /syntax error|invalid|bad|wrong number of arguments|not a number|dimension|expected/iu;
+
 const SOCKET_TIMEOUT_PREFIX = "Socket timeout";
 
 const CONNECTION_MESSAGES: ReadonlySet<string> = new Set([
@@ -228,9 +230,11 @@ const isConnectionFailure = (cause: unknown): boolean => {
   if (!(cause instanceof Error)) {
     return false;
   }
+
   if (hasCode(cause) && CONNECTION_CODES.has(cause.code)) {
     return true;
   }
+
   return (
     CONNECTION_MESSAGES.has(cause.message) ||
     cause.message.startsWith(SOCKET_TIMEOUT_PREFIX)
@@ -244,22 +248,29 @@ export const normalizeRedisError = (
   if (isConnectionFailure(cause)) {
     return connection(PROVIDER, cause);
   }
+
   const message = errorMessage(cause);
+
   if (UNKNOWN_COMMAND_PATTERN.test(message)) {
     return unsupported(PROVIDER, "queryEngine", MODULES_MESSAGE);
   }
+
   if (ALREADY_EXISTS_PATTERN.test(message)) {
     return alreadyExists(PROVIDER, index, cause);
   }
+
   if (NOT_FOUND_PATTERN.test(message)) {
     return notFound(PROVIDER, index, cause);
   }
+
   if (UNAUTHORIZED_PATTERN.test(message)) {
     return unauthorized(PROVIDER, cause);
   }
+
   if (INVALID_ARGUMENT_PATTERN.test(message)) {
     return invalidArgument(PROVIDER, message, cause);
   }
+
   return providerError(PROVIDER, cause);
 };
 
@@ -273,9 +284,11 @@ const redisFieldError = (field: RedisMetadataField): string | undefined => {
   if (REDIS_RESERVED_FIELDS.has(field.field)) {
     return `The Redis adapter keeps "${field.field}" for itself. Rename the metadata field.`;
   }
+
   if (!REDIS_FIELD_PATTERN.test(field.field)) {
     return `Redis cannot name a field "${field.field}". A field name must match ${REDIS_FIELD_PATTERN.source}.`;
   }
+
   return undefined;
 };
 
@@ -324,9 +337,11 @@ export const redisSchema = (
       },
     ],
   ];
+
   for (const field of fields) {
     entries.push([`${METADATA_PATH}.${field.field}`, fieldDefinition(field)]);
   }
+
   return Object.fromEntries(entries);
 };
 
@@ -336,10 +351,13 @@ export const scopeRedisFilter = (
   filter?: Filter
 ): Result<string, RedisFilterProblem> => {
   const scope = redisTagClause(REDIS_NAMESPACE_FIELD, namespace);
+
   if (filter === undefined) {
     return ok(scope);
   }
+
   const compiled = compileRedisFilter(filter, fields);
+
   return compiled.ok ? ok(`${scope} ${compiled.value}`) : compiled;
 };
 
@@ -351,6 +369,7 @@ export const redisKeyPrefix = (
 
 const toBlob = (vector: readonly number[]): Buffer => {
   const floats = Float32Array.from(vector);
+
   return Buffer.from(floats.buffer, floats.byteOffset, floats.byteLength);
 };
 
@@ -367,6 +386,7 @@ const typeName = (value: MetadataValue): string => {
   if (isNumber(value)) {
     return "a number";
   }
+
   return isString(value) ? "a string" : "a boolean or a list";
 };
 
@@ -375,6 +395,7 @@ const holdsWrongType = (
   value: MetadataValue
 ): boolean => {
   const numeric = isNumber(value);
+
   return type === "numeric" ? !numeric : numeric;
 };
 
@@ -383,20 +404,25 @@ const redisMetadataError = (
   fields: readonly RedisMetadataField[]
 ): string | undefined => {
   const metadata = Object.entries(record.metadata ?? {});
+
   for (const field of fields) {
     const entry = metadata.find(([key]) => key === field.field);
+
     if (entry !== undefined && holdsWrongType(field.type, entry[1])) {
       return `Redis leaves a whole document out of the index when a field holds a value its schema has no room for. Record "${record.id}" carries ${typeName(entry[1])} in "${field.field}", which the schema declares as ${field.type}.`;
     }
   }
+
   return undefined;
 };
 
 const jsonEntries = (value: RedisJsonValue): [string, RedisJsonValue][] => {
   if (Array.isArray(value)) {
     const [first] = value;
+
     return first === undefined ? [] : jsonEntries(first);
   }
+
   return isObjectLike(value) && !(value instanceof Date)
     ? Object.entries(value)
     : [];
@@ -411,10 +437,13 @@ const jsonVector = (value: RedisJsonValue): number[] => {
   if (isNumberArray(value)) {
     return value;
   }
+
   if (Array.isArray(value)) {
     const [first] = value;
+
     return isNumberArray(first) ? first : [];
   }
+
   return [];
 };
 
@@ -425,6 +454,7 @@ const parseJsonText = (source: string | undefined): RedisJsonValue => {
   if (source === undefined) {
     return null;
   }
+
   try {
     return JSON.parse(source);
   } catch {
@@ -438,6 +468,7 @@ const projection = (
 ): string | undefined => {
   const entry = Object.entries(document.value).find(([key]) => key === field);
   const value: unknown = entry?.[1];
+
   return isString(value) ? value : undefined;
 };
 
@@ -445,11 +476,15 @@ const distanceOf = (document: RedisSearchDocument): number => {
   const entry = Object.entries(document.value).find(
     ([key]) => key === REDIS_DISTANCE_FIELD
   );
+
   const value: unknown = entry?.[1];
+
   if (isNumber(value)) {
     return value;
   }
+
   const parsed = isString(value) ? Number(value) : Number.NaN;
+
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
@@ -461,12 +496,15 @@ const queryReturn = (
   includeVector: boolean
 ): string[] => {
   const fields = [REDIS_DISTANCE_FIELD];
+
   if (includeMetadata) {
     fields.push(METADATA_PATH);
   }
+
   if (includeVector) {
     fields.push(VECTOR_PATH);
   }
+
   return fields;
 };
 
@@ -479,12 +517,15 @@ const toScoredRecord = (
   if (!document.id.startsWith(prefix)) {
     return undefined;
   }
+
   const metadata = includeMetadata
     ? jsonMetadata(parseJsonText(projection(document, METADATA_PATH)))
     : undefined;
+
   const vector = includeVector
     ? jsonVector(parseJsonText(projection(document, VECTOR_PATH)))
     : undefined;
+
   return {
     id: document.id.slice(prefix.length),
     metadata,
@@ -499,6 +540,7 @@ const toVectorRecord = (
   includeVector: boolean
 ): VectorRecord => {
   const entries = jsonEntries(stored);
+
   return {
     id,
     metadata: jsonMetadata(jsonField(entries, METADATA_KEY)),
@@ -528,15 +570,19 @@ const deletePage = async (
     LIMIT: { from: 0, size: DELETE_PAGE },
     RETURN: [],
   });
+
   const keys: string[] = [];
+
   for (const document of page.documents) {
     if (document.id.startsWith(context.prefix)) {
       keys.push(document.id);
     }
   }
+
   if (keys.length > 0) {
     await context.client.unlink(keys);
   }
+
   return { seen: page.documents.length, unlinked: keys.length };
 };
 
@@ -545,6 +591,7 @@ const deleteMatches = async (
   prefilter: string
 ): Promise<void> => {
   const page = await deletePage(context, prefilter);
+
   if (page.unlinked > 0 && page.seen === DELETE_PAGE) {
     await deleteMatches(context, prefilter);
   }
@@ -555,9 +602,11 @@ const deleteByFilter = (
   filter?: Filter
 ): VecResult<void> => {
   const prefilter = scopeRedisFilter(context.namespace, context.fields, filter);
+
   if (!prefilter.ok) {
     return Promise.resolve(err(toVecstoreError(prefilter.error)));
   }
+
   return run(context.name, () => deleteMatches(context, prefilter.value));
 };
 
@@ -568,6 +617,7 @@ const queryIndex = async (
 ): Promise<ScoredRecord[]> => {
   const includeMetadata = query.includeMetadata ?? true;
   const includeVector = query.includeVector ?? false;
+
   const reply = await context.client.ft.search(
     context.name,
     knnQuery(prefilter, query.topK),
@@ -579,7 +629,9 @@ const queryIndex = async (
       SORTBY: { BY: REDIS_DISTANCE_FIELD, DIRECTION: "ASC" },
     }
   );
+
   const records: ScoredRecord[] = [];
+
   for (const document of reply.documents) {
     const record = toScoredRecord(
       document,
@@ -587,10 +639,12 @@ const queryIndex = async (
       includeMetadata,
       includeVector
     );
+
     if (record !== undefined) {
       records.push(record);
     }
   }
+
   return records;
 };
 
@@ -600,19 +654,24 @@ const fetchRecords = async (
   includeVector: boolean
 ): Promise<VectorRecord[]> => {
   const keys = ids.map((id) => `${context.prefix}${id}`);
+
   const batches = await mapBatches({
     action: (batch) => context.client.json.mGet(batch, ROOT_PATH),
     items: keys,
     size: WRITE_BATCH,
   });
+
   const stored = batches.flat();
   const records: VectorRecord[] = [];
+
   for (const [position, id] of ids.entries()) {
     const value = stored[position];
+
     if (value !== null && value !== undefined) {
       records.push(toVectorRecord(id, value, includeVector));
     }
   }
+
   return sortByIds(ids, records);
 };
 
@@ -622,9 +681,11 @@ const writeBatch = async (
   position: number
 ): Promise<void> => {
   const batch = batches[position];
+
   if (batch === undefined) {
     return;
   }
+
   await Promise.all(
     batch.map((record) =>
       context.client.json.set(
@@ -648,10 +709,12 @@ const metadataError = (
 ): string | undefined => {
   for (const record of records) {
     const message = redisMetadataError(record, fields);
+
     if (message !== undefined) {
       return message;
     }
   }
+
   return undefined;
 };
 
@@ -664,6 +727,7 @@ const createIndex = (
 ): VectorIndex => {
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
   const nameMessage = redisIndexNameError(name);
+
   const context: IndexContext = {
     client,
     fields,
@@ -671,15 +735,19 @@ const createIndex = (
     namespace,
     prefix: redisKeyPrefix(keyPrefix, name, namespace),
   };
+
   return {
     delete: (selector: DeleteSelector) => {
       if (nameMessage !== undefined) {
         return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
       }
+
       const rejected = deleteSelectorError(PROVIDER, selector);
+
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));
       }
+
       if ("ids" in selector) {
         return run(name, async () => {
           const keys = selector.ids.map((id) => `${context.prefix}${id}`);
@@ -690,6 +758,7 @@ const createIndex = (
           });
         });
       }
+
       return deleteByFilter(
         context,
         "filter" in selector ? selector.filter : undefined
@@ -700,10 +769,12 @@ const createIndex = (
       if (nameMessage !== undefined) {
         return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
       }
+
       return run(name, async () => {
         if (ids.length === 0) {
           return [];
         }
+
         return await fetchRecords(
           context,
           ids,
@@ -720,14 +791,19 @@ const createIndex = (
       if (nameMessage !== undefined) {
         return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
       }
+
       const invalidQuery = queryOptionsError(PROVIDER, query);
+
       if (invalidQuery !== undefined) {
         return Promise.resolve(err(invalidQuery));
       }
+
       const prefilter = scopeRedisFilter(namespace, fields, query.filter);
+
       if (!prefilter.ok) {
         return Promise.resolve(err(toVecstoreError(prefilter.error)));
       }
+
       return run(name, () => queryIndex(context, query, prefilter.value));
     },
 
@@ -735,14 +811,18 @@ const createIndex = (
       if (nameMessage !== undefined) {
         return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
       }
+
       const message = metadataError(records, fields);
+
       if (message !== undefined) {
         return Promise.resolve(err(invalidArgument(PROVIDER, message)));
       }
+
       return run(name, async () => {
         if (records.length === 0) {
           return;
         }
+
         await upsertRecords(context, records);
       });
     },
@@ -756,22 +836,29 @@ export const createRedisStore = <Client extends RedisClientLike>(
   const fields = options.metadataFields ?? [];
   const keyPrefix = options.keyPrefix ?? DEFAULT_KEY_PREFIX;
   const algorithm = options.algorithm ?? DEFAULT_ALGORITHM;
+
   return {
     createIndex: (spec: IndexSpec) => {
       const invalid = indexSpecError(PROVIDER, spec);
+
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       const nameMessage = redisIndexNameError(spec.name);
+
       if (nameMessage !== undefined) {
         return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
       }
+
       for (const field of fields) {
         const message = redisFieldError(field);
+
         if (message !== undefined) {
           return Promise.resolve(err(invalidArgument(PROVIDER, message)));
         }
       }
+
       return run(spec.name, async () => {
         await client.ft.create(
           spec.name,
@@ -795,11 +882,13 @@ export const createRedisStore = <Client extends RedisClientLike>(
     listIndexes: () =>
       run("", async () => {
         const names: string[] = [];
+
         for (const name of await client.ft._list()) {
           if (isString(name)) {
             names.push(name);
           }
         }
+
         return names;
       }),
 

@@ -102,6 +102,7 @@ describe(compileQdrantFilter, () => {
       eq("genre", "drama"),
       or(gt("year", 2000), not(exists("year")))
     );
+
     expect(compileQdrantFilter(filter)).toStrictEqual({
       must: [
         { key: "genre", match: { value: "drama" } },
@@ -119,6 +120,7 @@ describe(compileQdrantFilter, () => {
     const native: Schemas["Filter"] = compileQdrantFilter(
       and(eq("a", 1), isIn("b", ["x"]), not(exists("c")))
     );
+
     expect(native.must).toHaveLength(3);
   });
 });

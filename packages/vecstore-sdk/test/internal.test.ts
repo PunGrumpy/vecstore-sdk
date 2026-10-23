@@ -151,6 +151,7 @@ describe("metadata entries", () => {
       e: { nested: 1 },
       f: null,
     }).filter(isMetadataEntry);
+
     expect(metadataFromEntries(entries, new Set(["_id"]))).toStrictEqual({
       a: "x",
       b: 1,
@@ -166,11 +167,13 @@ describe(reservedKeyError, () => {
     expect(
       reservedKeyError("qdrant", [{ id: "a", vector: [1] }], reserved)
     ).toBeUndefined();
+
     const error = reservedKeyError(
       "qdrant",
       [{ id: "a", metadata: { _id: "other" }, vector: [1] }],
       reserved
     );
+
     expect(error?.kind).toBe("invalid_argument");
     expect(error?.message).toContain('Record "a"');
   });
@@ -265,6 +268,7 @@ describe(mapBatches, () => {
       items: [1, 2, 3, 4, 5],
       size: 2,
     });
+
     expect(results).toStrictEqual([3, 7, 5]);
   });
 
@@ -277,6 +281,7 @@ describe(mapBatches, () => {
         inFlight.max = Math.max(inFlight.max, inFlight.current);
         await Promise.resolve();
         inFlight.current -= 1;
+
         return batch;
       },
       concurrency: 4,
@@ -289,14 +294,17 @@ describe(mapBatches, () => {
   test("resolves to an empty array without calling the action", async () => {
     const counter = { calls: 0 };
     const empty: number[] = [];
+
     const results = await mapBatches({
       action: (batch) => {
         counter.calls += 1;
+
         return Promise.resolve(batch);
       },
       items: empty,
       size: 2,
     });
+
     expect(results).toStrictEqual([]);
     expect(counter.calls).toBe(0);
   });
@@ -309,9 +317,11 @@ describe(mapBatches, () => {
         action: async (batch) => {
           started.push(...batch);
           await Promise.resolve();
+
           if (batch.includes(1)) {
             throw new Error("batch failed");
           }
+
           return batch;
         },
         concurrency: 2,
@@ -333,6 +343,7 @@ describe(mapBatches, () => {
           if (item === 0) {
             throw new Error("first batch failed");
           }
+
           await sleep(10);
           finished.push(item ?? -1);
         },

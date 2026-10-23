@@ -52,15 +52,19 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
   useLayoutEffect(() => {
     const measure = () => {
       const tab = tabRefs.current[exampleIndex];
+
       if (tab) {
         setIndicator({ left: tab.offsetLeft, width: tab.offsetWidth });
       }
     };
+
     measure();
     const observer = new ResizeObserver(measure);
+
     if (listRef.current) {
       observer.observe(listRef.current);
     }
+
     return () => observer.disconnect();
   }, [exampleIndex]);
   const example = examples[exampleIndex] ?? examples[0];
@@ -77,6 +81,7 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
 
   const selectProvider = (id: string) => {
     const index = providers.findIndex((item) => item.id === id);
+
     if (index !== -1) {
       setProviderIndex(index);
     }
@@ -103,6 +108,7 @@ export const HeroDemo = ({ providers, examples }: HeroDemoProps) => {
           />
           {examples.map((item, index) => {
             const active = index === exampleIndex;
+
             return (
               <button
                 aria-selected={active}

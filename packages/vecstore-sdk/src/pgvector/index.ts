@@ -76,6 +76,7 @@ const DISTANCE_OPERATORS: Record<Metric, string> = {
 
 const HNSW_METHOD = "USING hnsw";
 const ITERATIVE_SCAN_MINOR = 8;
+
 const ITERATIVE_SCAN_SETTING =
   "set_config('hnsw.iterative_scan', CASE WHEN current_setting('hnsw.iterative_scan', true) IN ('strict_order', 'relaxed_order') THEN current_setting('hnsw.iterative_scan', true) ELSE 'strict_order' END, true)";
 
@@ -100,6 +101,7 @@ interface SearchProfile {
 
 const supportsIterativeScan = (version: string): boolean => {
   const [major = 0, minor = 0] = version.split(".").map(Number);
+
   return major > 0 || minor >= ITERATIVE_SCAN_MINOR;
 };
 
@@ -123,18 +125,23 @@ const distanceExpression = (metric: Metric, vectorParam: string): string =>
 
 const scoreExpression = (metric: Metric, vectorParam: string): string => {
   const distance = distanceExpression(metric, vectorParam);
+
   switch (metric) {
     case "cosine": {
       return `1 - (${distance})`;
     }
+
     case "dot": {
       return `-(${distance})`;
     }
+
     case "euclidean": {
       return distance;
     }
+
     default: {
       const exhaustive: never = metric;
+
       return exhaustive;
     }
   }
@@ -166,12 +173,15 @@ const resolveProfile = async (
     context.schema === undefined
       ? [context.name]
       : [context.name, context.schema];
+
   const { rows } = await context.client.query(
     `SELECT indexdef, (SELECT extversion FROM pg_extension WHERE extname = 'vector') AS extversion FROM pg_indexes WHERE tablename = $1 AND schemaname = ${schemaPredicate(context.schema, "$2")}`,
     params
   );
+
   for (const row of rows.filter(isIndexDefinitionRow)) {
     const metric = metricFromIndexDef(row.indexdef);
+
     if (metric !== undefined) {
       return {
         iterativeScan:
@@ -181,6 +191,7 @@ const resolveProfile = async (
       };
     }
   }
+
   return DEFAULT_PROFILE;
 };
 
@@ -194,6 +205,7 @@ const searchRows = async (
 ): Promise<object[]> => {
   try {
     const { rows } = await context.client.query(text, params);
+
     return rows;
   } catch (error) {
     context.forget();
@@ -207,6 +219,7 @@ const upsertStatement = (
   batch: readonly VectorRecord[]
 ): PgStatement => {
   const params: PgParam[] = [];
+
   const rows = batch.map((record, rowIndex) => {
     const base = rowIndex * UPSERT_COLUMNS;
     params.push(
@@ -215,8 +228,10 @@ const upsertStatement = (
       vectorLiteral(record.vector),
       JSON.stringify(record.metadata ?? {})
     );
+
     return `($${base + 1}, $${base + 2}, $${base + 3}::vector, $${base + 4}::jsonb)`;
   });
+
   return {
     params,
     text: `INSERT INTO ${table} (id, namespace, embedding, metadata) VALUES ${rows.join(", ")} ON CONFLICT (namespace, id) DO UPDATE SET embedding = EXCLUDED.embedding, metadata = EXCLUDED.metadata`,
@@ -233,27 +248,34 @@ const createIndex = (
   return {
     delete: (selector: DeleteSelector) => {
       const rejected = deleteSelectorError(PROVIDER, selector);
+
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));
       }
+
       return run(name, async () => {
         if ("ids" in selector) {
           await client.query(
             `DELETE FROM ${table} WHERE namespace = $1 AND id = ANY($2::text[])`,
             [namespace, [...selector.ids]]
           );
+
           return;
         }
+
         if ("filter" in selector) {
           const filter = compilePgvectorFilter(selector.filter, {
             startIndex: 2,
           });
+
           await client.query(
             `DELETE FROM ${table} WHERE namespace = $1 AND ${filter.text}`,
             [namespace, ...filter.params]
           );
+
           return;
         }
+
         await client.query(`DELETE FROM ${table} WHERE namespace = $1`, [
           namespace,
         ]);
@@ -265,16 +287,20 @@ const createIndex = (
         if (ids.length === 0) {
           return [];
         }
+
         const vectorColumn = fetchOptions.includeVector
           ? ", embedding::text AS embedding"
           : "";
+
         const { rows } = await client.query(
           `SELECT id, metadata${vectorColumn} FROM ${table} WHERE namespace = $1 AND id = ANY($2::text[])`,
           [namespace, [...ids]]
         );
+
         const records = rows.flatMap((row) =>
           isPostgresRow(row) ? [toVectorRecord(row)] : []
         );
+
         return sortByIds(ids, records);
       }),
 
@@ -284,44 +310,58 @@ const createIndex = (
 
     query: (query: QueryOptions) => {
       const invalid = queryOptionsError(PROVIDER, query);
+
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       return run(name, async () => {
         const { iterativeScan, metric } = await context.profile();
         const params: PgParam[] = [namespace, vectorLiteral(query.vector)];
+
         const filter: PgvectorSql | undefined =
           query.filter === undefined
             ? undefined
             : compilePgvectorFilter(query.filter, {
                 startIndex: params.length + 1,
               });
+
         if (filter !== undefined) {
           params.push(...filter.params);
         }
+
         params.push(query.topK);
+
         const scoped =
           filter === undefined
             ? "namespace = $1"
             : `namespace = $1 AND ${filter.text}`;
+
         const where = iterativeScan
           ? `${scoped} AND tuning.scan IS NOT NULL`
           : scoped;
+
         const vectorColumn = query.includeVector
           ? "embedding::text AS embedding,"
           : "";
+
         const distance = distanceExpression(metric, "$2");
         const score = `${scoreExpression(metric, "$2")} AS score`;
+
         const columns = iterativeScan
           ? `${score}, ${distance} AS distance`
           : score;
+
         const search = `SELECT id, metadata, ${vectorColumn} ${columns} FROM ${table} WHERE ${where} ORDER BY ${distance} LIMIT $${params.length}`;
+
         const rows = await searchRows(
           context,
           iterativeScan ? withIterativeScan(search) : search,
           params
         );
+
         const includeMetadata = query.includeMetadata ?? true;
+
         return rows.flatMap((row) =>
           isPostgresRow(row)
             ? [
@@ -341,6 +381,7 @@ const createIndex = (
         await mapBatches({
           action: (batch) => {
             const statement = upsertStatement(table, namespace, batch);
+
             return client.query(statement.text, statement.params);
           },
           items: lastById(records),
@@ -354,15 +395,19 @@ export const createPgvectorStore = <Client extends PgQueryable>(
   options: PgvectorStoreOptions<Client>
 ): VectorStore<Client> => {
   const { client, schema } = options;
+
   const tableRef = (name: string): string =>
     schema === undefined
       ? quoteIdent(name)
       : `${quoteIdent(schema)}.${quoteIdent(name)}`;
+
   const profiles = new Map<string, Promise<SearchProfile>>();
   const profileKey = (name: string): string => `${schema ?? ""}.${name}`;
+
   const forgetProfile = (name: string): void => {
     profiles.delete(profileKey(name));
   };
+
   const lookup = async (
     target: ProfileTarget,
     key: string
@@ -374,18 +419,24 @@ export const createPgvectorStore = <Client extends PgQueryable>(
       throw error;
     }
   };
+
   const profileFor = (target: ProfileTarget): Promise<SearchProfile> => {
     const key = profileKey(target.name);
     const cached = profiles.get(key);
+
     if (cached !== undefined) {
       return cached;
     }
+
     const pending = lookup(target, key);
     profiles.set(key, pending);
+
     return pending;
   };
+
   const context = (name: string): TableContext => {
     const target: ProfileTarget = { client, name, schema };
+
     return {
       ...target,
       forget: () => forgetProfile(name),
@@ -398,9 +449,11 @@ export const createPgvectorStore = <Client extends PgQueryable>(
     createIndex: (spec: IndexSpec) => {
       const invalid =
         indexSpecError(PROVIDER, spec) ?? indexNameError(PROVIDER, spec.name);
+
       if (invalid !== undefined) {
         return Promise.resolve(err(invalid));
       }
+
       return run(spec.name, async () => {
         forgetProfile(spec.name);
         const table = tableRef(spec.name);
@@ -428,10 +481,12 @@ export const createPgvectorStore = <Client extends PgQueryable>(
     listIndexes: () =>
       run("", async () => {
         const params: PgParam[] = schema === undefined ? [] : [schema];
+
         const { rows } = await client.query(
           `SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_attribute a ON a.attrelid = c.oid JOIN pg_type t ON t.oid = a.atttypid WHERE c.relkind = 'r' AND a.attname = 'embedding' AND t.typname = 'vector' AND n.nspname = ${schemaPredicate(schema, "$1")} ORDER BY c.relname`,
           params
         );
+
         return rows.flatMap((row) => (isNamedRow(row) ? [row.name] : []));
       }),
 

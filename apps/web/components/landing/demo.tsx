@@ -47,6 +47,7 @@ export const Demo = async () => {
           await renderCode(provider.snippet(example.filterCode)),
         ])
       );
+
       return {
         code: Object.fromEntries(entries),
         expression: example.expression,
@@ -56,6 +57,7 @@ export const Demo = async () => {
       };
     })
   );
+
   const providers = demoProviders.map(({ id, label }) => ({ id, label }));
 
   return <HeroDemo examples={examples} providers={providers} />;

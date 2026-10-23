@@ -195,8 +195,11 @@ describe("a cosine vecstore_query that meets a zero vector on PGlite", () => {
 describe("supabase install script", () => {
   const db = usePostgres(installSupabaseSql);
 
-  const asAnon = async <T>(fn: () => PromiseLike<T>): Promise<T> => {
-    await db().exec("set role anon");
+  const asRole = async <T>(
+    role: string,
+    fn: () => PromiseLike<T>
+  ): Promise<T> => {
+    await db().exec(`set role ${role}`);
 
     try {
       return await fn();
@@ -241,19 +244,70 @@ describe("supabase install script", () => {
 
     await ensureRoles(db(), ["anon"]);
     await db().exec("grant select on secured_anon to anon");
-    expect(await asAnon(() => countRows("secured_anon"))).toBe(0);
+    expect(await asRole("anon", () => countRows("secured_anon"))).toBe(0);
 
     await db().exec(
       "create policy secured_read on secured_anon for select to anon using (true)"
     );
-    expect(await asAnon(() => countRows("secured_anon"))).toBe(1);
+    expect(await asRole("anon", () => countRows("secured_anon"))).toBe(1);
   });
+
+  test("every vecstore function runs with the privileges of its caller", async () => {
+    const functions = await db().query<{ definer: boolean; name: string }>(
+      "select proname as name, prosecdef as definer from pg_proc where proname like 'vecstore\\_%'"
+    );
+
+    expect(functions.rows.length).toBeGreaterThan(0);
+    expect(functions.rows.filter((row) => row.definer)).toStrictEqual([]);
+  });
+
+  test.each(["anon", "authenticated"])(
+    "%s reads and changes nothing through the adapter until a policy exists",
+    async (role) => {
+      const name = `secured_${role}_verbs`;
+      await createSecured(name);
+
+      const index = createSupabaseStore({ client: rpcClient(db()) }).index(
+        name
+      );
+
+      await index.upsert([{ id: "a", vector: [0, 0, 1] }]);
+
+      await ensureRoles(db(), [role]);
+      await db().exec(
+        `grant select, insert, update, delete on ${name} to ${role}`
+      );
+
+      const queried = await asRole(role, () =>
+        index.query({ topK: 1, vector: [0, 0, 1] })
+      );
+
+      const fetched = await asRole(role, () => index.fetch(["a"]));
+
+      const upserted = await asRole(role, () =>
+        index.upsert([{ id: "b", vector: [1, 0, 0] }])
+      );
+
+      const deleted = await asRole(role, () => index.delete({ ids: ["a"] }));
+
+      expect(queried.ok && queried.value).toStrictEqual([]);
+      expect(fetched.ok && fetched.value).toStrictEqual([]);
+      expect(upserted.ok || upserted.error.kind).toBe("unauthorized");
+      expect(deleted.ok).toBe(true);
+
+      const remaining = await db().query<{ id: string }>(
+        `select id from ${name}`
+      );
+
+      expect(remaining.rows.map((row) => row.id)).toStrictEqual(["a"]);
+    }
+  );
 
   test("anon cannot call the ddl functions once the supabase roles exist", async () => {
     await ensureRoles(db(), ["anon", "authenticated", "service_role"]);
     await installSupabaseSql(db());
 
-    const response = await asAnon(() =>
+    const response = await asRole("anon", () =>
       rpcClient(db()).rpc("vecstore_create_index", {
         dimension: 3,
         index_name: "x",

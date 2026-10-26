@@ -6,7 +6,15 @@ import { source } from "@/lib/source";
 // A table cell is sliced from the Markdown together with the pipe that opens
 // it, and the last one with the pipe that closes the row. Search results render
 // that Markdown, so the pipes show up as stray characters.
-const TABLE_PIPES = /^\|\s*|\s*(?<!\\)\|$/gu;
+const stripTablePipes = (content: string): string => {
+  const opened = content.startsWith("|")
+    ? content.slice(1).trimStart()
+    : content;
+
+  return opened.endsWith("|") && !opened.endsWith("\\|")
+    ? opened.slice(0, -1).trimEnd()
+    : opened;
+};
 
 // The index has one `content` field, so a page title weighs the same as any
 // other record and BM25 favours the shorter one. A table header cell such as
@@ -23,7 +31,7 @@ const withoutTablePipes = ({
 }: StructuredData): StructuredData => ({
   contents: contents.map((item) => ({
     ...item,
-    content: item.content.replace(TABLE_PIPES, ""),
+    content: stripTablePipes(item.content),
   })),
   headings,
 });

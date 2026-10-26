@@ -1,5 +1,14 @@
 # vecstore-sdk
 
+## 0.1.5
+
+### Patch Changes
+
+- 5bc2bed: Report network failures as `{ kind: "connection" }` on Bun as well as Node. Bun's `fetch` puts the error code on the error itself instead of on `cause`, so an unreachable host came back as `provider` from the Qdrant, Upstash, and Supabase adapters under Bun. The adapters now recognise both shapes, and the Supabase adapter treats a response with status 0 (no HTTP response) as a connection failure, including a timed-out request. The pgvector adapter also maps node-postgres's code-less timeouts and dropped connections to `connection`, and both Postgres adapters map the SQLSTATEs 57P02, 57P03, and 53300 to it. `SupabaseRpcResponse` gains an optional `status` field.
+- 83c8002: Turn on row level security for a table that the pgvector adapter's `createIndex` makes when the database has an `anon` role, as every Supabase project does. Before this, a table created through `createPgvectorStore` on a Supabase database sat in `public` with row level security off, so anyone holding the project's anon key could read, change, and delete its records through the REST API. The role that runs `createIndex` owns the table and keeps full access. Plain Postgres without an `anon` role is unchanged. Tables created by earlier versions are not altered; turn it on with `alter table "<name>" enable row level security;`.
+- a4daf39: Fix three pgvector and Supabase query defects. `not` around a range filter, such as `not(gt("year", 2000))`, now matches records that have no `year`, as the docs describe; the range comparison evaluated to SQL `NULL` for a missing field, so those records were skipped by queries and by `delete({ filter })`. A record with a zero vector, whose cosine score is NaN, now ranks last instead of first when Postgres reads an HNSW-indexed table without the index. The metric is now read from the `embedding` column's operator class only, so a table whose name contains an operator class name, such as `x_vector_cosine_ops`, keeps its own metric. Re-run `sql/supabase.sql` to get the new `vecstore_filter_sql`, `vecstore_metric`, and `vecstore_query`.
+- da20248: Keep Upstash namespaces apart on `fetch` in metadata mode. A default-namespace handle that fetched an id shaped `{namespace}/{length}/{id}` received that namespace's record, relabelled with the plain id, in place of its own. `fetch` now returns only records of the handle's namespace. Every verb also returns `invalid_argument` up front for a metadata-mode namespace holding a backslash or both quote characters, which `upsert` used to accept although no query or filtered delete could reach it afterwards, and for an index name of `.` or `..`, which the request URL would have collapsed.
+
 ## 0.1.4
 
 ### Patch Changes

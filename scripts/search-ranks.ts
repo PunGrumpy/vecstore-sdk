@@ -53,9 +53,11 @@ const pagePath = (url: string): string => url.split("#")[0] ?? url;
 const search = async (base: string, query: string): Promise<SearchResult[]> => {
   const url = `${base}/api/search?query=${encodeURIComponent(query)}`;
   const response = await fetch(url);
+
   if (!response.ok) {
     throw new Error(`${url} returned ${response.status}`);
   }
+
   // SAFETY: /api/search returns a JSON array of results that each carry a `url`.
   return (await response.json()) as SearchResult[];
 };
@@ -66,6 +68,7 @@ const pagesOf = (results: readonly SearchResult[]): string[] => [
 
 const rankOf = (pages: readonly string[], page: string): string => {
   const index = pages.indexOf(page);
+
   return index === -1 ? "-" : `#${index + 1}`;
 };
 
@@ -73,9 +76,11 @@ const parseTarget = (arg: string): Target => {
   const separator = arg.indexOf("=");
   const label = arg.slice(0, separator);
   const base = arg.slice(separator + 1).replace(/\/$/u, "");
+
   if (separator < 1 || !base) {
     throw new Error(`Expected <label>=<base url>, got "${arg}"`);
   }
+
   return { base, label };
 };
 
@@ -109,12 +114,16 @@ const rows = await Promise.all(
 console.log(
   `| query | page | ${targets.map((target) => target.label).join(" | ")} |`
 );
+
 console.log(`| --- | --- | ${targets.map(() => "---").join(" | ")} |`);
+
 for (const { found, page, query } of rows) {
   const cells = found.map(({ results }) => {
     const pages = pagesOf(results);
+
     return `${rankOf(pages, page)} of ${pages.length}`;
   });
+
   console.log(`| \`${query}\` | \`${page}\` | ${cells.join(" | ")} |`);
 }
 
@@ -122,6 +131,7 @@ if (top > 0) {
   for (const { found, query } of rows) {
     for (const { label, results } of found) {
       console.log(`\n${label} · ${query}`);
+
       for (const [index, page] of pagesOf(results).slice(0, top).entries()) {
         console.log(`  ${index + 1}. ${page}`);
       }

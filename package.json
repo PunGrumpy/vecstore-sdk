@@ -28,14 +28,14 @@
     "eslint-plugin-sonarjs": "^4.2.2",
     "husky": "^9.1.7",
     "opentype.js": "^2.0.0",
-    "oxfmt": "^0.74.0",
-    "oxlint": "^1.89.0",
+    "oxfmt": "^0.75.0",
+    "oxlint": "^1.90.0",
     "oxlint-plugin-react-doctor": "^0.9.18",
-    "pkg-pr-new": "0.0.91",
+    "pkg-pr-new": "0.0.93",
     "publint": "0.3.25",
     "turbo": "^2.11.10",
     "typescript": "^7",
-    "ultracite": "8.0.2"
+    "ultracite": "8.1.0"
   },
   "devEngines": {
     "packageManager": {

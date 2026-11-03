@@ -191,9 +191,7 @@ const run = <T>(
 ): VecResult<T> =>
   attempt((cause) => normalizePineconeError(cause, context), action);
 
-const namespaceArgs = (
-  namespace: string | undefined
-): { namespace?: string } =>
+const namespaceArgs = (namespace: string | undefined): { namespace?: string } =>
   namespace === undefined || namespace === "" ? {} : { namespace };
 
 const toPineconeRecord = (record: VectorRecord): PineconeRecordLike => ({

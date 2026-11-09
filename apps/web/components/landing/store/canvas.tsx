@@ -128,12 +128,12 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
       return;
     }
 
-    let disposed = false;
-    let stop: (() => void) | undefined;
-    let palette = readPalette(probe);
+    const lifetime = new AbortController();
+    const stops: (() => void)[] = [];
+    const theme = { palette: readPalette(probe) };
 
     const observer = new MutationObserver(() => {
-      palette = readPalette(probe);
+      theme.palette = readPalette(probe);
     });
 
     observer.observe(document.documentElement, { attributeFilter: ["class"] });
@@ -141,7 +141,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
     const run = async () => {
       const gpu = await init();
 
-      if (disposed) {
+      if (lifetime.signal.aborted) {
         gpu.dispose();
 
         return;
@@ -217,7 +217,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
           scene: {
             camera: [...cameraPosition(0, 0), SPECULAR],
             colors,
-            ink: [...palette.shell, SHELL_ALPHA],
+            ink: [...theme.palette.shell, SHELL_ALPHA],
             lights: modelLights,
             params: [0, BOUNCE_GAIN, EMISSIVE_DARK, 0],
             viewProj: viewProjection(1, 0, 0),
@@ -250,7 +250,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
       });
 
       const order = [...Array.from({ length: SLOTS }).keys()];
-      let frameIndex = 0;
+      const noise = { frame: 0 };
       const stage3d = stageBody(pool, cubes);
 
       const loop = frameLoop(gpu, (frame) => {
@@ -263,8 +263,8 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
 
         const aspect = width / Math.max(height, 1);
         const matrix = viewProjection(aspect, query.tiltX, query.tiltY);
-        const hues = spectrumRef.current ? palette.hues : undefined;
-        const tone = themeOf(palette.dark);
+        const hues = spectrumRef.current ? theme.palette.hues : undefined;
+        const tone = themeOf(theme.palette.dark);
         order.sort(byDepth(query));
 
         let count = 0;
@@ -287,8 +287,11 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
           const layer = Math.floor(slot / CELLS.length);
           const cell = slot % CELLS.length;
           const lit = isLit(query, layer, cell);
-          const [red, green, blue] = palette.core;
-          const [tintRed, tintGreen, tintBlue] = hues?.[cell] ?? palette.core;
+          const [red, green, blue] = theme.palette.core;
+
+          const [tintRed, tintGreen, tintBlue] =
+            hues?.[cell] ?? theme.palette.core;
+
           const [x, y, z] = originOf(slot);
           const base = position * INSTANCE_FLOATS;
           instances[base] = x;
@@ -320,7 +323,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
         }
 
         cellGeometry.buffers[1].write(instances);
-        frameIndex = (frameIndex + 1) % 64;
+        noise.frame = (noise.frame + 1) % 64;
         const lightU = count > 0 ? centreU / count : 0.5;
         const lightV = count > 0 ? centreV / count : 0.5;
 
@@ -337,7 +340,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
           scene: {
             camera: [...cameraPosition(query.tiltX, query.tiltY), SPECULAR],
             colors,
-            ink: [...palette.shell, SHELL_ALPHA],
+            ink: [...theme.palette.shell, SHELL_ALPHA],
             lights: modelLights,
             params: [count, tone.bounce, tone.emissive, 0],
             viewProj: matrix,
@@ -347,7 +350,7 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
           bloom: {
             dispersion: hues ? FLARE_DISPERSION : 0,
             exposure: tone.exposure,
-            frame: frameIndex,
+            frame: noise.frame,
             gain: tone.glow,
             grain: BLOOM_GRAIN,
             halo: FLARE_HALO,
@@ -362,26 +365,31 @@ export const StoreCanvas = ({ queryRef, spectrum }: StoreCanvasProps) => {
         frame.pass(view, composite);
       });
 
-      stop = () => {
+      stops.push(() => {
         loop.stop();
         gpu.dispose();
-      };
+      });
     };
 
     const start = async () => {
       try {
         await run();
       } catch {
-        stop?.();
+        for (const stop of stops) {
+          stop();
+        }
       }
     };
 
     start();
 
     return () => {
-      disposed = true;
+      lifetime.abort();
       observer.disconnect();
-      stop?.();
+
+      for (const stop of stops) {
+        stop();
+      }
     };
   }, [queryRef]);
 

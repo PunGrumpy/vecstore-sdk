@@ -42,11 +42,11 @@ export const StoreStack = ({
       return;
     }
 
-    let frame = 0;
+    const pending = { frame: 0 };
 
     const onMove = (event: PointerEvent) => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
+      cancelAnimationFrame(pending.frame);
+      pending.frame = requestAnimationFrame(() => {
         queryRef.current = queryFrom(
           scene.getBoundingClientRect(),
           event.clientX,
@@ -58,7 +58,7 @@ export const StoreStack = ({
     window.addEventListener("pointermove", onMove);
 
     return () => {
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(pending.frame);
       window.removeEventListener("pointermove", onMove);
     };
   }, []);

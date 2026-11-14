@@ -94,7 +94,7 @@
     "test": "bun test --randomize --timeout 30000 --path-ignore-patterns 'test/live/**'",
     "test:coverage": "bun test --coverage --randomize --timeout 30000 --path-ignore-patterns 'test/live/**'",
     "typecheck": "tsc --noEmit",
-    "test:live": "VECSTORE_LIVE=1 bun test test/live",
+    "test:live": "VECSTORE_LIVE=1 bun test --timeout 120000 test/live",
     "check:package": "bun run build && bun scripts/check-exports.ts && bun x publint && bun x attw --pack . --profile esm-only --exclude-entrypoints ./sql/supabase.sql"
   },
   "devDependencies": {

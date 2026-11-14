@@ -4,11 +4,12 @@ import type { PGlite } from "@electric-sql/pglite";
 
 import { eq, gte, ne } from "../../src/filter/ast";
 import { createPgvectorStore } from "../../src/pgvector";
-import type { DeleteSelector } from "../../src/types";
+import type { DeleteSelector, VectorRecord } from "../../src/types";
 import {
   containsCases,
   liveCases,
   negatedRangeCases,
+  scanAll,
   setupLive,
 } from "../live/conformance";
 import { emptySelector, filterWithoutValue } from "../malformed";
@@ -36,6 +37,73 @@ describe("pgvector on PGlite", () => {
       await expect(run(live())).resolves.toBeUndefined();
     }
   );
+});
+
+const scannedRecords = (prefix: string, count: number): VectorRecord[] =>
+  Array.from({ length: count }, (_, position) => ({
+    id: `${prefix}${String(count - position).padStart(2, "0")}`,
+    metadata: { position },
+    vector: [position, 1],
+  }));
+
+const SCANNED_A = scannedRecords("a", 15);
+const SCANNED_B = scannedRecords("b", 10);
+
+const sortedIds = (records: readonly VectorRecord[]): string[] =>
+  records.map((record) => record.id).toSorted();
+
+describe("scan on PGlite", () => {
+  const db = usePostgres(async (client) => {
+    const store = createPgvectorStore({ client });
+    await store.createIndex({ dimension: 2, name: "scanned" });
+    await store.index("scanned", { namespace: "tenant-a" }).upsert(SCANNED_A);
+    await store.index("scanned", { namespace: "tenant-b" }).upsert(SCANNED_B);
+  });
+
+  const index = (namespace: string) =>
+    createPgvectorStore({ client: db() }).index("scanned", { namespace });
+
+  test("pages of seven return each id of the namespace once, in id order", async () => {
+    const pages = await scanAll(index("tenant-a"), { limit: 7 });
+    const records = pages.flatMap((page) => page.records);
+
+    expect(pages.map((page) => page.records.length)).toStrictEqual([7, 7, 1]);
+    expect(records.map((record) => record.id)).toStrictEqual(
+      sortedIds(SCANNED_A)
+    );
+    expect(records.every((record) => record.vector.length === 0)).toBeTruthy();
+  });
+
+  test("a namespace that fills its last page ends without an empty page", async () => {
+    const pages = await scanAll(index("tenant-b"), { limit: 5 });
+
+    expect(pages.map((page) => page.records.length)).toStrictEqual([5, 5]);
+    expect(
+      pages.flatMap((page) => page.records.map((record) => record.id))
+    ).toStrictEqual(sortedIds(SCANNED_B));
+  });
+
+  test("includeVector returns the stored vector and metadata", async () => {
+    const result = await index("tenant-a").scan({
+      includeVector: true,
+      limit: 1,
+    });
+
+    expect(result).toStrictEqual({
+      ok: true,
+      value: {
+        cursor: "a01",
+        records: [{ id: "a01", metadata: { position: 14 }, vector: [14, 1] }],
+      },
+    });
+  });
+
+  test("an empty namespace returns no records and no cursor", async () => {
+    const result = await index("tenant-c").scan();
+
+    expect(result.ok && result.value.records).toStrictEqual([]);
+    expect(result.ok && result.value.cursor).toBeUndefined();
+  });
 });
 
 describe("index lifecycle on PGlite", () => {

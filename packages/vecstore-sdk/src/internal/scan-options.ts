@@ -1,6 +1,6 @@
 import { invalidArgument } from "../errors";
 import type { Provider, VecstoreError } from "../errors";
-import type { ScanOptions } from "../types";
+import type { ScanOptions, ScanPage, VectorRecord } from "../types";
 import { isString } from "./guards";
 
 export const DEFAULT_SCAN_LIMIT = 100;
@@ -35,3 +35,13 @@ export const scanLimit = (
   options: ScanOptions | undefined,
   max: number = MAX_SCAN_LIMIT
 ): number => Math.min(options?.limit ?? DEFAULT_SCAN_LIMIT, max);
+
+export const idOrderedPage = (
+  records: readonly VectorRecord[],
+  limit: number
+): ScanPage => {
+  const kept = records.slice(0, limit);
+  const cursor = records.length > limit ? kept.at(-1)?.id : undefined;
+
+  return { cursor, records: kept };
+};

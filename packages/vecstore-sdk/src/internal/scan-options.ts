@@ -45,3 +45,8 @@ export const idOrderedPage = (
 
   return { cursor, records: kept };
 };
+
+export const lastIdPage = (records: VectorRecord[]): ScanPage => ({
+  cursor: records.at(-1)?.id,
+  records,
+});

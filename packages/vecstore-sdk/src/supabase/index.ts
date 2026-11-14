@@ -16,7 +16,11 @@ import {
   vectorLiteral,
 } from "../internal/postgres";
 import { queryOptionsError } from "../internal/query-options";
-import { scanOptionsError } from "../internal/scan-options";
+import {
+  lastIdPage,
+  scanLimit,
+  scanOptionsError,
+} from "../internal/scan-options";
 import { recordsError } from "../internal/vector";
 import { err } from "../result";
 import type {
@@ -93,6 +97,14 @@ export type SupabaseCall =
       readonly args: SupabaseNamespaceTarget & {
         readonly ids: readonly string[];
         readonly include_vector: boolean;
+      };
+    }
+  | {
+      readonly fn: "vecstore_scan";
+      readonly args: SupabaseNamespaceTarget & {
+        readonly after_id: string | null;
+        readonly include_vector: boolean;
+        readonly page_size: number;
       };
     }
   | {
@@ -319,12 +331,25 @@ const createIndexHandle = (
     scan: (scanOptions) => {
       const rejected = scanOptionsError(PROVIDER, scanOptions);
 
-      return Promise.resolve(
-        err(
-          rejected ??
-            unsupported(PROVIDER, "scan", "scan is not implemented yet")
-        )
-      );
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+
+      return run(context("vecstore_scan"), async () => {
+        const pageSize = scanLimit(scanOptions);
+
+        const rows = await invoke(client, {
+          args: {
+            ...scope,
+            after_id: scanOptions?.cursor ?? null,
+            include_vector: scanOptions?.includeVector ?? false,
+            page_size: pageSize,
+          },
+          fn: "vecstore_scan",
+        });
+
+        return lastIdPage(readRecords(rows));
+      });
     },
 
     upsert: (records) => {

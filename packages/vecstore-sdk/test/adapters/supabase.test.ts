@@ -411,6 +411,142 @@ describe(createSupabaseStore, () => {
     ]);
   });
 
+  test("scan asks vecstore_scan for a page after the cursor", async () => {
+    const { client, calls } = fakeClient({
+      responses: [
+        [
+          { id: "a", metadata: { n: 1 } },
+          { id: "b", metadata: {} },
+        ],
+        [{ embedding: "[1,2]", id: "c", metadata: {} }],
+        [],
+      ],
+    });
+
+    const index = createSupabaseStore({ client }).index("docs", {
+      namespace: "tenant",
+    });
+
+    await expect(index.scan({ limit: 2 })).resolves.toStrictEqual({
+      ok: true,
+      value: {
+        cursor: "b",
+        records: [
+          { id: "a", metadata: { n: 1 }, vector: [] },
+          { id: "b", metadata: {}, vector: [] },
+        ],
+      },
+    });
+
+    const last = await index.scan({
+      cursor: "b",
+      includeVector: true,
+      limit: 2,
+    });
+
+    expect(last.ok && last.value.records).toStrictEqual([
+      { id: "c", metadata: {}, vector: [1, 2] },
+    ]);
+    expect(last.ok && last.value.cursor).toBe("c");
+
+    const empty = await index.scan({ cursor: "c", limit: 2 });
+
+    expect(empty.ok && empty.value.records).toStrictEqual([]);
+    expect(empty.ok && empty.value.cursor).toBeUndefined();
+    expect(calls).toStrictEqual([
+      {
+        args: {
+          after_id: null,
+          include_vector: false,
+          index_name: "docs",
+          index_schema: null,
+          match_namespace: "tenant",
+          page_size: 2,
+        },
+        fn: "vecstore_scan",
+      },
+      {
+        args: {
+          after_id: "b",
+          include_vector: true,
+          index_name: "docs",
+          index_schema: null,
+          match_namespace: "tenant",
+          page_size: 2,
+        },
+        fn: "vecstore_scan",
+      },
+      {
+        args: {
+          after_id: "c",
+          include_vector: false,
+          index_name: "docs",
+          index_schema: null,
+          match_namespace: "tenant",
+          page_size: 2,
+        },
+        fn: "vecstore_scan",
+      },
+    ]);
+  });
+
+  test("scan clamps a larger limit to the page maximum", async () => {
+    const { client, calls } = fakeClient();
+
+    await createSupabaseStore({ client }).index("docs").scan({ limit: 5000 });
+
+    expect(
+      calls.map((call) => ("page_size" in call.args ? call.args.page_size : 0))
+    ).toStrictEqual([1000]);
+  });
+
+  test("scan keeps going when a row cap returns fewer rows than the page size", async () => {
+    const { client } = fakeClient({
+      responses: [
+        [
+          { id: "a", metadata: {} },
+          { id: "b", metadata: {} },
+          { id: "c", metadata: {} },
+        ],
+        [],
+      ],
+    });
+
+    const index = createSupabaseStore({ client }).index("docs");
+    const first = await index.scan({ limit: 5 });
+
+    expect(first.ok && first.value.records).toHaveLength(3);
+    expect(first.ok && first.value.cursor).toBe("c");
+
+    const second = await index.scan({ cursor: "c", limit: 5 });
+
+    expect(second.ok && second.value.records).toStrictEqual([]);
+    expect(second.ok && second.value.cursor).toBeUndefined();
+  });
+
+  test.each([
+    ["a zero limit", { limit: 0 }],
+    ["an empty cursor", { cursor: "" }],
+  ])("scan rejects %s before calling the database", async (_name, options) => {
+    const { client, calls } = fakeClient();
+
+    const result = await createSupabaseStore({ client })
+      .index("docs")
+      .scan(options);
+
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(calls).toHaveLength(0);
+  });
+
+  test("scan against a database without vecstore_scan asks to rerun the install file", async () => {
+    const { client } = fakeClient({ error: rpcError("PGRST202") });
+    const result = await createSupabaseStore({ client }).index("docs").scan();
+
+    expect(!result.ok && result.error.kind).toBe("unsupported");
+    expect(!result.ok && result.error.message).toContain("vecstore_scan");
+    expect(!result.ok && result.error.message).toContain("sql/supabase.sql");
+  });
+
   test("an RPC error becomes a result rather than a throw", async () => {
     const { client } = fakeClient({ error: rpcError("42P01") });
 

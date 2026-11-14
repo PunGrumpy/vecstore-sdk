@@ -33,7 +33,7 @@ import {
 import { indexSpecError } from "../internal/index-spec";
 import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
 import { queryOptionsError } from "../internal/query-options";
-import { scanOptionsError } from "../internal/scan-options";
+import { scanLimit, scanOptionsError } from "../internal/scan-options";
 import { recordsError } from "../internal/vector";
 import { err, ok } from "../result";
 import type { Result } from "../result";
@@ -46,6 +46,8 @@ import type {
   MetadataValue,
   Metric,
   QueryOptions,
+  ScanOptions,
+  ScanPage,
   ScoredRecord,
   VecResult,
   VectorIndex,
@@ -133,6 +135,16 @@ export type RedisJsonValue =
   | RedisJsonValue[]
   | { [key: string]: RedisJsonValue };
 
+export interface RedisScanOptions {
+  readonly MATCH: string;
+  readonly COUNT: number;
+}
+
+export interface RedisScanReply {
+  readonly cursor: string;
+  readonly keys: string[];
+}
+
 export interface RedisClientLike {
   readonly ft: {
     readonly create: (
@@ -160,6 +172,10 @@ export interface RedisClientLike {
     readonly mGet: (keys: string[], path: string) => Promise<RedisJsonValue[]>;
   };
   readonly unlink: (keys: string[]) => Promise<number>;
+  readonly scan: (
+    cursor: string,
+    options: RedisScanOptions
+  ) => Promise<RedisScanReply>;
 }
 
 export interface RedisStoreOptions<Client> {
@@ -187,6 +203,8 @@ const BLOB_PARAM = "BLOB";
 const DIALECT = 2;
 const DELETE_PAGE = 500;
 const WRITE_BATCH = 500;
+const FIRST_SCAN_CURSOR = "0";
+const GLOB_SPECIAL = /[*?[\]\\]/gu;
 
 const METRICS: Record<Metric, RedisDistanceMetric> = {
   cosine: "COSINE",
@@ -368,6 +386,9 @@ export const redisKeyPrefix = (
   index: string,
   namespace: string
 ): string => `${keyPrefix}${index}:${encodeURIComponent(namespace)}:`;
+
+const matchPattern = (prefix: string): string =>
+  `${prefix.replaceAll(GLOB_SPECIAL, "\\$&")}*`;
 
 const toBlob = (vector: readonly number[]): Buffer => {
   const floats = Float32Array.from(vector);
@@ -677,6 +698,31 @@ const fetchRecords = async (
   return sortByIds(ids, records);
 };
 
+const scanRecords = async (
+  context: IndexContext,
+  options: ScanOptions | undefined
+): Promise<ScanPage> => {
+  const reply = await context.client.scan(
+    options?.cursor ?? FIRST_SCAN_CURSOR,
+    { COUNT: scanLimit(options), MATCH: matchPattern(context.prefix) }
+  );
+
+  const ids = [...new Set(reply.keys)].flatMap((key) =>
+    key.startsWith(context.prefix) ? [key.slice(context.prefix.length)] : []
+  );
+
+  const records = await fetchRecords(
+    context,
+    ids,
+    options?.includeVector ?? false
+  );
+
+  return {
+    cursor: reply.cursor === FIRST_SCAN_CURSOR ? undefined : reply.cursor,
+    records,
+  };
+};
+
 const writeBatch = async (
   context: IndexContext,
   batches: readonly (readonly VectorRecord[])[],
@@ -810,14 +856,17 @@ const createIndex = (
     },
 
     scan: (scanOptions) => {
+      if (nameMessage !== undefined) {
+        return Promise.resolve(err(invalidArgument(PROVIDER, nameMessage)));
+      }
+
       const rejected = scanOptionsError(PROVIDER, scanOptions);
 
-      return Promise.resolve(
-        err(
-          rejected ??
-            unsupported(PROVIDER, "scan", "scan is not implemented yet")
-        )
-      );
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+
+      return run(name, () => scanRecords(context, scanOptions));
     },
 
     upsert: (records) => {

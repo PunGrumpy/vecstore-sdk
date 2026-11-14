@@ -1,5 +1,17 @@
 # vecstore-sdk
 
+## 0.2.0
+
+### Minor Changes
+
+- c1fd3a5: Add `scan`, which pages through every record in an index's namespace on all seven adapters: `const page = await index.scan({ cursor, limit, includeVector })` returns up to `limit` records and a `cursor` for the next call, `undefined` once the scan is done. Records come back with the ids you wrote, including on Qdrant, Vectorize, and Upstash, where the provider stores a hashed or prefixed id. A page can be short or empty while `cursor` is set. Pinecone supports it on serverless indexes only. Supabase users re-run `sql/supabase.sql` to install `vecstore_scan`. `VectorIndex` and the `QdrantClientLike`, `PineconeIndexLike`, `UpstashIndexLike`, and `RedisClientLike` types gain a required member, so code that implements them by hand needs the new method.
+- 7f1c720: Add `unwrap`, which returns the value of a successful `Result` and throws an `Error` for a failed one. The error's message names the provider and the kind, such as `qdrant connection: fetch failed`, and its `cause` is the original `VecstoreError`. Code that only wants to stop on a failure no longer writes `throw new Error(result.error.message)`, which dropped both.
+
+### Patch Changes
+
+- 9dd2fe3: Reject a vector that cannot be stored before any adapter writes it. `fetch` returns `vector: []` unless you pass `{ includeVector: true }`, and it returns the same `VectorRecord` type that `upsert` takes, so fetching a record, changing its metadata, and upserting it typechecked. On Redis that call returned `ok` and stored a document with an empty vector, which the search index leaves out of every query; the other adapters passed the empty vector on to the provider. Every adapter's `upsert` now returns `invalid_argument` and writes nothing when a vector is empty, holds `NaN` or an infinite value, or has a different length from the first record in the call. `query` returns `invalid_argument` for an empty or non-finite query vector.
+- 3df1182: Hold less memory during a large `upsert` on Qdrant, Upstash Vector, and Cloudflare Vectorize. These adapters converted every record into the provider's request shape before sending the first batch, so the converted copy of the whole input stayed alive until the last batch finished. They now convert each batch as it is sent, as the pgvector, Supabase, and Pinecone adapters already did. With 5,000 records of 1,536 dimensions, the memory still reachable while requests ran dropped from about 140 MB to about 1 MB on Vectorize and from about 60 MB to under 10 MB on Qdrant and Upstash. Requests and their order are unchanged.
+
 ## 0.1.5
 
 ### Patch Changes

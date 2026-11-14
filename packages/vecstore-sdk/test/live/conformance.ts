@@ -83,6 +83,7 @@ export const setupLive = (
   options: LiveOptions = {}
 ): (() => Live) => {
   let live: Live | null = null;
+  let created: Pick<Live, "indexName" | "store"> | null = null;
 
   const [before, after] = options.isolated
     ? [beforeEach, afterEach]
@@ -96,6 +97,7 @@ export const setupLive = (
       options.indexName?.() ?? `vecstore_live_${Date.now()}_${indexSequence}`;
 
     unwrap(await store.createIndex({ dimension: DIMENSION, name: indexName }));
+    created = { indexName, store };
     const index = store.index(indexName, { namespace: NAMESPACE });
     unwrap(await index.upsert(records));
     await waitForRecords(index);
@@ -103,9 +105,11 @@ export const setupLive = (
   });
 
   after(async () => {
-    if (live !== null) {
-      const { indexName, store } = live;
-      live = null;
+    live = null;
+
+    if (created !== null) {
+      const { indexName, store } = created;
+      created = null;
       unwrap(await store.deleteIndex(indexName));
     }
   });

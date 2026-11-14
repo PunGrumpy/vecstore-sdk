@@ -31,6 +31,10 @@ The adapter needs `@pinecone-database/pinecone` 7 or later, which introduced the
 
 Serverless indexes reject `delete({ filter })`. The adapter returns an `unsupported` error with `feature: "deleteByFilter"`. To delete matching records, delete by ids instead, or query first and delete the returned ids, repeating until a query returns nothing, since one query returns at most `topK` matches.
 
+## Scan
+
+`scan` lists ids with `listPaginated` and reads them with `fetch`, at most 100 records per page. Pinecone lists ids on serverless indexes only, so on a pod-based index `scan` returns `unsupported` with `feature: "scan"`.
+
 ## What the adapter stores
 
 | Concern   | Pinecone         |

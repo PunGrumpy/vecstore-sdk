@@ -137,6 +137,10 @@ A filter is limited to 2,048 bytes of JSON. Indexed string metadata is compared 
 
 The adapter sends up to 1,000 records per upsert request as NDJSON and runs up to four batches at a time.
 
+## Scan
+
+`scan` lists ids with `listVectors`, which has no namespace filter, so a namespaced scan reads the whole index and drops other namespaces' vectors, which can leave a page short or empty. Vectorize expires a list cursor after a while, so finish a scan rather than keeping a cursor for later.
+
 ## What the adapter stores
 
 | Concern | Where it lives |

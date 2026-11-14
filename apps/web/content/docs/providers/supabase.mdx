@@ -39,6 +39,8 @@ Supabase reloads the PostgREST schema cache when the file finishes. If a call st
 notify pgrst, 'reload schema';
 ```
 
+`scan` calls `vecstore_scan`, which older installs lack. Run the file again after you upgrade to get it. A scan page holds at most 1,000 records, PostgREST's default row cap. The adapter keeps paging until a page comes back empty, so a project with a lower row cap still reads every record, in smaller pages.
+
 ## Which key to use
 
 Every function is declared `security invoker`, so it runs with the privileges of the key you passed to `createClient`. `createIndex` enables row level security on the table it creates and adds no policy, so under the `anon` or `authenticated` role `query`, `fetch`, `upsert`, and `delete` see and change nothing until you write one. The service role bypasses row level security.
@@ -87,17 +89,18 @@ A filter goes over the wire as the JSON tree you built with `eq`, `and`, and the
 
 ## The SQL functions
 
-The adapter calls seven functions:
+The adapter calls eight functions:
 
-| Function                | Called by                           |
-| ----------------------- | ----------------------------------- |
-| `vecstore_create_index` | `createIndex`                       |
-| `vecstore_drop_index`   | `deleteIndex`                       |
-| `vecstore_list_indexes` | `listIndexes`                       |
-| `vecstore_upsert`       | `upsert`, in batches of 100 records |
-| `vecstore_query`        | `query`                             |
-| `vecstore_fetch`        | `fetch`, in batches of 500 ids      |
-| `vecstore_delete`       | `delete`                            |
+| Function                | Called by                            |
+| ----------------------- | ------------------------------------ |
+| `vecstore_create_index` | `createIndex`                        |
+| `vecstore_drop_index`   | `deleteIndex`                        |
+| `vecstore_list_indexes` | `listIndexes`                        |
+| `vecstore_upsert`       | `upsert`, in batches of 100 records  |
+| `vecstore_query`        | `query`                              |
+| `vecstore_fetch`        | `fetch`, in batches of 500 ids       |
+| `vecstore_scan`         | `scan`, at most 1,000 records a page |
+| `vecstore_delete`       | `delete`                             |
 
 Four more functions support them: `vecstore_table` quotes an index name into a table reference, `vecstore_filter_sql` compiles a filter, `vecstore_contains_any` writes the containment test that `eq` and `isIn` share, and `vecstore_metric` reads the metric from the index definition.
 

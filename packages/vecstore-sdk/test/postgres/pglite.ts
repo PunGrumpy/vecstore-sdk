@@ -11,8 +11,14 @@ const SUPABASE_SQL = fileURLToPath(
   new URL("../../sql/supabase.sql", import.meta.url)
 );
 
+const seed = await PGlite.create({ extensions: { vector } });
+
+const snapshot = await seed.dumpDataDir("none");
+
+await seed.close();
+
 export const createPostgres = (): PGlite =>
-  new PGlite({ extensions: { vector } });
+  new PGlite({ extensions: { vector }, loadDataDir: snapshot });
 
 export const usePostgres = (
   setup?: (db: PGlite) => Promise<void>

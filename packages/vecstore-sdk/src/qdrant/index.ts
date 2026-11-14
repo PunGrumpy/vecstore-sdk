@@ -197,6 +197,20 @@ const toPayload = (
   return Object.fromEntries(entries);
 };
 
+const toPoints = (
+  namespace: string,
+  records: readonly VectorRecord[]
+): QdrantPoint[] =>
+  records.map((record) => {
+    const id = toPointId(namespace, record.id);
+
+    return {
+      id,
+      payload: toPayload(namespace, record, id),
+      vector: [...record.vector],
+    };
+  });
+
 const namespaceCondition = (namespace: string): QdrantCondition =>
   namespace === ""
     ? {
@@ -444,19 +458,13 @@ const createIndex = (
           return;
         }
 
-        const points = lastById(records).map((record): QdrantPoint => {
-          const id = toPointId(namespace, record.id);
-
-          return {
-            id,
-            payload: toPayload(namespace, record, id),
-            vector: [...record.vector],
-          };
-        });
-
         await mapBatches({
-          action: (batch) => client.upsert(name, { points: batch, wait: true }),
-          items: points,
+          action: (batch) =>
+            client.upsert(name, {
+              points: toPoints(namespace, batch),
+              wait: true,
+            }),
+          items: lastById(records),
           size: UPSERT_BATCH,
         });
       });

@@ -334,6 +334,16 @@ describe(createRedisStore, () => {
     expect(fake.unlinked).toStrictEqual([]);
   });
 
+  test("upsert rejects a record without vector values before calling the provider", async () => {
+    const { fake, index } = await setup();
+    const written = fake.documents.size;
+
+    const result = await index.upsert([{ id: "doc-1", vector: [] }]);
+
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(fake.documents.size).toBe(written);
+  });
+
   test("query passes the vector as a float32 blob", async () => {
     const { fake, index } = await setup();
     await index.query({ topK: 1, vector: [1, 0.5, 0] });

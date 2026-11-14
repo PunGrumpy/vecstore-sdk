@@ -25,8 +25,9 @@ import {
   isSurrogateUuid,
   isUuid,
 } from "../src/internal/uuid";
-import type { DeleteSelector } from "../src/types";
-import { looseFilter, looseSelector } from "./malformed";
+import { recordsError } from "../src/internal/vector";
+import type { DeleteSelector, VectorRecord } from "../src/types";
+import { looseFilter, looseRecord, looseSelector } from "./malformed";
 import {
   NETWORK_CODES,
   bunFetchFailure,
@@ -257,6 +258,71 @@ describe(queryOptionsError, () => {
         vector: [1],
       })?.kind
     ).toBe("invalid_argument");
+  });
+});
+
+const rejectedRecords: [string, VectorRecord[]][] = [
+  ["an empty vector", [{ id: "a", vector: [] }]],
+  ["a NaN value", [{ id: "a", vector: [1, Number.NaN] }]],
+  ["an infinite value", [{ id: "a", vector: [Number.POSITIVE_INFINITY] }]],
+  ["a vector that is not an array", [looseRecord('{"id":"a","vector":"1,2"}')]],
+  ["a first record without a vector", [looseRecord('{"id":"a"}')]],
+  [
+    "two dimensions in one call",
+    [
+      { id: "a", vector: [1, 0] },
+      { id: "b", vector: [1] },
+    ],
+  ],
+];
+
+const rejectedQueryVectors: [string, number[]][] = [
+  ["an empty vector", []],
+  ["a NaN value", [1, Number.NaN]],
+  ["an infinite value", [Number.NEGATIVE_INFINITY]],
+];
+
+describe(recordsError, () => {
+  test.each(rejectedRecords)("rejects %s", (_name, records) => {
+    expect(recordsError("qdrant", records)?.kind).toBe("invalid_argument");
+  });
+
+  test("accepts finite vectors of one dimension and an empty call", () => {
+    expect(
+      recordsError("qdrant", [
+        { id: "a", vector: [1, 0] },
+        { id: "b", vector: [0, 1] },
+      ])
+    ).toBeUndefined();
+    expect(recordsError("qdrant", [])).toBeUndefined();
+    expect(
+      recordsError("qdrant", [
+        Object.assign(looseRecord('{"id":"a"}'), {
+          vector: Float32Array.of(1, 0),
+        }),
+        Object.assign(looseRecord('{"id":"b"}'), {
+          vector: Float64Array.of(0, 1),
+        }),
+      ])
+    ).toBeUndefined();
+  });
+
+  test("names the record and the fetch option when a vector is empty", () => {
+    const message = recordsError("qdrant", [
+      { id: "a", vector: [1] },
+      { id: "b", vector: [] },
+    ])?.message;
+
+    expect(message).toContain('"b"');
+    expect(message).toContain("includeVector");
+  });
+});
+
+describe("queryOptionsError with a vector", () => {
+  test.each(rejectedQueryVectors)("rejects %s", (_name, vector) => {
+    expect(queryOptionsError("qdrant", { topK: 1, vector })?.kind).toBe(
+      "invalid_argument"
+    );
   });
 });
 

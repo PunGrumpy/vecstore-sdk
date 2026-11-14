@@ -275,6 +275,17 @@ describe(createUpstashStore, () => {
     expect(recorded.deletes).toStrictEqual([]);
   });
 
+  test("upsert rejects a record without vector values before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+
+    const result = await createUpstashStore({ client })
+      .index("docs")
+      .upsert([{ id: "doc-1", vector: [] }]);
+
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(recorded.upserts).toStrictEqual([]);
+  });
+
   test("query scopes the filter to the namespace and hides reserved keys", async () => {
     const { client, recorded } = fakeClient();
     const store = createUpstashStore({ client });

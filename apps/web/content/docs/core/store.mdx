@@ -24,8 +24,8 @@ Every provider gets namespaces. Pinecone and Vectorize have them natively. On Qd
 
 | Method | Description |
 | --- | --- |
-| `upsert(records)` | Inserts or replaces records by id. Large batches are sent as several provider requests, four at a time. If one fails, no further request starts, the ones already in flight finish, and the call returns the error. Redis sends one 500-record batch after another and stops at the first batch that fails. Retry the whole call, because an upsert replaces by id. |
-| `query({ vector, topK, filter?, includeMetadata?, includeVector? })` | Returns the nearest records with a `score`. |
+| `upsert(records)` | Inserts or replaces records by id. Large batches are sent as several provider requests, four at a time. If one fails, no further request starts, the ones already in flight finish, and the call returns the error. Redis sends one 500-record batch after another and stops at the first batch that fails. Retry the whole call, because an upsert replaces by id. A record whose vector is empty, holds a value that is not a finite number, or has a different length from the first record in the call returns `invalid_argument`, and nothing is written. |
+| `query({ vector, topK, filter?, includeMetadata?, includeVector? })` | Returns the nearest records with a `score`. An empty query vector, or one holding a value that is not a finite number, returns `invalid_argument`. |
 | `fetch(ids, { includeVector? })` | Returns the records that exist, in request order. |
 | `delete({ ids })`, `delete({ filter })`, `delete({ all: true })` | Removes records in the namespace. A selector that names none of the three, or an empty `ids` list, returns `invalid_argument` and deletes nothing. |
 

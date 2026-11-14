@@ -25,6 +25,7 @@ import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
 import { isNetworkFailure } from "../internal/network";
 import { queryOptionsError } from "../internal/query-options";
+import { recordsError } from "../internal/vector";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -680,7 +681,8 @@ const createIndex = (
     },
 
     upsert: (records): VecResult<void> => {
-      const rejected = upsertRejection(records);
+      const rejected =
+        upsertRejection(records) ?? recordsError(PROVIDER, records);
 
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));

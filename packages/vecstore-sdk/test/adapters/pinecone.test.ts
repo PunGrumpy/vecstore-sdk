@@ -336,6 +336,17 @@ describe(createPineconeStore, () => {
     expect(recorded.deleteAlls).toStrictEqual([]);
   });
 
+  test("upsert rejects a record without vector values before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+
+    const result = await createPineconeStore({ client })
+      .index("docs")
+      .upsert([{ id: "doc-1", vector: [] }]);
+
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(recorded.upserts).toStrictEqual([]);
+  });
+
   test("delete by filter on an index that rejects it is unsupported", async () => {
     const { client } = fakeClient();
 

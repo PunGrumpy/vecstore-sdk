@@ -71,7 +71,7 @@ Moving to Supabase needs a setup step the others do not: install `sql/supabase.s
 
 ## Copy the data
 
-The SDK does not move records for you. The SDK has no verb that lists records, so export ids with the provider's own scroll or list call through `store.raw` (Qdrant `scroll`, Pinecone `listPaginated`, Upstash `range`, a keyset `SELECT` on pgvector or Supabase, a paged `FT.SEARCH` on Redis, `listVectors` on Vectorize), then `fetch` them in pages of 1,000 with `{ includeVector: true }` and `upsert` into the new index. `fetch` leaves vectors out unless you ask for them, and an `upsert` of a record without one fails (on pgvector and Supabase with `invalid_argument`). The adapter batches upserts, so pass as many records per call as fit in memory.
+The SDK does not move records for you. The SDK has no verb that lists records, so export ids with the provider's own scroll or list call through `store.raw` (Qdrant `scroll`, Pinecone `listPaginated`, Upstash `range`, a keyset `SELECT` on pgvector or Supabase, a paged `FT.SEARCH` on Redis, `listVectors` on Vectorize), then `fetch` them in pages of 1,000 with `{ includeVector: true }` and `upsert` into the new index. `fetch` leaves vectors out unless you ask for them, and `upsert` returns `invalid_argument` for a record without one. The adapter batches upserts, so pass as many records per call as fit in memory.
 
 ```ts
 const page = await source.fetch(ids, { includeVector: true });

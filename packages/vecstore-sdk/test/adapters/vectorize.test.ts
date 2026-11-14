@@ -503,6 +503,17 @@ describe(createVectorizeStore, () => {
     expect(calls).toStrictEqual([]);
   });
 
+  test("upsert rejects a record without vector values before calling the provider", async () => {
+    const { calls, client } = fakeCloudflare();
+
+    const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .upsert([{ id: "doc-1", vector: [] }]);
+
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(calls).toStrictEqual([]);
+  });
+
   test("a filter Vectorize cannot express is reported before the request", async () => {
     const { calls, client } = fakeCloudflare();
 

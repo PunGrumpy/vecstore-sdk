@@ -26,6 +26,7 @@ import { namespaceError } from "../internal/namespace";
 import { isNetworkFailure } from "../internal/network";
 import { queryOptionsError } from "../internal/query-options";
 import { deterministicUuid, isSurrogateUuid, isUuid } from "../internal/uuid";
+import { recordsError } from "../internal/vector";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -447,7 +448,9 @@ const createIndex = (
 
     upsert: (records): VecResult<void> => {
       const rejected =
-        invalid ?? reservedKeyError(PROVIDER, records, RESERVED_KEYS);
+        invalid ??
+        recordsError(PROVIDER, records) ??
+        reservedKeyError(PROVIDER, records, RESERVED_KEYS);
 
       if (rejected !== undefined) {
         return Promise.resolve(err(rejected));

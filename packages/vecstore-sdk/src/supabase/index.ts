@@ -16,6 +16,7 @@ import {
   vectorLiteral,
 } from "../internal/postgres";
 import { queryOptionsError } from "../internal/query-options";
+import { recordsError } from "../internal/vector";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -314,8 +315,14 @@ const createIndexHandle = (
       });
     },
 
-    upsert: (records) =>
-      run(context("vecstore_upsert"), async () => {
+    upsert: (records) => {
+      const rejected = recordsError(PROVIDER, records);
+
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+
+      return run(context("vecstore_upsert"), async () => {
         await mapBatches({
           action: (batch) =>
             invoke(client, {
@@ -325,7 +332,8 @@ const createIndexHandle = (
           items: lastById(records),
           size: UPSERT_BATCH,
         });
-      }),
+      });
+    },
   };
 };
 

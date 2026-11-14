@@ -24,6 +24,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       id-token: write
       contents: write
@@ -65,7 +66,7 @@ jobs:
 
       - name: Deploy the Docs Site
         if: inputs.snapshot != true && steps.changesets.outputs.published == 'true'
-        run: curl --fail --silent --show-error --request POST "$DEPLOY_HOOK"
+        run: curl --fail --silent --show-error --max-time 30 --request POST "$DEPLOY_HOOK"
         env:
           DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
 
@@ -81,9 +82,9 @@ jobs:
         if: inputs.snapshot == true
         run: bun x changeset version --snapshot "$SHORT_SHA"
 
-      - name: Build
+      - name: Build and check the package
         if: inputs.snapshot == true
-        run: bun x turbo run build --filter=vecstore-sdk
+        run: bun run check:release
 
       - name: Publish Snapshot Release
         if: inputs.snapshot == true

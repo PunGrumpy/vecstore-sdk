@@ -14,7 +14,8 @@
     "typecheck": "turbo run typecheck",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "turbo run build --filter=vecstore-sdk && changeset publish",
+    "check:release": "turbo run build test typecheck --filter=vecstore-sdk && bun run --filter vecstore-sdk check:package",
+    "release": "bun run check:release && changeset publish",
     "check": "ultracite check",
     "fix": "ultracite fix",
     "prepare": "husky"

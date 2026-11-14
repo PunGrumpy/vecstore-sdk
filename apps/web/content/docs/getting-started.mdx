@@ -37,32 +37,44 @@ await store.createIndex({ name: "docs", dimension: 1536, metric: "cosine" });
 Get an index handle scoped to a namespace, then upsert records. Each record has an `id`, a `vector`, and optional `metadata`:
 
 ```ts
+import { unwrap } from "vecstore-sdk";
+
 const docs = store.index("docs", { namespace: "tenant_1" });
 
-await docs.upsert([
-  { id: "doc-1", vector: embedding, metadata: { genre: "drama", year: 2010 } },
-  { id: "doc-2", vector: embedding, metadata: { genre: "comedy", year: 1998 } },
-]);
+unwrap(
+  await docs.upsert([
+    {
+      id: "doc-1",
+      vector: embedding,
+      metadata: { genre: "drama", year: 2010 },
+    },
+    {
+      id: "doc-2",
+      vector: embedding,
+      metadata: { genre: "comedy", year: 1998 },
+    },
+  ])
+);
 ```
+
+`unwrap` returns the value of a successful result and throws an `Error` for a failed one. The message names the provider and the error kind, and `cause` holds the original error. To handle a failure instead of throwing, check `result.ok` yourself; [Errors](/docs/core/errors) lists the kinds.
 
 ## Query with a filter
 
 Build the filter with the exported helpers and pass it to `query`. The adapter compiles it to a Qdrant filter:
 
 ```ts
-import { and, eq, gt } from "vecstore-sdk";
+import { and, eq, gt, unwrap } from "vecstore-sdk";
 
-const result = await docs.query({
-  vector: queryEmbedding,
-  topK: 5,
-  filter: and(eq("genre", "drama"), gt("year", 2000)),
-});
+const matches = unwrap(
+  await docs.query({
+    vector: queryEmbedding,
+    topK: 5,
+    filter: and(eq("genre", "drama"), gt("year", 2000)),
+  })
+);
 
-if (!result.ok) {
-  throw new Error(result.error.message);
-}
-
-for (const match of result.value) {
+for (const match of matches) {
   console.log(match.id, match.score, match.metadata);
 }
 ```

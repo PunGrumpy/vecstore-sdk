@@ -47,3 +47,15 @@ type Result<T, E> =
 ```
 
 The package exports the `ok` and `err` constructors for tests and fakes.
+
+## Throw instead
+
+When a failure should end the call, `unwrap` returns the value of a successful result and throws an `Error` for a failed one:
+
+```ts
+import { unwrap } from "vecstore-sdk";
+
+const matches = unwrap(await docs.query({ vector, topK: 5 }));
+```
+
+The thrown error's message is the provider, the kind, and the error's own message, for example `qdrant connection: fetch failed`. Its `cause` is the `VecstoreError` itself.

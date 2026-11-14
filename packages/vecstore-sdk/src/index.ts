@@ -46,7 +46,7 @@ export {
 
 export type { Err, Ok, Result } from "./result";
 
-export { err, ok } from "./result";
+export { err, ok, unwrap } from "./result";
 
 export type {
   DeleteSelector,

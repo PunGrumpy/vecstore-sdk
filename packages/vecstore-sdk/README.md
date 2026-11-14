@@ -44,7 +44,7 @@ Create a store from a native client, create an index, write records, and query w
 
 ```ts
 import { QdrantClient } from "@qdrant/js-client-rest";
-import { and, eq, gt } from "vecstore-sdk";
+import { and, eq, gt, unwrap } from "vecstore-sdk";
 import { createQdrantStore } from "vecstore-sdk/qdrant";
 
 const store = createQdrantStore({
@@ -55,21 +55,25 @@ await store.createIndex({ name: "docs", dimension: 1536, metric: "cosine" });
 
 const docs = store.index("docs", { namespace: "tenant_1" });
 
-await docs.upsert([
-  { id: "doc-1", vector: embedding, metadata: { genre: "drama", year: 2010 } },
-]);
+unwrap(
+  await docs.upsert([
+    {
+      id: "doc-1",
+      vector: embedding,
+      metadata: { genre: "drama", year: 2010 },
+    },
+  ])
+);
 
-const result = await docs.query({
-  vector: queryEmbedding,
-  topK: 5,
-  filter: and(eq("genre", "drama"), gt("year", 2000)),
-});
+const matches = unwrap(
+  await docs.query({
+    vector: queryEmbedding,
+    topK: 5,
+    filter: and(eq("genre", "drama"), gt("year", 2000)),
+  })
+);
 
-if (!result.ok) {
-  throw new Error(result.error.message);
-}
-
-for (const match of result.value) {
+for (const match of matches) {
   console.log(match.id, match.score, match.metadata);
 }
 ```

@@ -306,6 +306,17 @@ describe(createPgvectorStore, () => {
     expect(calls).toStrictEqual([]);
   });
 
+  test("upsert rejects a record without vector values before calling the provider", async () => {
+    const { client, calls } = fakeClient();
+
+    const result = await createPgvectorStore({ client })
+      .index("docs")
+      .upsert([{ id: "doc-1", vector: [] }]);
+
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(calls).toStrictEqual([]);
+  });
+
   test("query asks for an iterative scan on an HNSW index with pgvector 0.8", async () => {
     const { client, calls } = fakeClient([
       [

@@ -398,6 +398,17 @@ describe(createQdrantStore, () => {
     expect(recorded.deletes).toStrictEqual([]);
   });
 
+  test("upsert rejects a record without vector values before calling the provider", async () => {
+    const { client, recorded } = fakeClient();
+
+    const result = await createQdrantStore({ client })
+      .index("docs")
+      .upsert([{ id: "doc-1", vector: [] }]);
+
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(recorded.upserts).toStrictEqual([]);
+  });
+
   test("the default namespace matches points without a namespace", () => {
     expect(scopeQdrantFilter()).toStrictEqual({ must: [defaultScope] });
   });

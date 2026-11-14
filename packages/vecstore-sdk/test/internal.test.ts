@@ -276,6 +276,12 @@ const rejectedRecords: [string, VectorRecord[]][] = [
   ],
 ];
 
+const rejectedQueryVectors: [string, number[]][] = [
+  ["an empty vector", []],
+  ["a NaN value", [1, Number.NaN]],
+  ["an infinite value", [Number.NEGATIVE_INFINITY]],
+];
+
 describe(recordsError, () => {
   test.each(rejectedRecords)("rejects %s", (_name, records) => {
     expect(recordsError("qdrant", records)?.kind).toBe("invalid_argument");
@@ -309,6 +315,14 @@ describe(recordsError, () => {
 
     expect(message).toContain('"b"');
     expect(message).toContain("includeVector");
+  });
+});
+
+describe("queryOptionsError with a vector", () => {
+  test.each(rejectedQueryVectors)("rejects %s", (_name, vector) => {
+    expect(queryOptionsError("qdrant", { topK: 1, vector })?.kind).toBe(
+      "invalid_argument"
+    );
   });
 });
 

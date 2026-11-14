@@ -301,6 +301,17 @@ describe(createSupabaseStore, () => {
     expect(calls).toStrictEqual([]);
   });
 
+  test("upsert rejects a record without vector values before calling the provider", async () => {
+    const { client, calls } = fakeClient();
+
+    const result = await createSupabaseStore({ client })
+      .index("docs")
+      .upsert([{ id: "doc-1", vector: [] }]);
+
+    expect(result).toMatchObject({ error: { kind: "invalid_argument" } });
+    expect(calls).toStrictEqual([]);
+  });
+
   test("fetch returns records in request order", async () => {
     const { client, calls } = fakeClient({
       responses: [

@@ -6,6 +6,7 @@ import {
   notFound,
   providerError,
   unauthorized,
+  unsupported,
 } from "../errors";
 import type { VecstoreError } from "../errors";
 import { and, eq, exists, not, or } from "../filter/ast";
@@ -25,6 +26,7 @@ import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
 import { isNetworkFailure } from "../internal/network";
 import { queryOptionsError } from "../internal/query-options";
+import { scanOptionsError } from "../internal/scan-options";
 import { recordsError } from "../internal/vector";
 import { err } from "../result";
 import type {
@@ -678,6 +680,17 @@ const createIndex = (
           vector: match.vector,
         }));
       });
+    },
+
+    scan: (scanOptions) => {
+      const rejected = scanOptionsError(PROVIDER, scanOptions);
+
+      return Promise.resolve(
+        err(
+          rejected ??
+            unsupported(PROVIDER, "scan", "scan is not implemented yet")
+        )
+      );
     },
 
     upsert: (records): VecResult<void> => {

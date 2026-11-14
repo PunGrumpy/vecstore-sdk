@@ -57,6 +57,8 @@ export type {
   MetadataValue,
   Metric,
   QueryOptions,
+  ScanOptions,
+  ScanPage,
   ScoredRecord,
   VecResult,
   VectorIndex,

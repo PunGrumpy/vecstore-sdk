@@ -16,6 +16,7 @@ import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { deleteSelectorError } from "../internal/delete-selector";
 import { indexSpecError } from "../internal/index-spec";
 import { queryOptionsError } from "../internal/query-options";
+import { scanOptionsError } from "../internal/scan-options";
 import { recordsError } from "../internal/vector";
 import { err } from "../result";
 import type {
@@ -316,6 +317,17 @@ const createIndex = (
           toScoredRecord(match, includeMetadata, includeVector)
         );
       });
+    },
+
+    scan: (scanOptions) => {
+      const rejected = scanOptionsError(PROVIDER, scanOptions);
+
+      return Promise.resolve(
+        err(
+          rejected ??
+            unsupported(PROVIDER, "scan", "scan is not implemented yet")
+        )
+      );
     },
 
     upsert: (records) => {

@@ -30,6 +30,7 @@ import {
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
 import { queryOptionsError } from "../internal/query-options";
+import { scanOptionsError } from "../internal/scan-options";
 import { deterministicUuid, isSurrogateUuid } from "../internal/uuid";
 import { recordsError } from "../internal/vector";
 import { err } from "../result";
@@ -457,6 +458,17 @@ const createIndex = (
 
         return records;
       });
+    },
+
+    scan: (scanOptions) => {
+      const rejected = scanOptionsError(PROVIDER, scanOptions);
+
+      return Promise.resolve(
+        err(
+          rejected ??
+            unsupported(PROVIDER, "scan", "scan is not implemented yet")
+        )
+      );
     },
 
     upsert: (records): VecResult<void> => {

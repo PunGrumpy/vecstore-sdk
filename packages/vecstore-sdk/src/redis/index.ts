@@ -33,6 +33,7 @@ import {
 import { indexSpecError } from "../internal/index-spec";
 import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
 import { queryOptionsError } from "../internal/query-options";
+import { scanOptionsError } from "../internal/scan-options";
 import { recordsError } from "../internal/vector";
 import { err, ok } from "../result";
 import type { Result } from "../result";
@@ -806,6 +807,17 @@ const createIndex = (
       }
 
       return run(name, () => queryIndex(context, query, prefilter.value));
+    },
+
+    scan: (scanOptions) => {
+      const rejected = scanOptionsError(PROVIDER, scanOptions);
+
+      return Promise.resolve(
+        err(
+          rejected ??
+            unsupported(PROVIDER, "scan", "scan is not implemented yet")
+        )
+      );
     },
 
     upsert: (records) => {

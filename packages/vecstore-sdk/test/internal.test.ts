@@ -21,12 +21,18 @@ import { namespaceError } from "../src/internal/namespace";
 import { isNetworkFailure } from "../src/internal/network";
 import { queryOptionsError } from "../src/internal/query-options";
 import {
+  DEFAULT_SCAN_LIMIT,
+  MAX_SCAN_LIMIT,
+  scanLimit,
+  scanOptionsError,
+} from "../src/internal/scan-options";
+import {
   deterministicUuid,
   isSurrogateUuid,
   isUuid,
 } from "../src/internal/uuid";
 import { recordsError } from "../src/internal/vector";
-import type { DeleteSelector, VectorRecord } from "../src/types";
+import type { DeleteSelector, ScanOptions, VectorRecord } from "../src/types";
 import { looseFilter, looseRecord, looseSelector } from "./malformed";
 import {
   NETWORK_CODES,
@@ -258,6 +264,55 @@ describe(queryOptionsError, () => {
         vector: [1],
       })?.kind
     ).toBe("invalid_argument");
+  });
+});
+
+const rejectedScanOptions: [string, ScanOptions][] = [
+  ["a zero limit", { limit: 0 }],
+  ["a negative limit", { limit: -1 }],
+  ["a fractional limit", { limit: 1.5 }],
+  ["a NaN limit", { limit: Number.NaN }],
+  ["an infinite limit", { limit: Number.POSITIVE_INFINITY }],
+  ["an empty cursor", { cursor: "" }],
+];
+
+const acceptedScanOptions: [string, ScanOptions | undefined][] = [
+  ["no options", undefined],
+  ["empty options", {}],
+  ["a limit of one", { limit: 1 }],
+  ["a cursor", { cursor: "x" }],
+];
+
+describe(scanOptionsError, () => {
+  test.each(rejectedScanOptions)("rejects %s", (_name, options) => {
+    expect(scanOptionsError("qdrant", options)?.kind).toBe("invalid_argument");
+  });
+
+  test.each(acceptedScanOptions)("accepts %s", (_name, options) => {
+    expect(scanOptionsError("qdrant", options)).toBeUndefined();
+  });
+
+  test("names the limit it rejects", () => {
+    expect(scanOptionsError("qdrant", { limit: 0 })?.message).toBe(
+      "limit must be a positive integer, got 0"
+    );
+  });
+});
+
+describe(scanLimit, () => {
+  test.each([
+    ["no options", undefined, DEFAULT_SCAN_LIMIT],
+    ["no limit", {}, DEFAULT_SCAN_LIMIT],
+    ["a small limit", { limit: 7 }, 7],
+    ["the maximum", { limit: MAX_SCAN_LIMIT }, MAX_SCAN_LIMIT],
+    ["a limit above the maximum", { limit: 5000 }, MAX_SCAN_LIMIT],
+  ])("returns the limit for %s", (_name, options, expected) => {
+    expect(scanLimit(options)).toBe(expected);
+  });
+
+  test("lowers the limit to an adapter's own maximum", () => {
+    expect(scanLimit({ limit: 500 }, 100)).toBe(100);
+    expect(scanLimit(undefined, 50)).toBe(50);
   });
 });
 

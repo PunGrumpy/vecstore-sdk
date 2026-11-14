@@ -357,6 +357,13 @@ interface UpstashLayout {
   readonly owns: (index: string, upstashNamespace: string) => boolean;
 }
 
+const storedRecords = (
+  layout: UpstashLayout,
+  namespace: string,
+  records: readonly VectorRecord[]
+): UpstashRecordLike[] =>
+  records.map((record) => layout.storedRecord(namespace, record));
+
 const INDEX_LABEL = "index name";
 
 const scopeError = (namespace: string): VecstoreError | undefined => {
@@ -682,13 +689,10 @@ const createIndex = (
       return run(name, async () => {
         const target = scope();
 
-        const stored = lastById(records).map((record) =>
-          layout.storedRecord(namespace, record)
-        );
-
         await mapBatches({
-          action: (batch) => client.upsert(batch, target),
-          items: stored,
+          action: (batch) =>
+            client.upsert(storedRecords(layout, namespace, batch), target),
+          items: lastById(records),
           size: UPSERT_BATCH,
         });
       });

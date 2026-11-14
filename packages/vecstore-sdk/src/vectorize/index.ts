@@ -276,8 +276,12 @@ const toLine = (namespace: string, record: VectorRecord): string => {
   });
 };
 
-const toNdjson = (lines: readonly string[]): File =>
-  new File([lines.join("\n")], NDJSON_NAME, { type: NDJSON_TYPE });
+const toNdjson = (namespace: string, records: readonly VectorRecord[]): File =>
+  new File(
+    [records.map((record) => toLine(namespace, record)).join("\n")],
+    NDJSON_NAME,
+    { type: NDJSON_TYPE }
+  );
 
 const deletableIds = async (
   indexes: VectorizeIndexes,
@@ -467,18 +471,14 @@ const createIndex = (
           return;
         }
 
-        const lines = lastById(records).map((record) =>
-          toLine(namespace, record)
-        );
-
         await mapBatches({
           action: (batch) =>
             indexes.upsert(name, {
               account_id: accountId,
-              body: toNdjson(batch),
+              body: toNdjson(namespace, batch),
               "unparsable-behavior": UNPARSABLE_BEHAVIOR,
             }),
-          items: lines,
+          items: lastById(records),
           size: UPSERT_BATCH,
         });
       });

@@ -30,6 +30,7 @@ import {
 import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
 import { queryOptionsError } from "../internal/query-options";
+import { scanLimit, scanOptionsError } from "../internal/scan-options";
 import { deterministicUuid, isSurrogateUuid } from "../internal/uuid";
 import { recordsError } from "../internal/vector";
 import { err } from "../result";
@@ -42,6 +43,7 @@ import type {
   Metadata,
   Metric,
   QueryOptions,
+  ScanPage,
   ScoredRecord,
   VecResult,
   VectorIndex,
@@ -70,6 +72,10 @@ export type VectorizeIndexes = VectorizeClient["vectorize"]["indexes"];
 export type VectorizeQueryParams = Parameters<VectorizeIndexes["query"]>[1] & {
   readonly namespace?: string;
 };
+
+export type VectorizeListPage = Awaited<
+  ReturnType<VectorizeIndexes["listVectors"]>
+>;
 
 export type VectorizeMetric = "cosine" | "euclidean" | "dot-product";
 
@@ -284,6 +290,52 @@ const toNdjson = (namespace: string, records: readonly VectorRecord[]): File =>
     { type: NDJSON_TYPE }
   );
 
+const getVectors = (
+  indexes: VectorizeIndexes,
+  accountId: string,
+  name: string,
+  storedIds: readonly string[]
+): Promise<unknown[]> =>
+  mapBatches({
+    action: (batch) =>
+      indexes.getByIDs(name, { account_id: accountId, ids: batch }),
+    items: storedIds,
+    size: ID_BATCH,
+  });
+
+const readRecords = (
+  namespace: string,
+  includeVector: boolean,
+  responses: readonly unknown[]
+): VectorRecord[] => {
+  const records: VectorRecord[] = [];
+
+  for (const response of responses) {
+    for (const found of isUnknownArray(response) ? response : []) {
+      if (isStoredVector(found) && belongsToNamespace(namespace, found)) {
+        records.push({
+          id: readId(found),
+          metadata: readMetadata(found),
+          vector: includeVector ? readVector(found) : [],
+        });
+      }
+    }
+  }
+
+  return records;
+};
+
+const listedIds = (page: VectorizeListPage): string[] =>
+  page === null ? [] : page.vectors.map((vector) => vector.id);
+
+const nextListCursor = (page: VectorizeListPage): string | undefined => {
+  const next = page?.nextCursor;
+
+  return page?.isTruncated === true && isString(next) && next !== ""
+    ? next
+    : undefined;
+};
+
 const deletableIds = async (
   indexes: VectorizeIndexes,
   accountId: string,
@@ -377,29 +429,9 @@ const createIndex = (
 
         const includeVector = fetchOptions.includeVector ?? false;
         const stored = ids.map((id) => toVectorizeId(namespace, id));
+        const responses = await getVectors(indexes, accountId, name, stored);
 
-        const responses = await mapBatches({
-          action: (batch) =>
-            indexes.getByIDs(name, { account_id: accountId, ids: batch }),
-          items: stored,
-          size: ID_BATCH,
-        });
-
-        const records: VectorRecord[] = [];
-
-        for (const response of responses) {
-          for (const found of isUnknownArray(response) ? response : []) {
-            if (isStoredVector(found) && belongsToNamespace(namespace, found)) {
-              records.push({
-                id: readId(found),
-                metadata: readMetadata(found),
-                vector: includeVector ? readVector(found) : [],
-              });
-            }
-          }
-        }
-
-        return sortByIds(ids, records);
+        return sortByIds(ids, readRecords(namespace, includeVector, responses));
       });
     },
 
@@ -456,6 +488,38 @@ const createIndex = (
         }
 
         return records;
+      });
+    },
+
+    scan: (scanOptions): VecResult<ScanPage> => {
+      const rejected = invalid ?? scanOptionsError(PROVIDER, scanOptions);
+
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+
+      return run(name, async () => {
+        const page = await indexes.listVectors(name, {
+          account_id: accountId,
+          count: scanLimit(scanOptions),
+          cursor: scanOptions?.cursor,
+        });
+
+        const responses = await getVectors(
+          indexes,
+          accountId,
+          name,
+          listedIds(page)
+        );
+
+        return {
+          cursor: nextListCursor(page),
+          records: readRecords(
+            namespace,
+            scanOptions?.includeVector ?? false,
+            responses
+          ),
+        };
       });
     },
 

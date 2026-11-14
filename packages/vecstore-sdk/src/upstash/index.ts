@@ -25,6 +25,7 @@ import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
 import { isNetworkFailure } from "../internal/network";
 import { queryOptionsError } from "../internal/query-options";
+import { scanLimit, scanOptionsError } from "../internal/scan-options";
 import { recordsError } from "../internal/vector";
 import { err } from "../result";
 import type {
@@ -36,6 +37,7 @@ import type {
   MetadataValue,
   Metric,
   QueryOptions,
+  ScanPage,
   ScoredRecord,
   VecResult,
   VectorIndex,
@@ -81,6 +83,11 @@ export interface UpstashNamespaceOptions {
   readonly namespace?: string;
 }
 
+export interface UpstashRangeResult {
+  readonly nextCursor: string;
+  readonly vectors: UpstashStoredRecord[];
+}
+
 export interface UpstashIndexLike {
   readonly upsert: (
     records: UpstashRecordLike[],
@@ -107,6 +114,16 @@ export interface UpstashIndexLike {
     args: { ids: string[] } | { filter: string },
     options?: UpstashNamespaceOptions
   ) => Promise<UpstashDeleteResult>;
+  readonly range: (
+    args: {
+      cursor: string;
+      limit: number;
+      prefix?: string;
+      includeMetadata?: boolean;
+      includeVectors?: boolean;
+    },
+    options?: UpstashNamespaceOptions
+  ) => Promise<UpstashRangeResult>;
   readonly reset: (options?: UpstashNamespaceOptions) => Promise<string>;
   readonly info: () => Promise<UpstashInfo>;
   readonly listNamespaces: () => Promise<string[]>;
@@ -129,6 +146,8 @@ const RESERVED_KEYS: ReadonlySet<string> = new Set([
 const PROVIDER = "upstash";
 const DEFAULT_NAMESPACE = "";
 const NAMESPACE_SEPARATOR = "~";
+const FIRST_RANGE_CURSOR = "0";
+const LAST_RANGE_CURSOR = "";
 const UPSERT_BATCH = 100;
 const ID_BATCH = 1000;
 
@@ -354,6 +373,7 @@ interface UpstashLayout {
   readonly readId: (record: UpstashResultRecord) => string;
   readonly readMetadata: (record: UpstashResultRecord) => Metadata;
   readonly reservedKeys: ReadonlySet<string>;
+  readonly scanPrefix?: (namespace: string) => string | undefined;
   readonly indexOf: (upstashNamespace: string) => string;
   readonly owns: (index: string, upstashNamespace: string) => boolean;
 }
@@ -364,6 +384,29 @@ const storedRecords = (
   records: readonly VectorRecord[]
 ): UpstashRecordLike[] =>
   records.map((record) => layout.storedRecord(namespace, record));
+
+const readRecords = (
+  layout: UpstashLayout,
+  namespace: string,
+  stored: readonly (UpstashStoredRecord | null)[]
+): VectorRecord[] => {
+  const records: VectorRecord[] = [];
+
+  for (const record of stored) {
+    if (record !== null && layout.holds(namespace, record)) {
+      records.push({
+        id: layout.readId(record),
+        metadata: layout.readMetadata(record),
+        vector: record.vector ?? [],
+      });
+    }
+  }
+
+  return records;
+};
+
+const nextCursor = (result: UpstashRangeResult): string | undefined =>
+  result.nextCursor === LAST_RANGE_CURSOR ? undefined : result.nextCursor;
 
 const INDEX_LABEL = "index name";
 
@@ -438,6 +481,8 @@ const METADATA_LAYOUT: UpstashLayout = {
   readMetadata: (record) =>
     metadataFromEntries(metadataEntries(record), RESERVED_KEYS),
   reservedKeys: RESERVED_KEYS,
+  scanPrefix: (namespace) =>
+    namespace === DEFAULT_NAMESPACE ? undefined : `${namespace}/`,
   storedId: toStoredId,
   storedRecord: toStoredRecord,
   upstashNamespace: metadataNamespace,
@@ -623,19 +668,7 @@ const createIndex = (
           size: ID_BATCH,
         });
 
-        const records: VectorRecord[] = [];
-
-        for (const record of responses.flat()) {
-          if (record !== null && layout.holds(namespace, record)) {
-            records.push({
-              id: layout.readId(record),
-              metadata: layout.readMetadata(record),
-              vector: record.vector ?? [],
-            });
-          }
-        }
-
-        return sortByIds(ids, records);
+        return sortByIds(ids, readRecords(layout, namespace, responses.flat()));
       });
     },
 
@@ -677,6 +710,32 @@ const createIndex = (
           score: match.score,
           vector: match.vector,
         }));
+      });
+    },
+
+    scan: (scanOptions): VecResult<ScanPage> => {
+      const rejected = invalid ?? scanOptionsError(PROVIDER, scanOptions);
+
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+
+      return run(name, async () => {
+        const result = await client.range(
+          {
+            cursor: scanOptions?.cursor ?? FIRST_RANGE_CURSOR,
+            includeMetadata: true,
+            includeVectors: scanOptions?.includeVector ?? false,
+            limit: scanLimit(scanOptions),
+            prefix: layout.scanPrefix?.(namespace),
+          },
+          scope()
+        );
+
+        return {
+          cursor: nextCursor(result),
+          records: readRecords(layout, namespace, result.vectors),
+        };
       });
     },
 

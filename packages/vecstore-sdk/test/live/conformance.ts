@@ -2,7 +2,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { and, eq, gt, isIn, not, notIn } from "../../src/filter/ast";
-import type { VectorIndex, VectorRecord, VectorStore } from "../../src/types";
+import type {
+  ScanOptions,
+  ScanPage,
+  VectorIndex,
+  VectorRecord,
+  VectorStore,
+} from "../../src/types";
 
 export type LiveStore = Pick<
   VectorStore<never>,
@@ -59,6 +65,19 @@ const unwrap = <T>(
 
 const idsOf = (matches: readonly { readonly id: string }[]): string[] =>
   matches.map((match) => match.id);
+
+export const scanAll = async (
+  index: VectorIndex,
+  options: ScanOptions = {},
+  pages: readonly ScanPage[] = []
+): Promise<ScanPage[]> => {
+  const page = unwrap(await index.scan(options));
+  const seen = [...pages, page];
+
+  return page.cursor === undefined
+    ? seen
+    : scanAll(index, { ...options, cursor: page.cursor }, seen);
+};
 
 const waitForRecords = async (
   index: VectorIndex,
@@ -279,6 +298,15 @@ export const liveCases: LiveCase[] = [
       );
 
       expect(matches).toStrictEqual([]);
+    },
+  ],
+  [
+    "scan pages through every record of the namespace",
+    async ({ index }) => {
+      const pages = await scanAll(index, { limit: 1 });
+      const scanned = new Set(pages.flatMap((page) => idsOf(page.records)));
+
+      expect([...scanned].toSorted()).toStrictEqual(idsOf(records).toSorted());
     },
   ],
   [

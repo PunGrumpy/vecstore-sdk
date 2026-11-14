@@ -16,6 +16,7 @@ import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { deleteSelectorError } from "../internal/delete-selector";
 import { indexSpecError } from "../internal/index-spec";
 import { queryOptionsError } from "../internal/query-options";
+import { scanLimit, scanOptionsError } from "../internal/scan-options";
 import { recordsError } from "../internal/vector";
 import { err } from "../result";
 import type {
@@ -26,6 +27,8 @@ import type {
   MetadataValue,
   Metric,
   QueryOptions,
+  ScanOptions,
+  ScanPage,
   ScoredRecord,
   VecResult,
   VectorIndex,
@@ -66,6 +69,11 @@ export interface PineconeIndexSpec {
   };
 }
 
+export interface PineconeListPage {
+  readonly vectors?: readonly { readonly id?: string }[];
+  readonly pagination?: { readonly next?: string };
+}
+
 export interface PineconeIndexLike {
   readonly upsert: (options: {
     records: PineconeRecordLike[];
@@ -89,6 +97,11 @@ export interface PineconeIndexLike {
     namespace?: string;
   }) => Promise<void>;
   readonly deleteAll: (options?: { namespace?: string }) => Promise<void>;
+  readonly listPaginated: (options: {
+    namespace?: string;
+    limit?: number;
+    paginationToken?: string;
+  }) => Promise<PineconeListPage>;
 }
 
 export interface PineconeCreateIndexOptions {
@@ -123,6 +136,7 @@ const PROVIDER = "pinecone";
 const UPSERT_BATCH = 100;
 const FETCH_BATCH = 1000;
 const ID_BATCH = 1000;
+const MAX_SCAN_LIMIT = 100;
 
 const DEFAULT_SPEC: PineconeIndexSpec = {
   serverless: { cloud: "aws", region: "us-east-1" },
@@ -218,6 +232,68 @@ const recordsOf = (
     toVectorRecord(record, includeVector)
   );
 
+const fetchRecords = async (
+  target: PineconeIndexLike,
+  scope: { namespace?: string },
+  ids: readonly string[],
+  includeVector: boolean
+): Promise<VectorRecord[]> => {
+  const responses = await mapBatches({
+    action: (batch) => target.fetch({ ...scope, ids: batch }),
+    items: ids,
+    size: FETCH_BATCH,
+  });
+
+  const records = responses.flatMap((response) =>
+    recordsOf(response, includeVector)
+  );
+
+  return sortByIds(ids, records);
+};
+
+const listedIds = (page: PineconeListPage): string[] =>
+  (page.vectors ?? []).flatMap((vector) =>
+    vector.id === undefined ? [] : [vector.id]
+  );
+
+const nextToken = (page: PineconeListPage): string | undefined => {
+  const next = page.pagination?.next;
+
+  return next === "" ? undefined : next;
+};
+
+const scanNamespace = async (
+  target: PineconeIndexLike,
+  context: ErrorContext,
+  scope: { namespace?: string },
+  options: ScanOptions | undefined
+): VecResult<ScanPage> => {
+  const listContext =
+    options?.cursor === undefined ? { ...context, feature: "scan" } : context;
+
+  const listed = await run(listContext, () =>
+    target.listPaginated({
+      ...scope,
+      limit: scanLimit(options, MAX_SCAN_LIMIT),
+      paginationToken: options?.cursor,
+    })
+  );
+
+  if (!listed.ok) {
+    return listed;
+  }
+
+  return run(context, async () => ({
+    cursor: nextToken(listed.value),
+    records: await fetchRecords(
+      target,
+      scope,
+      listedIds(listed.value),
+      options?.includeVector ?? false
+    ),
+  }));
+};
+
 const toScoredRecord = (
   match: PineconeScoredRecordLike,
   includeMetadata: boolean,
@@ -269,21 +345,9 @@ const createIndex = (
     },
 
     fetch: (ids, fetchOptions: FetchOptions = {}) =>
-      run(context, async () => {
-        const includeVector = fetchOptions.includeVector ?? false;
-
-        const responses = await mapBatches({
-          action: (batch) => target.fetch({ ...scope, ids: batch }),
-          items: ids,
-          size: FETCH_BATCH,
-        });
-
-        const records = responses.flatMap((response) =>
-          recordsOf(response, includeVector)
-        );
-
-        return sortByIds(ids, records);
-      }),
+      run(context, () =>
+        fetchRecords(target, scope, ids, fetchOptions.includeVector ?? false)
+      ),
 
     name,
 
@@ -316,6 +380,16 @@ const createIndex = (
           toScoredRecord(match, includeMetadata, includeVector)
         );
       });
+    },
+
+    scan: (scanOptions) => {
+      const rejected = scanOptionsError(PROVIDER, scanOptions);
+
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+
+      return scanNamespace(target, context, scope, scanOptions);
     },
 
     upsert: (records) => {

@@ -43,6 +43,17 @@ export interface FetchOptions {
   readonly includeVector?: boolean;
 }
 
+export interface ScanOptions {
+  readonly cursor?: string;
+  readonly limit?: number;
+  readonly includeVector?: boolean;
+}
+
+export interface ScanPage {
+  readonly records: VectorRecord[];
+  readonly cursor: string | undefined;
+}
+
 export type DeleteSelector =
   | { readonly ids: NonEmpty<string> }
   | { readonly filter: Filter }
@@ -59,6 +70,7 @@ export interface VectorIndex {
     ids: readonly string[],
     options?: FetchOptions
   ) => VecResult<VectorRecord[]>;
+  readonly scan: (options?: ScanOptions) => VecResult<ScanPage>;
   readonly delete: (selector: DeleteSelector) => VecResult<void>;
 }
 

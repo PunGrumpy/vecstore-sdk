@@ -7,6 +7,7 @@ import type {
   RedisClientLike,
   RedisCreateOptions,
   RedisJsonValue,
+  RedisScanOptions,
   RedisSchema,
   RedisSearchOptions,
   RedisSearchReply,
@@ -32,9 +33,15 @@ interface SearchCall {
   readonly options?: RedisSearchOptions;
 }
 
+interface ScanCall {
+  readonly cursor: string;
+  readonly options: RedisScanOptions;
+}
+
 interface FakeClient {
   readonly client: RedisClientLike;
   readonly creates: CreateCall[];
+  readonly scans: ScanCall[];
   readonly searches: SearchCall[];
   readonly documents: Map<string, RedisJsonValue>;
   readonly unlinked: string[][];
@@ -50,6 +57,11 @@ const jsonEntry = (value: RedisJsonValue, key: string): RedisJsonValue => {
 
   return Object.entries(value).find(([name]) => name === key)?.[1] ?? null;
 };
+
+const GLOB_ESCAPE = /\\(?<literal>[\s\S])/gu;
+
+const matchedPrefix = (match: string): string =>
+  match.slice(0, -1).replaceAll(GLOB_ESCAPE, "$<literal>");
 
 const namespaceOf = (query: string): string =>
   NAMESPACE_PATTERN.exec(query)?.groups?.namespace ?? "";
@@ -79,6 +91,7 @@ const createFakeClient = (): FakeClient => {
   const documents = new Map<string, RedisJsonValue>();
   const unlinked: string[][] = [];
   const mGetCalls: string[][] = [];
+  const scans: ScanCall[] = [];
   const indexes = new Set<string>();
 
   const client: RedisClientLike = {
@@ -136,6 +149,19 @@ const createFakeClient = (): FakeClient => {
         return Promise.resolve("OK");
       },
     },
+    scan: (cursor, options) => {
+      scans.push({ cursor, options });
+
+      const keys = [...documents.keys()];
+      const start = Number(cursor);
+      const end = start + options.COUNT;
+      const prefix = matchedPrefix(options.MATCH);
+
+      return Promise.resolve({
+        cursor: end < keys.length ? String(end) : "0",
+        keys: keys.slice(start, end).filter((key) => key.startsWith(prefix)),
+      });
+    },
     unlink: (keys) => {
       unlinked.push(keys);
       let removed = 0;
@@ -148,7 +174,15 @@ const createFakeClient = (): FakeClient => {
     },
   };
 
-  return { client, creates, documents, mGetCalls, searches, unlinked };
+  return {
+    client,
+    creates,
+    documents,
+    mGetCalls,
+    scans,
+    searches,
+    unlinked,
+  };
 };
 
 const records: VectorRecord[] = [
@@ -424,6 +458,96 @@ describe(createRedisStore, () => {
     expect(fake.mGetCalls).toHaveLength(2);
     expect(fake.mGetCalls[0]).toHaveLength(500);
     expect(fake.mGetCalls[1]).toHaveLength(1);
+  });
+
+  test("scan pages through the namespace's keys with SCAN", async () => {
+    const { fake, index, store } = await setup();
+
+    await store
+      .index(INDEX, { namespace: "tenant-b" })
+      .upsert([{ id: "doc-z", vector: [1, 1, 1] }]);
+    await index.upsert([{ id: "doc-c", vector: [0, 0, 1] }]);
+
+    const first = unwrap(await index.scan({ limit: 2 }));
+
+    const last = unwrap(
+      await index.scan({ cursor: first.cursor, includeVector: true, limit: 2 })
+    );
+
+    expect(first).toStrictEqual({
+      cursor: "2",
+      records: [
+        { id: "doc-a", metadata: { genre: "drama", year: 1999 }, vector: [] },
+        { id: "doc-b", metadata: { genre: "comedy", year: 2010 }, vector: [] },
+      ],
+    });
+    expect(last.records).toStrictEqual([
+      { id: "doc-c", metadata: {}, vector: [0, 0, 1] },
+    ]);
+    expect(last.cursor).toBeUndefined();
+    expect(fake.scans).toStrictEqual([
+      { cursor: "0", options: { COUNT: 2, MATCH: "vecstore:docs:tenant-a:*" } },
+      { cursor: "2", options: { COUNT: 2, MATCH: "vecstore:docs:tenant-a:*" } },
+    ]);
+  });
+
+  test("scan escapes glob characters of the key prefix in MATCH", async () => {
+    const fake = createFakeClient();
+
+    const index = createRedisStore({
+      client: fake.client,
+      keyPrefix: "app*[1]?\\",
+    }).index(INDEX);
+
+    await index.upsert([{ id: "a", vector: [1, 0, 0] }]);
+
+    const page = unwrap(await index.scan());
+
+    expect(fake.scans.map((call) => call.options.MATCH)).toStrictEqual([
+      "app\\*\\[1\\]\\?\\\\docs::*",
+    ]);
+    expect(page.records.map((record) => record.id)).toStrictEqual(["a"]);
+  });
+
+  test("scan returns a key that SCAN repeats within a page once", async () => {
+    const fake = createFakeClient();
+    const key = "vecstore:docs::a";
+
+    const repeating: RedisClientLike = {
+      ...fake.client,
+      scan: () => Promise.resolve({ cursor: "0", keys: [key, key] }),
+    };
+
+    const index = createRedisStore({ client: repeating }).index(INDEX);
+    await index.upsert([{ id: "a", vector: [1, 0, 0] }]);
+
+    const page = unwrap(await index.scan());
+
+    expect(page.records.map((record) => record.id)).toStrictEqual(["a"]);
+    expect(fake.mGetCalls).toStrictEqual([[key]]);
+  });
+
+  test("scan sends a limit above 1,000 as a COUNT of 1,000", async () => {
+    const { fake, index } = await setup();
+
+    await index.scan({ limit: 5000 });
+
+    expect(fake.scans.map((call) => call.options.COUNT)).toStrictEqual([1000]);
+  });
+
+  test.each([
+    ["a zero limit", INDEX, { limit: 0 }],
+    ["an empty cursor", INDEX, { cursor: "" }],
+    ["an index name with a colon", "docs:v2", {}],
+  ])("scan rejects %s before any request", async (_name, name, options) => {
+    const fake = createFakeClient();
+
+    const result = await createRedisStore({ client: fake.client })
+      .index(name)
+      .scan(options);
+
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(fake.scans).toStrictEqual([]);
   });
 
   test("delete by id unlinks the namespaced keys", async () => {

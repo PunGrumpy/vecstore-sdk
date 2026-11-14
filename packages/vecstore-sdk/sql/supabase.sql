@@ -339,6 +339,35 @@ begin
 end;
 $$;
 
+create or replace function vecstore_scan(
+  index_name text,
+  index_schema text,
+  match_namespace text,
+  after_id text,
+  page_size int,
+  include_vector boolean
+)
+returns table (id text, metadata jsonb, embedding text)
+language plpgsql
+stable
+security invoker
+set search_path = public, extensions
+as $$
+begin
+  return query execute format(
+    'select id, metadata, %s as embedding
+     from %s where namespace = %L and (%L::text is null or id > %L)
+     order by id limit %s',
+    case when include_vector then 'embedding::text' else 'null::text' end,
+    vecstore_table(index_name, index_schema),
+    match_namespace,
+    after_id,
+    after_id,
+    page_size
+  );
+end;
+$$;
+
 create or replace function vecstore_delete(
   index_name text,
   index_schema text,

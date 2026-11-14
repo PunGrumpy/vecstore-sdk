@@ -17,6 +17,11 @@ import {
   vectorLiteral,
 } from "../internal/postgres";
 import { queryOptionsError } from "../internal/query-options";
+import {
+  idOrderedPage,
+  scanLimit,
+  scanOptionsError,
+} from "../internal/scan-options";
 import { recordsError } from "../internal/vector";
 import { err } from "../result";
 import type {
@@ -26,6 +31,7 @@ import type {
   IndexSpec,
   Metric,
   QueryOptions,
+  ScanOptions,
   VecResult,
   VectorIndex,
   VectorRecord,
@@ -80,6 +86,8 @@ const ITERATIVE_SCAN_MINOR = 8;
 
 const ITERATIVE_SCAN_SETTING =
   "set_config('hnsw.iterative_scan', CASE WHEN current_setting('hnsw.iterative_scan', true) IN ('strict_order', 'relaxed_order') THEN current_setting('hnsw.iterative_scan', true) ELSE 'strict_order' END, true)";
+
+const VECTOR_COLUMN = ", embedding::text AS embedding";
 
 const quoteIdent = (name: string): string => `"${name.replaceAll('"', '""')}"`;
 
@@ -214,6 +222,32 @@ const searchRows = async (
   }
 };
 
+const readRecords = (rows: readonly object[]): VectorRecord[] =>
+  rows.flatMap((row) => (isPostgresRow(row) ? [toVectorRecord(row)] : []));
+
+const scanStatement = (
+  table: string,
+  namespace: string,
+  options: ScanOptions | undefined
+): PgStatement => {
+  const params: PgParam[] = [namespace];
+  const after = options?.cursor;
+
+  if (after !== undefined) {
+    params.push(after);
+  }
+
+  params.push(scanLimit(options) + 1);
+
+  const vectorColumn = options?.includeVector ? VECTOR_COLUMN : "";
+  const range = after === undefined ? "" : " AND id > $2";
+
+  return {
+    params,
+    text: `SELECT id, metadata${vectorColumn} FROM ${table} WHERE namespace = $1${range} ORDER BY id LIMIT $${params.length}`,
+  };
+};
+
 const upsertStatement = (
   table: string,
   namespace: string,
@@ -289,20 +323,14 @@ const createIndex = (
           return [];
         }
 
-        const vectorColumn = fetchOptions.includeVector
-          ? ", embedding::text AS embedding"
-          : "";
+        const vectorColumn = fetchOptions.includeVector ? VECTOR_COLUMN : "";
 
         const { rows } = await client.query(
           `SELECT id, metadata${vectorColumn} FROM ${table} WHERE namespace = $1 AND id = ANY($2::text[])`,
           [namespace, [...ids]]
         );
 
-        const records = rows.flatMap((row) =>
-          isPostgresRow(row) ? [toVectorRecord(row)] : []
-        );
-
-        return sortByIds(ids, records);
+        return sortByIds(ids, readRecords(rows));
       }),
 
     name,
@@ -374,6 +402,21 @@ const createIndex = (
               ]
             : []
         );
+      });
+    },
+
+    scan: (scanOptions) => {
+      const rejected = scanOptionsError(PROVIDER, scanOptions);
+
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+
+      return run(name, async () => {
+        const statement = scanStatement(table, namespace, scanOptions);
+        const { rows } = await client.query(statement.text, statement.params);
+
+        return idOrderedPage(readRecords(rows), scanLimit(scanOptions));
       });
     },
 

@@ -130,6 +130,22 @@ const queryAction = (body: string, stored: Store): Response => {
   return envelope({ count: matches.length, matches });
 };
 
+const listAction = (search: string, stored: Store): Response => {
+  const params = new URLSearchParams(search);
+  const ids = [...stored.keys()];
+  const start = Number(params.get("cursor") ?? 0);
+  const end = start + Number(params.get("count"));
+  const isTruncated = end < ids.length;
+
+  return envelope({
+    count: Math.min(end, ids.length) - start,
+    isTruncated,
+    nextCursor: isTruncated ? String(end) : null,
+    totalCount: ids.length,
+    vectors: ids.slice(start, end).map((id) => ({ id })),
+  });
+};
+
 const runAction = (action: string, body: string, stored: Store): Response => {
   switch (action) {
     case "upsert": {
@@ -187,6 +203,10 @@ const fakeCloudflare = (failing: ReadonlySet<string> = new Set()) => {
         },
         { status: 400 }
       );
+    }
+
+    if (action === "list") {
+      return listAction(search, stored);
     }
 
     return runAction(action, body, stored);
@@ -661,6 +681,86 @@ describe(createVectorizeStore, () => {
       { body: "", method: "DELETE", path: "/docs", search: "" },
     ]);
   });
+
+  test("scan lists stored ids and reads them back with the caller's ids", async () => {
+    const { calls, client } = fakeCloudflare();
+    const store = createVectorizeStore({ accountId: ACCOUNT_ID, client });
+    const docs = store.index("docs", { namespace: "tenant-a" });
+
+    await docs.upsert([{ id: "doc-1", metadata: { n: 1 }, vector: [1] }]);
+    await store
+      .index("docs", { namespace: "tenant-b" })
+      .upsert([{ id: "doc-9", vector: [9] }]);
+    await docs.upsert([
+      { id: "doc-2", vector: [2] },
+      { id: "doc-3", vector: [3] },
+    ]);
+
+    const first = await docs.scan({ limit: 2 });
+    const cursor = first.ok ? first.value.cursor : undefined;
+    const last = await docs.scan({ cursor, includeVector: true, limit: 2 });
+
+    expect(first).toStrictEqual({
+      ok: true,
+      value: {
+        cursor: "2",
+        records: [{ id: "doc-1", metadata: { n: 1 }, vector: [] }],
+      },
+    });
+    expect(last.ok && last.value.records).toStrictEqual([
+      { id: "doc-2", metadata: {}, vector: [2] },
+      { id: "doc-3", metadata: {}, vector: [3] },
+    ]);
+    expect(last.ok && last.value.cursor).toBeUndefined();
+    expect(
+      calls.flatMap((call) => (call.path === "/docs/list" ? [call.search] : []))
+    ).toStrictEqual(["?count=2", "?count=2&cursor=2"]);
+  });
+
+  test("scan of an index that lists nothing ends with no records", async () => {
+    const client = new Cloudflare({
+      apiToken: "test-token",
+      fetch: () => Promise.resolve(envelope(null)),
+    });
+
+    const result = await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .scan();
+
+    expect(result.ok && result.value.records).toStrictEqual([]);
+    expect(result.ok && result.value.cursor).toBeUndefined();
+  });
+
+  test("scan lowers a limit above 1,000 to 1,000", async () => {
+    const { calls, client } = fakeCloudflare();
+
+    await createVectorizeStore({ accountId: ACCOUNT_ID, client })
+      .index("docs")
+      .scan({ limit: 5000 });
+
+    expect(calls.map((call) => call.search)).toStrictEqual(["?count=1000"]);
+  });
+
+  test.each([
+    ["a zero limit", "", { limit: 0 }],
+    ["an empty cursor", "", { cursor: "" }],
+    ["a namespace with a slash", "a/3", {}],
+  ])(
+    "scan rejects %s before the request",
+    async (_name, namespace, options) => {
+      const { calls, client } = fakeCloudflare();
+
+      const result = await createVectorizeStore({
+        accountId: ACCOUNT_ID,
+        client,
+      })
+        .index("docs", { namespace })
+        .scan(options);
+
+      expect(!result.ok && result.error.kind).toBe("invalid_argument");
+      expect(calls).toStrictEqual([]);
+    }
+  );
 
   test.each(errorKinds)("%s %s becomes %s", (status, message, kind) => {
     const error = normalizeVectorizeError(statusError(status, message), "docs");

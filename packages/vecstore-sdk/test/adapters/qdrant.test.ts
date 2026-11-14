@@ -11,6 +11,7 @@ import type {
   QdrantFilter,
   QdrantPoint,
   QdrantScoredPoint,
+  QdrantScrollResult,
   QdrantStoredPoint,
 } from "../../src/qdrant";
 import {
@@ -43,8 +44,34 @@ interface Recorded {
   )[];
   readonly queries: { filter?: QdrantFilter; limit: number; query: number[] }[];
   readonly retrieves: number[];
+  readonly scrolls: {
+    filter: QdrantFilter;
+    limit: number;
+    offset?: string | number;
+    with_payload: boolean;
+    with_vector: boolean;
+  }[];
   readonly upserts: QdrantPoint[][];
 }
+
+const withoutVector = (point: QdrantStoredPoint): QdrantStoredPoint => ({
+  id: point.id,
+  payload: point.payload,
+});
+
+const scrollPage = (
+  stored: readonly QdrantStoredPoint[],
+  start: number,
+  limit: number,
+  withVector: boolean
+): QdrantScrollResult => {
+  const page = stored.slice(start, start + limit);
+
+  return {
+    next_page_offset: stored[start + limit]?.id ?? null,
+    points: withVector ? page : page.map(withoutVector),
+  };
+};
 
 const fakeClient = () => {
   const stored: QdrantStoredPoint[] = [];
@@ -56,6 +83,7 @@ const fakeClient = () => {
     payloadIndexes: [],
     queries: [],
     retrieves: [],
+    scrolls: [],
     upserts: [],
   };
 
@@ -101,6 +129,18 @@ const fakeClient = () => {
 
       return Promise.resolve(
         stored.filter((point) => args.ids.includes(point.id))
+      );
+    },
+    scroll: (_name, args) => {
+      recorded.scrolls.push(args);
+
+      const start =
+        args.offset === undefined
+          ? 0
+          : stored.findIndex((point) => point.id === args.offset);
+
+      return Promise.resolve(
+        scrollPage(stored, start, args.limit, args.with_vector)
       );
     },
     upsert: (_name, args) => {
@@ -487,6 +527,124 @@ describe(createQdrantStore, () => {
     });
     expect(recorded.upserts).toStrictEqual([]);
   });
+
+  test("scan pages with scroll and returns the caller's ids", async () => {
+    const { client, recorded } = fakeClient();
+    const store = createQdrantStore({ client });
+    const index = store.index("docs", { namespace: "tenant-a" });
+
+    await index.upsert([
+      { id: "doc-1", metadata: { n: 1 }, vector: [1, 0] },
+      { id: "doc-2", vector: [0, 1] },
+      { id: "doc-3", vector: [1, 1] },
+    ]);
+
+    const first = await index.scan({ limit: 2 });
+    const cursor = first.ok ? first.value.cursor : undefined;
+    const last = await index.scan({ cursor, includeVector: true, limit: 2 });
+
+    expect(first.ok && first.value.records).toStrictEqual([
+      { id: "doc-1", metadata: { n: 1 }, vector: [] },
+      { id: "doc-2", metadata: {}, vector: [] },
+    ]);
+    expect(cursor).toBe(String(recorded.upserts[0]?.[2]?.id));
+    expect(last.ok && last.value.records).toStrictEqual([
+      { id: "doc-3", metadata: {}, vector: [1, 1] },
+    ]);
+    expect(last.ok && last.value.cursor).toBeUndefined();
+    expect(
+      recorded.scrolls.map((scroll) => [
+        scroll.offset ?? null,
+        scroll.limit,
+        scroll.with_payload,
+        scroll.with_vector,
+      ])
+    ).toStrictEqual([
+      [null, 2, true, false],
+      [cursor ?? null, 2, true, true],
+    ]);
+    expect(recorded.scrolls.map((scroll) => scroll.filter)).toStrictEqual([
+      scopeQdrantFilter("tenant-a"),
+      scopeQdrantFilter("tenant-a"),
+    ]);
+  });
+
+  test("scan drops a point the server returns from another namespace", async () => {
+    const { client } = fakeClient();
+    const store = createQdrantStore({ client });
+
+    await store
+      .index("docs", { namespace: "tenant-b" })
+      .upsert([{ id: "other", vector: [1] }]);
+    await store
+      .index("docs", { namespace: "tenant-a" })
+      .upsert([{ id: "mine", vector: [1] }]);
+
+    const result = await store.index("docs", { namespace: "tenant-a" }).scan();
+
+    expect(result.ok && result.value.records).toStrictEqual([
+      { id: "mine", metadata: {}, vector: [] },
+    ]);
+  });
+
+  test("scan resumes from a numeric next page offset as a number", async () => {
+    const offsets: unknown[] = [];
+
+    const client: QdrantClientLike = {
+      ...fakeClient().client,
+      scroll: (_name, args) => {
+        offsets.push(args.offset);
+
+        return Promise.resolve({
+          next_page_offset: 42,
+          points: [{ id: 7, payload: { genre: "drama" } }],
+        });
+      },
+    };
+
+    const index = createQdrantStore({ client }).index("docs");
+
+    const result = await index.scan();
+    await index.scan({ cursor: "42" });
+    await index.scan({ cursor: UUID });
+
+    expect(result).toStrictEqual({
+      ok: true,
+      value: {
+        cursor: "42",
+        records: [{ id: "7", metadata: { genre: "drama" }, vector: [] }],
+      },
+    });
+    expect(offsets).toStrictEqual([undefined, 42, UUID]);
+  });
+
+  test("scan lowers a limit above 1,000 to 1,000", async () => {
+    const { client, recorded } = fakeClient();
+
+    await createQdrantStore({ client }).index("docs").scan({ limit: 5000 });
+
+    expect(recorded.scrolls.map((scroll) => scroll.limit)).toStrictEqual([
+      1000,
+    ]);
+  });
+
+  test.each([
+    ["a zero limit", "", { limit: 0 }],
+    ["an empty cursor", "", { cursor: "" }],
+    ["a namespace with a slash", "a/3", {}],
+  ])(
+    "scan rejects %s before calling the client",
+    async (_name, namespace, options) => {
+      const { client, recorded } = fakeClient();
+
+      const result = await createQdrantStore({ client })
+        .index("docs", { namespace })
+        .scan(options);
+
+      expect(!result.ok && result.error.kind).toBe("invalid_argument");
+      expect(recorded.scrolls).toStrictEqual([]);
+    }
+  );
 
   test.each(statusKinds)("HTTP %i becomes %s", (status, kind) => {
     expect(normalizeQdrantError(httpFailure(status), "docs").kind).toBe(kind);

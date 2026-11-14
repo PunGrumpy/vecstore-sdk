@@ -477,6 +477,75 @@ describe(createPgvectorStore, () => {
     ]);
   });
 
+  test("scan reads one row past the limit and pages by id", async () => {
+    const { client, calls } = fakeClient([
+      [
+        { id: "a", metadata: { n: 1 } },
+        { id: "b", metadata: {} },
+        { id: "c", metadata: {} },
+      ],
+      [{ embedding: "[1,2]", id: "c", metadata: {} }],
+    ]);
+
+    const index = createPgvectorStore({ client }).index("docs", {
+      namespace: "tenant",
+    });
+
+    await expect(index.scan({ limit: 2 })).resolves.toStrictEqual({
+      ok: true,
+      value: {
+        cursor: "b",
+        records: [
+          { id: "a", metadata: { n: 1 }, vector: [] },
+          { id: "b", metadata: {}, vector: [] },
+        ],
+      },
+    });
+
+    const last = await index.scan({
+      cursor: "b",
+      includeVector: true,
+      limit: 2,
+    });
+
+    expect(last.ok && last.value.records).toStrictEqual([
+      { id: "c", metadata: {}, vector: [1, 2] },
+    ]);
+    expect(last.ok && last.value.cursor).toBeUndefined();
+    expect(calls.map((call) => [call.text, call.params])).toStrictEqual([
+      [
+        `SELECT id, metadata FROM "docs" WHERE namespace = $1 ORDER BY id LIMIT $2`,
+        ["tenant", 3],
+      ],
+      [
+        `SELECT id, metadata, embedding::text AS embedding FROM "docs" WHERE namespace = $1 AND id > $2 ORDER BY id LIMIT $3`,
+        ["tenant", "b", 3],
+      ],
+    ]);
+  });
+
+  test("scan lowers a limit above 1,000 to 1,000", async () => {
+    const { client, calls } = fakeClient();
+
+    await createPgvectorStore({ client }).index("docs").scan({ limit: 5000 });
+
+    expect(calls[0]?.params).toStrictEqual(["", 1001]);
+  });
+
+  test.each([
+    ["a zero limit", { limit: 0 }],
+    ["an empty cursor", { cursor: "" }],
+  ])("scan rejects %s before calling the database", async (_name, options) => {
+    const { client, calls } = fakeClient();
+
+    const result = await createPgvectorStore({ client })
+      .index("docs")
+      .scan(options);
+
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(calls).toHaveLength(0);
+  });
+
   test.each(codeKinds)("code %s becomes %s", (code, kind) => {
     expect(normalizePgvectorError(pgError(code), "docs").kind).toBe(kind);
   });

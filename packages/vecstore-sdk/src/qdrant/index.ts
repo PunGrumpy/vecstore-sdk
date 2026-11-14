@@ -6,7 +6,6 @@ import {
   notFound,
   providerError,
   unauthorized,
-  unsupported,
 } from "../errors";
 import type { VecstoreError } from "../errors";
 import type { Filter } from "../filter/ast";
@@ -15,7 +14,12 @@ import type { QdrantCondition, QdrantFilter } from "../filter/qdrant";
 import { attempt } from "../internal/attempt";
 import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { deleteSelectorError } from "../internal/delete-selector";
-import { isNumberArray, isObjectLike, isString } from "../internal/guards";
+import {
+  isNumber,
+  isNumberArray,
+  isObjectLike,
+  isString,
+} from "../internal/guards";
 import { indexSpecError } from "../internal/index-spec";
 import {
   isMetadataEntry,
@@ -26,7 +30,7 @@ import type { MetadataEntry } from "../internal/metadata";
 import { namespaceError } from "../internal/namespace";
 import { isNetworkFailure } from "../internal/network";
 import { queryOptionsError } from "../internal/query-options";
-import { scanOptionsError } from "../internal/scan-options";
+import { scanLimit, scanOptionsError } from "../internal/scan-options";
 import { deterministicUuid, isSurrogateUuid, isUuid } from "../internal/uuid";
 import { recordsError } from "../internal/vector";
 import { err } from "../result";
@@ -39,6 +43,7 @@ import type {
   MetadataValue,
   Metric,
   QueryOptions,
+  ScanPage,
   ScoredRecord,
   VecResult,
   VectorIndex,
@@ -69,6 +74,13 @@ export interface QdrantStoredPoint {
 
 export interface QdrantScoredPoint extends QdrantStoredPoint {
   readonly score: number;
+}
+
+export type QdrantPageOffset = string | number | object | null;
+
+export interface QdrantScrollResult {
+  readonly points: QdrantStoredPoint[];
+  readonly next_page_offset?: QdrantPageOffset;
 }
 
 export interface QdrantUpdateResult {
@@ -112,6 +124,16 @@ export interface QdrantClientLike {
       with_vector: boolean;
     }
   ) => Promise<QdrantStoredPoint[]>;
+  readonly scroll: (
+    name: string,
+    args: {
+      filter: QdrantFilter;
+      limit: number;
+      offset?: string | number;
+      with_payload: boolean;
+      with_vector: boolean;
+    }
+  ) => Promise<QdrantScrollResult>;
   readonly delete: (
     name: string,
     args: { wait?: boolean } & (
@@ -137,6 +159,7 @@ const ID_NAMESPACE = "vecstore-sdk/qdrant/point-id";
 const PROVIDER = "qdrant";
 const UPSERT_BATCH = 500;
 const ID_BATCH = 1000;
+const UNSIGNED_INTEGER = /^\d+$/u;
 const HTTP_BAD_REQUEST = 400;
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
@@ -181,6 +204,38 @@ const inNamespace = (namespace: string, point: QdrantStoredPoint): boolean => {
 
 const readVector = (point: QdrantStoredPoint): number[] | undefined =>
   isNumberArray(point.vector) ? point.vector : undefined;
+
+const readRecords = (
+  namespace: string,
+  points: readonly QdrantStoredPoint[]
+): VectorRecord[] => {
+  const records: VectorRecord[] = [];
+
+  for (const point of points) {
+    if (inNamespace(namespace, point)) {
+      records.push({
+        id: fromPoint(point),
+        metadata: readMetadata(point),
+        vector: readVector(point) ?? [],
+      });
+    }
+  }
+
+  return records;
+};
+
+const nextCursor = (response: QdrantScrollResult): string | undefined => {
+  const offset = response.next_page_offset;
+
+  return isString(offset) || isNumber(offset) ? String(offset) : undefined;
+};
+
+const toOffset = (cursor: string | undefined): string | number | undefined =>
+  cursor !== undefined &&
+  UNSIGNED_INTEGER.test(cursor) &&
+  Number.isSafeInteger(Number(cursor))
+    ? Number(cursor)
+    : cursor;
 
 const toPayload = (
   namespace: string,
@@ -397,19 +452,7 @@ const createIndex = (
           size: ID_BATCH,
         });
 
-        const records: VectorRecord[] = [];
-
-        for (const point of responses.flat()) {
-          if (inNamespace(namespace, point)) {
-            records.push({
-              id: fromPoint(point),
-              metadata: readMetadata(point),
-              vector: readVector(point) ?? [],
-            });
-          }
-        }
-
-        return sortByIds(ids, records);
+        return sortByIds(ids, readRecords(namespace, responses.flat()));
       });
     },
 
@@ -448,15 +491,27 @@ const createIndex = (
       });
     },
 
-    scan: (scanOptions) => {
-      const rejected = scanOptionsError(PROVIDER, scanOptions);
+    scan: (scanOptions): VecResult<ScanPage> => {
+      const rejected = invalid ?? scanOptionsError(PROVIDER, scanOptions);
 
-      return Promise.resolve(
-        err(
-          rejected ??
-            unsupported(PROVIDER, "scan", "scan is not implemented yet")
-        )
-      );
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+
+      return run(name, async () => {
+        const response = await client.scroll(name, {
+          filter: scopeQdrantFilter(options.namespace),
+          limit: scanLimit(scanOptions),
+          offset: toOffset(scanOptions?.cursor),
+          with_payload: true,
+          with_vector: scanOptions?.includeVector ?? false,
+        });
+
+        return {
+          cursor: nextCursor(response),
+          records: readRecords(namespace, response.points),
+        };
+      });
     },
 
     upsert: (records): VecResult<void> => {

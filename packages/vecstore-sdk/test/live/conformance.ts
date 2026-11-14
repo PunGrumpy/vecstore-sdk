@@ -301,6 +301,15 @@ export const liveCases: LiveCase[] = [
     },
   ],
   [
+    "scan pages through every record of the namespace",
+    async ({ index }) => {
+      const pages = await scanAll(index, { limit: 1 });
+      const scanned = new Set(pages.flatMap((page) => idsOf(page.records)));
+
+      expect([...scanned].toSorted()).toStrictEqual(idsOf(records).toSorted());
+    },
+  ],
+  [
     "delete by id removes only that record",
     async ({ index }) => {
       unwrap(await index.delete({ ids: ["doc-c"] }));

@@ -33,6 +33,7 @@ import {
 import { indexSpecError } from "../internal/index-spec";
 import { isMetadataEntry, metadataFromEntries } from "../internal/metadata";
 import { queryOptionsError } from "../internal/query-options";
+import { recordsError } from "../internal/vector";
 import { err, ok } from "../result";
 import type { Result } from "../result";
 import type {
@@ -816,6 +817,12 @@ const createIndex = (
 
       if (message !== undefined) {
         return Promise.resolve(err(invalidArgument(PROVIDER, message)));
+      }
+
+      const rejected = recordsError(PROVIDER, records);
+
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
       }
 
       return run(name, async () => {

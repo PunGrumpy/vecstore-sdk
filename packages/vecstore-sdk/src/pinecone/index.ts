@@ -16,6 +16,7 @@ import { lastById, mapBatches, sortByIds } from "../internal/collections";
 import { deleteSelectorError } from "../internal/delete-selector";
 import { indexSpecError } from "../internal/index-spec";
 import { queryOptionsError } from "../internal/query-options";
+import { recordsError } from "../internal/vector";
 import { err } from "../result";
 import type {
   DeleteSelector,
@@ -317,15 +318,22 @@ const createIndex = (
       });
     },
 
-    upsert: (records) =>
-      run(context, async () => {
+    upsert: (records) => {
+      const rejected = recordsError(PROVIDER, records);
+
+      if (rejected !== undefined) {
+        return Promise.resolve(err(rejected));
+      }
+
+      return run(context, async () => {
         await mapBatches({
           action: (batch) =>
             target.upsert({ ...scope, records: batch.map(toPineconeRecord) }),
           items: lastById(records),
           size: UPSERT_BATCH,
         });
-      }),
+      });
+    },
   };
 };
 

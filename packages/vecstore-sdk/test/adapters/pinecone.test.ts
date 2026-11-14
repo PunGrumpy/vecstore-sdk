@@ -9,6 +9,7 @@ import type {
   PineconeClientLike,
   PineconeFilter,
   PineconeIndexLike,
+  PineconeListPage,
   PineconeRecordLike,
 } from "../../src/pinecone";
 import {
@@ -44,16 +45,40 @@ interface Recorded {
     topK: number;
     vector: number[];
   }[];
+  readonly fetches: string[][];
+  readonly lists: {
+    limit?: number;
+    namespace?: string;
+    paginationToken?: string;
+  }[];
   readonly upserts: { records: PineconeRecordLike[]; namespace?: string }[];
 }
 
+const DEFAULT_LIST_LIMIT = 100;
+
+const listPage = (
+  ids: readonly string[],
+  start: number,
+  limit: number
+): PineconeListPage => {
+  const end = start + limit;
+  const vectors = ids.slice(start, end).map((id) => ({ id }));
+
+  return end < ids.length
+    ? { pagination: { next: String(end) }, vectors }
+    : { vectors };
+};
+
 const fakeClient = () => {
   const stored = new Map<string, PineconeRecordLike>();
+  const namespaces = new Map<string, string>();
 
   const recorded: Recorded = {
     createIndexes: [],
     deleteAlls: [],
     deleteManys: [],
+    fetches: [],
+    lists: [],
     queries: [],
     upserts: [],
   };
@@ -70,6 +95,8 @@ const fakeClient = () => {
       return Promise.resolve();
     },
     fetch: (options) => {
+      recorded.fetches.push(options.ids);
+
       const found: Record<string, PineconeRecordLike> = {};
 
       for (const id of options.ids) {
@@ -81,6 +108,23 @@ const fakeClient = () => {
       }
 
       return Promise.resolve({ records: found });
+    },
+    listPaginated: (options) => {
+      recorded.lists.push(options);
+
+      const ids = [...namespaces.entries()]
+        .flatMap(([id, namespace]) =>
+          namespace === (options.namespace ?? "") ? [id] : []
+        )
+        .toSorted();
+
+      return Promise.resolve(
+        listPage(
+          ids,
+          Number(options.paginationToken ?? 0),
+          options.limit ?? DEFAULT_LIST_LIMIT
+        )
+      );
     },
     query: (options) => {
       recorded.queries.push(options);
@@ -97,6 +141,7 @@ const fakeClient = () => {
 
       for (const record of options.records) {
         stored.set(record.id, record);
+        namespaces.set(record.id, options.namespace ?? "");
       }
 
       return Promise.resolve();
@@ -375,6 +420,129 @@ describe(createPineconeStore, () => {
       },
       ok: false,
     });
+  });
+
+  test("scan lists ids page by page and fetches them in list order", async () => {
+    const { client, recorded } = fakeClient();
+    const store = createPineconeStore({ client });
+    const index = store.index("docs", { namespace: "tenant-a" });
+
+    await store
+      .index("docs", { namespace: "tenant-b" })
+      .upsert([{ id: "other", vector: [9] }]);
+    await index.upsert([
+      { id: "c", vector: [3] },
+      { id: "a", metadata: { n: 1 }, vector: [1] },
+      { id: "b", vector: [2] },
+    ]);
+
+    const first = await index.scan({ limit: 2 });
+    const cursor = first.ok ? first.value.cursor : undefined;
+    const last = await index.scan({ cursor, includeVector: true, limit: 2 });
+
+    expect(first).toStrictEqual({
+      ok: true,
+      value: {
+        cursor: "2",
+        records: [
+          { id: "a", metadata: { n: 1 }, vector: [] },
+          { id: "b", metadata: {}, vector: [] },
+        ],
+      },
+    });
+    expect(last.ok && last.value.records).toStrictEqual([
+      { id: "c", metadata: {}, vector: [3] },
+    ]);
+    expect(last.ok && last.value.cursor).toBeUndefined();
+    expect(
+      recorded.lists.map((list) => [
+        list.namespace,
+        list.limit,
+        list.paginationToken ?? null,
+      ])
+    ).toStrictEqual([
+      ["tenant-a", 2, null],
+      ["tenant-a", 2, "2"],
+    ]);
+  });
+
+  test("scan lowers a limit above 100 to 100", async () => {
+    const { client, recorded } = fakeClient();
+
+    await createPineconeStore({ client }).index("docs").scan({ limit: 1000 });
+
+    expect(recorded.lists.map((list) => list.limit)).toStrictEqual([100]);
+  });
+
+  test("scan of an empty page sends no fetch", async () => {
+    const { client, recorded } = fakeClient();
+
+    const result = await createPineconeStore({ client }).index("docs").scan();
+
+    expect(result.ok && result.value.records).toStrictEqual([]);
+    expect(recorded.fetches).toStrictEqual([]);
+  });
+
+  test.each([
+    ["a zero limit", { limit: 0 }],
+    ["an empty cursor", { cursor: "" }],
+  ])("scan rejects %s before calling the provider", async (_name, options) => {
+    const { client, recorded } = fakeClient();
+
+    const result = await createPineconeStore({ client })
+      .index("docs")
+      .scan(options);
+
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded.lists).toStrictEqual([]);
+  });
+
+  test("scan on an index that cannot list ids is unsupported", async () => {
+    const { client } = fakeClient();
+    const message = "List is only supported on serverless indexes";
+
+    const rejecting: PineconeClientLike = {
+      ...client,
+      index: (options) => ({
+        ...client.index(options),
+        listPaginated: () =>
+          Promise.reject(namedError("PineconeBadRequestError", message)),
+      }),
+    };
+
+    const result = await createPineconeStore({ client: rejecting })
+      .index("docs")
+      .scan();
+
+    expect(result).toStrictEqual({
+      error: {
+        feature: "scan",
+        kind: "unsupported",
+        message,
+        provider: "pinecone",
+      },
+      ok: false,
+    });
+  });
+
+  test("scan with a stale cursor is an invalid argument, not an unsupported index", async () => {
+    const { client } = fakeClient();
+    const message = "Invalid pagination token";
+
+    const rejecting: PineconeClientLike = {
+      ...client,
+      index: (options) => ({
+        ...client.index(options),
+        listPaginated: () =>
+          Promise.reject(namedError("PineconeBadRequestError", message)),
+      }),
+    };
+
+    const result = await createPineconeStore({ client: rejecting })
+      .index("docs")
+      .scan({ cursor: "stale" });
+
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
   });
 
   test.each(errorKinds)("%s becomes %s", (name, kind) => {

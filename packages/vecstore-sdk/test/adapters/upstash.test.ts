@@ -46,6 +46,14 @@ interface Recorded {
   }[];
   readonly deletedNamespaces: string[];
   readonly fetches: { ids: string[]; namespace?: string }[];
+  readonly ranges: {
+    cursor: string;
+    includeMetadata?: boolean;
+    includeVectors?: boolean;
+    limit: number;
+    namespace?: string;
+    prefix?: string;
+  }[];
   readonly resets: (string | undefined)[];
   readonly queries: {
     filter?: string;
@@ -58,6 +66,14 @@ interface Recorded {
   readonly upserts: { records: UpstashRecordLike[]; namespace?: string }[];
 }
 
+const rangeRecord = (
+  record: UpstashRecordLike,
+  includeVectors: boolean
+): UpstashStoredRecord =>
+  includeVectors
+    ? { id: record.id, metadata: record.metadata, vector: record.vector }
+    : { id: record.id, metadata: record.metadata };
+
 const fakeClient = (info: UpstashInfo = DEFAULT_INFO) => {
   const stored = new Map<string, Map<string, UpstashRecordLike>>();
 
@@ -66,6 +82,7 @@ const fakeClient = (info: UpstashInfo = DEFAULT_INFO) => {
     deletes: [],
     fetches: [],
     queries: [],
+    ranges: [],
     resets: [],
     upserts: [],
   };
@@ -143,6 +160,27 @@ const fakeClient = (info: UpstashInfo = DEFAULT_INFO) => {
         })
       );
     },
+    range: (args, options: UpstashNamespaceOptions = {}) => {
+      recorded.ranges.push({ ...args, namespace: options.namespace });
+
+      const prefix = args.prefix ?? "";
+      const includeVectors = args.includeVectors === true;
+
+      const matching = [...bucket(options.namespace).values()].flatMap(
+        (record) =>
+          record.id.startsWith(prefix)
+            ? [rangeRecord(record, includeVectors)]
+            : []
+      );
+
+      const start = Number(args.cursor);
+      const end = start + args.limit;
+
+      return Promise.resolve({
+        nextCursor: end < matching.length ? String(end) : "",
+        vectors: matching.slice(start, end),
+      });
+    },
     reset: (options: UpstashNamespaceOptions = {}) => {
       recorded.resets.push(options.namespace);
       bucket(options.namespace).clear();
@@ -180,6 +218,7 @@ const indexCalls: [string, IndexCall][] = [
   ["delete by ids", (index) => index.delete({ ids: ["a"] })],
   ["delete by filter", (index) => index.delete({ filter: eq("genre", "x") })],
   ["delete all", (index) => index.delete({ all: true })],
+  ["scan", (index) => index.scan()],
 ];
 
 const callRows = (values: readonly string[]): [string, string, IndexCall][] =>
@@ -199,6 +238,7 @@ const NO_CALLS: Recorded = {
   deletes: [],
   fetches: [],
   queries: [],
+  ranges: [],
   resets: [],
   upserts: [],
 };
@@ -693,6 +733,100 @@ describe(createUpstashStore, () => {
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
   });
 
+  test("scan pages with range and returns only the namespace's records", async () => {
+    const { client, recorded } = fakeClient();
+    const store = createUpstashStore({ client });
+    const tenantA = store.index("docs", { namespace: "tenant-a" });
+
+    await tenantA.upsert([
+      { id: "doc-1", metadata: { n: 1 }, vector: [1, 0, 0] },
+    ]);
+    await store.index("docs").upsert([{ id: "tenant-a/x", vector: [0, 0, 1] }]);
+    await tenantA.upsert([
+      { id: "doc-2", vector: [0, 1, 0] },
+      { id: "doc-3", vector: [1, 1, 0] },
+    ]);
+    await store
+      .index("docs", { namespace: "tenant-b" })
+      .upsert([{ id: "doc-9", vector: [1, 1, 1] }]);
+
+    const first = await tenantA.scan({ limit: 2 });
+    const cursor = first.ok ? first.value.cursor : undefined;
+    const last = await tenantA.scan({ cursor, includeVector: true, limit: 2 });
+
+    expect(first).toStrictEqual({
+      ok: true,
+      value: {
+        cursor: "2",
+        records: [{ id: "doc-1", metadata: { n: 1 }, vector: [] }],
+      },
+    });
+    expect(last.ok && last.value.records).toStrictEqual([
+      { id: "doc-2", metadata: {}, vector: [0, 1, 0] },
+      { id: "doc-3", metadata: {}, vector: [1, 1, 0] },
+    ]);
+    expect(last.ok && last.value.cursor).toBeUndefined();
+    expect(recorded.ranges).toStrictEqual([
+      {
+        cursor: "0",
+        includeMetadata: true,
+        includeVectors: false,
+        limit: 2,
+        namespace: "docs",
+        prefix: "tenant-a/",
+      },
+      {
+        cursor: "2",
+        includeMetadata: true,
+        includeVectors: true,
+        limit: 2,
+        namespace: "docs",
+        prefix: "tenant-a/",
+      },
+    ]);
+  });
+
+  test("a default namespace scan reads the whole index and keeps its own records", async () => {
+    const { client, recorded } = fakeClient();
+    const store = createUpstashStore({ client });
+
+    await store
+      .index("docs", { namespace: "tenant-a" })
+      .upsert([{ id: "doc-1", vector: [1, 0, 0] }]);
+    await store.index("docs").upsert([{ id: "doc-2", vector: [0, 1, 0] }]);
+
+    const result = await store.index("docs").scan();
+
+    expect(result.ok && result.value.records).toStrictEqual([
+      { id: "doc-2", metadata: {}, vector: [] },
+    ]);
+    expect(recorded.ranges.map((range) => range.prefix ?? null)).toStrictEqual([
+      null,
+    ]);
+  });
+
+  test("scan lowers a limit above 1,000 to 1,000", async () => {
+    const { client, recorded } = fakeClient();
+
+    await createUpstashStore({ client }).index("docs").scan({ limit: 5000 });
+
+    expect(recorded.ranges.map((range) => range.limit)).toStrictEqual([1000]);
+  });
+
+  test.each([
+    ["a zero limit", { limit: 0 }],
+    ["an empty cursor", { cursor: "" }],
+  ])("scan rejects %s before calling the provider", async (_name, options) => {
+    const { client, recorded } = fakeClient();
+
+    const result = await createUpstashStore({ client })
+      .index("docs")
+      .scan(options);
+
+    expect(!result.ok && result.error.kind).toBe("invalid_argument");
+    expect(recorded).toStrictEqual(NO_CALLS);
+  });
+
   test.each(errorKinds)("%s becomes %s", (message, kind) => {
     expect(normalizeUpstashError(upstashError(message), "docs").kind).toBe(
       kind
@@ -914,6 +1048,25 @@ describe("upstash native namespaces", () => {
       .upsert([{ id: "a", vector: [1, 0, 0] }]);
 
     expect(!result.ok && result.error.kind).toBe("invalid_argument");
+  });
+
+  test("scan reads the native namespace without a prefix", async () => {
+    const { client, recorded } = fakeClient();
+    const index = nativeStore(client).index("docs", { namespace: "tenant-a" });
+
+    await index.upsert([
+      { id: "doc-1", metadata: { _namespace: "x" }, vector: [1, 0, 0] },
+    ]);
+
+    const result = await index.scan({ includeVector: true });
+
+    expect(result.ok && result.value.records).toStrictEqual([
+      { id: "doc-1", metadata: { _namespace: "x" }, vector: [1, 0, 0] },
+    ]);
+    expect(result.ok && result.value.cursor).toBeUndefined();
+    expect(
+      recorded.ranges.map((range) => [range.namespace, range.prefix ?? null])
+    ).toStrictEqual([["docs~tenant-a", null]]);
   });
 
   test("native mode fetch returns a record whose metadata carries a _namespace field", async () => {

@@ -98,17 +98,17 @@
     "check:package": "bun run build && bun scripts/check-exports.ts && bun x publint && bun x attw --pack . --profile esm-only --exclude-entrypoints ./sql/supabase.sql"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.16",
-    "@electric-sql/pglite-pgvector": "0.0.17",
+    "@electric-sql/pglite": "0.6.0",
+    "@electric-sql/pglite-pgvector": "0.1.0",
     "@pinecone-database/pinecone": "^9.2.0",
     "@qdrant/js-client-rest": "^1.20.0",
-    "@supabase/supabase-js": "^2.119.0",
-    "@types/bun": "^1.4.4",
+    "@supabase/supabase-js": "^2.119.2",
+    "@types/bun": "^1.4.5",
     "@types/pg": "^8.23.1",
-    "@upstash/vector": "^1.2.3",
+    "@upstash/vector": "^1.2.4",
     "cloudflare": "^7",
     "pg": "^8.23.1",
-    "redis": "^6.3.1",
+    "redis": "^6.4.0",
     "tsdown": "^0.23.7"
   },
   "peerDependencies": {
